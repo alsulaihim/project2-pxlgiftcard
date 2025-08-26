@@ -28,7 +28,17 @@ export function usePXLCurrency() {
         unsubscribe = pxlCurrencyService.subscribe((data) => {
           setCurrencyData(data);
           setLoading(false);
+          setError(null);
         });
+        
+        // If no data received within 3 seconds, set loading to false
+        setTimeout(() => {
+          if (loading && !currencyData) {
+            setLoading(false);
+            // Use default values if no data available
+            console.log('Using default PXL currency values');
+          }
+        }, 3000);
       } catch (err) {
         console.error('Failed to initialize PXL currency:', err);
         setError('Failed to load currency data');

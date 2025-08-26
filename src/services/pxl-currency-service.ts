@@ -57,15 +57,20 @@ export class PXLCurrencyService {
       const currencySnap = await getDoc(currencyRef);
 
       if (!currencySnap.exists()) {
+        console.log('PXL currency data not found, initializing...');
         // Initialize with default data
         await this.initializeDefaultCurrency();
+      } else {
+        console.log('PXL currency data loaded successfully');
       }
 
       // Start listening for real-time updates
       this.startListening();
     } catch (error) {
       console.error('Failed to initialize PXL currency service:', error);
-      throw error;
+      // If we can't read, it might be a permissions issue
+      // Try to start listening anyway - it might work for real-time updates
+      this.startListening();
     }
   }
 
