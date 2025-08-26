@@ -3,25 +3,21 @@
  * Supports both USD (Stripe/PayPal) and PXL payments
  */
 
-import { Navigation } from "@/components/layout/navigation";
 import CheckoutForm from "@/components/ecommerce/checkout-form";
 
 export default function CheckoutPage() {
   return (
-    <div className="min-h-screen bg-black">
-      <Navigation />
-      <main className="flex-1 py-8 md:py-12">
-        <div className="container mx-auto px-4 md:px-6 lg:px-8 max-w-4xl">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">Checkout</h1>
-            <p className="text-gray-400">
-              Complete your purchase with USD or PXL currency
-            </p>
-          </div>
-          
-          <CheckoutForm />
+    <main className="flex-1 py-8 md:py-12">
+      <div className="container mx-auto px-4 md:px-6 lg:px-8 max-w-4xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">Checkout</h1>
+          <p className="text-gray-400">
+            Complete your purchase with USD or PXL currency
+          </p>
         </div>
-      </main>
-    </div>
+        
+        <CheckoutForm />
+      </div>
+    </main>
   );
 }
