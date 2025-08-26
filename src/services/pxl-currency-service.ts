@@ -283,66 +283,91 @@ export class PXLCurrencyService {
     bonusPxl: number;
     effectiveRate: number;
   }> {
-    // Calculate PXL amount with tier discount
-    const calculation = this.calculatePXLPurchase(usdAmount, userTier);
-    
-    // Create transaction record
-    const transaction = {
-      userId,
-      type: 'pxl-purchase',
-      amounts: {
-        usd: usdAmount,
-        pxl: calculation.totalPxl,
-        exchangeRate: this.getCurrentRate(),
+    try {
+      console.log('Processing PXL purchase:', { userId, usdAmount, userTier, paymentMethod });
+      
+      // Calculate PXL amount with tier discount
+      const calculation = this.calculatePXLPurchase(usdAmount, userTier);
+      console.log('PXL calculation:', calculation);
+      
+      // Create transaction record
+      const transaction = {
+        userId,
+        type: 'pxl-purchase',
+        amounts: {
+          usd: usdAmount,
+          pxl: calculation.totalPxl,
+          exchangeRate: this.getCurrentRate(),
+          bonusPxl: calculation.bonusPxl,
+          effectiveRate: calculation.effectiveRate,
+        },
+        payment: {
+          method: paymentMethod,
+          provider: paymentMethod === 'paypal' ? 'paypal' : 'stripe',
+          externalId: paymentId,
+        },
+        tier: {
+          userTier,
+          purchaseDiscountPercentage: calculation.appliedDiscount,
+        },
+        status: 'completed',
+        timestamps: {
+          created: Timestamp.now(),
+          updated: Timestamp.now(),
+          completed: Timestamp.now(),
+        },
+      };
+      
+      // Add transaction to Firestore
+      console.log('Creating transaction record...');
+      const docRef = await addDoc(collection(db, 'transactions'), transaction);
+      console.log('Transaction created:', docRef.id);
+      
+      // Update user's PXL balance
+      // Note: In production, this should be done in a Cloud Function for security
+      console.log('Fetching user document...');
+      const userRef = doc(db, 'users', userId);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User not found');
+      }
+      
+      const userData = userDoc.data();
+      console.log('User data found, current wallet:', userData.wallets);
+      
+      // Ensure wallet structure exists
+      if (!userData.wallets) {
+        userData.wallets = { pxl: { balance: 0, totalEarned: 0, lockedBalance: 0, totalSpent: 0, totalSent: 0, totalReceived: 0 }, usd: { balance: 0 } };
+      }
+      if (!userData.wallets.pxl) {
+        userData.wallets.pxl = { balance: 0, totalEarned: 0, lockedBalance: 0, totalSpent: 0, totalSent: 0, totalReceived: 0 };
+      }
+      
+      const currentBalance = userData.wallets.pxl.balance || 0;
+      const currentTotalEarned = userData.wallets.pxl.totalEarned || 0;
+      
+      console.log('Updating balance from', currentBalance, 'to', currentBalance + calculation.totalPxl);
+      
+      // Update the user's PXL balance and statistics
+      await updateDoc(userRef, {
+        'wallets.pxl.balance': currentBalance + calculation.totalPxl,
+        'wallets.pxl.totalEarned': currentTotalEarned + calculation.totalPxl,
+        'timestamps.updated': Timestamp.now()
+      });
+      
+      console.log('Balance updated successfully');
+      
+      return {
+        transactionId: docRef.id,
+        pxlReceived: calculation.totalPxl,
         bonusPxl: calculation.bonusPxl,
         effectiveRate: calculation.effectiveRate,
-      },
-      payment: {
-        method: paymentMethod,
-        provider: paymentMethod === 'paypal' ? 'paypal' : 'stripe',
-        externalId: paymentId,
-      },
-      tier: {
-        userTier,
-        purchaseDiscountPercentage: calculation.appliedDiscount,
-      },
-      status: 'completed',
-      timestamps: {
-        created: Timestamp.now(),
-        updated: Timestamp.now(),
-        completed: Timestamp.now(),
-      },
-    };
-    
-    // Add transaction to Firestore
-    const docRef = await addDoc(collection(db, 'transactions'), transaction);
-    
-    // Update user's PXL balance
-    // Note: In production, this should be done in a Cloud Function for security
-    const userRef = doc(db, 'users', userId);
-    const userDoc = await getDoc(userRef);
-    
-    if (!userDoc.exists()) {
-      throw new Error('User not found');
+      };
+    } catch (error) {
+      console.error('Error in processPXLPurchase:', error);
+      throw error;
     }
-    
-    const userData = userDoc.data();
-    const currentBalance = userData.wallets?.pxl?.balance || 0;
-    const currentTotalEarned = userData.wallets?.pxl?.totalEarned || 0;
-    
-    // Update the user's PXL balance and statistics
-    await updateDoc(userRef, {
-      'wallets.pxl.balance': currentBalance + calculation.totalPxl,
-      'wallets.pxl.totalEarned': currentTotalEarned + calculation.totalPxl,
-      'timestamps.updated': Timestamp.now()
-    });
-    
-    return {
-      transactionId: docRef.id,
-      pxlReceived: calculation.totalPxl,
-      bonusPxl: calculation.bonusPxl,
-      effectiveRate: calculation.effectiveRate,
-    };
   }
 
   /**
