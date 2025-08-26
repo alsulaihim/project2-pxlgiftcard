@@ -10,9 +10,15 @@ import {
   Gift,
   Star,
   Filter,
-  Download
+  Download,
+  RefreshCcw,
+  Zap
 } from "lucide-react";
 import { formatBalance } from "@/lib/validation";
+import { formatPXL } from "@/lib/pxl-currency";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase-config";
+import { collection, query, where, orderBy, limit, onSnapshot, Timestamp, QuerySnapshot, DocumentData } from "firebase/firestore";
 
 interface Transaction {
   id: string;
@@ -20,7 +26,7 @@ interface Transaction {
   amount: number;
   currency: "PXL" | "USD";
   description: string;
-  timestamp: string;
+  timestamp: Timestamp;
   status: "completed" | "pending" | "failed";
   metadata?: {
     recipient?: string;
@@ -34,220 +40,289 @@ interface Transaction {
  * Transaction History component showing all PXL-related transactions
  */
 export function TransactionHistory() {
+  const { user } = useAuth();
   const [filter, setFilter] = React.useState<"all" | "purchases" | "transfers" | "rewards">("all");
   const [showAll, setShowAll] = React.useState(false);
+  const [transactions, setTransactions] = React.useState<Transaction[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
-  // Mock transaction data
-  const allTransactions: Transaction[] = [
-    {
-      id: "tx-001",
-      type: "giftcard-purchase",
-      amount: -2450,
-      currency: "PXL",
-      description: "Amazon Gift Card - $25",
-      timestamp: "2024-01-15T10:30:00Z",
-      status: "completed",
-      metadata: { giftcard: "Amazon" }
-    },
-    {
-      id: "tx-002",
-      type: "cashback",
-      amount: 73,
-      currency: "PXL",
-      description: "Cashback from Amazon purchase",
-      timestamp: "2024-01-15T10:30:00Z",
-      status: "completed",
-    },
-    {
-      id: "tx-003",
-      type: "pxl-purchase",
-      amount: 4980,
-      currency: "PXL",
-      description: "Purchased PXL with credit card",
-      timestamp: "2024-01-14T15:45:00Z",
-      status: "completed",
-      metadata: { paymentMethod: "Credit Card" }
-    },
-    {
-      id: "tx-004",
-      type: "pxl-transfer-received",
-      amount: 1000,
-      currency: "PXL",
-      description: "Received from @john_doe",
-      timestamp: "2024-01-13T09:15:00Z",
-      status: "completed",
-      metadata: { sender: "@john_doe" }
-    },
-    {
-      id: "tx-005",
-      type: "tier-bonus",
-      amount: 500,
-      currency: "PXL",
-      description: "Pro tier advancement bonus",
-      timestamp: "2024-01-12T14:20:00Z",
-      status: "completed",
-    },
-    {
-      id: "tx-006",
-      type: "pxl-transfer-sent",
-      amount: -2000,
-      currency: "PXL",
-      description: "Sent to @alice_smith",
-      timestamp: "2024-01-11T11:30:00Z",
-      status: "completed",
-      metadata: { recipient: "@alice_smith" }
-    },
-    {
-      id: "tx-007",
-      type: "giftcard-purchase",
-      amount: -1470,
-      currency: "PXL",
-      description: "Netflix Gift Card - $15",
-      timestamp: "2024-01-10T16:45:00Z",
-      status: "completed",
-      metadata: { giftcard: "Netflix" }
-    },
-    {
-      id: "tx-008",
-      type: "pxl-purchase",
-      amount: 9976,
-      currency: "PXL",
-      description: "Purchased PXL with PayPal",
-      timestamp: "2024-01-09T12:00:00Z",
-      status: "completed",
-      metadata: { paymentMethod: "PayPal" }
-    },
-  ];
+  // Load transactions from Firestore
+  React.useEffect(() => {
+    if (!user) return;
 
-  const filteredTransactions = allTransactions.filter(tx => {
-    if (filter === "all") return true;
-    if (filter === "purchases") return tx.type === "giftcard-purchase" || tx.type === "pxl-purchase";
-    if (filter === "transfers") return tx.type === "pxl-transfer-sent" || tx.type === "pxl-transfer-received";
-    if (filter === "rewards") return tx.type === "cashback" || tx.type === "tier-bonus";
-    return true;
-  });
+    const transactionsQuery = query(
+      collection(db, 'transactions'),
+      where('userId', '==', user.uid),
+      orderBy('timestamps.created', 'desc'),
+      limit(showAll ? 100 : 10)
+    );
 
-  const displayedTransactions = showAll ? filteredTransactions : filteredTransactions.slice(0, 5);
+    const unsubscribe = onSnapshot(transactionsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
+      const txns: Transaction[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        
+        // Map Firestore data to Transaction interface
+        let description = '';
+        let metadata: any = {};
+        
+        switch (data.type) {
+          case 'pxl-purchase':
+            description = `Purchased ${formatPXL(data.amounts.pxl)}`;
+            metadata.paymentMethod = data.payment?.method || 'card';
+            break;
+          case 'pxl-transfer-sent':
+            description = `Sent to ${data.transfer?.recipientUsername || 'Unknown'}`;
+            metadata.recipient = data.transfer?.recipientUsername;
+            break;
+          case 'pxl-transfer-received':
+            description = `Received from ${data.transfer?.senderUsername || 'Unknown'}`;
+            metadata.sender = data.transfer?.senderUsername;
+            break;
+          case 'giftcard-purchase':
+            description = `${data.giftcard?.brand || 'Giftcard'} - $${data.giftcard?.denomination || '0'}`;
+            metadata.giftcard = data.giftcard?.brand;
+            break;
+          case 'cashback':
+            description = 'Cashback reward';
+            break;
+          case 'tier-bonus':
+            description = 'Tier progression bonus';
+            break;
+          default:
+            description = data.type;
+        }
+        
+        return {
+          id: doc.id,
+          type: data.type,
+          amount: data.amounts.pxl,
+          currency: 'PXL' as const,
+          description,
+          timestamp: data.timestamps.created,
+          status: data.status,
+          metadata
+        };
+      });
+      
+      setTransactions(txns);
+      setLoading(false);
+    });
 
-  const getTransactionIcon = (type: Transaction["type"]) => {
-    switch (type) {
-      case "giftcard-purchase":
-        return <ShoppingBag className="h-5 w-5 text-gray-400" />;
-      case "pxl-purchase":
-        return <CreditCard className="h-5 w-5 text-gray-400" />;
-      case "pxl-transfer-sent":
-        return <ArrowUpRight className="h-5 w-5 text-red-400" />;
-      case "pxl-transfer-received":
-        return <ArrowDownLeft className="h-5 w-5 text-green-400" />;
-      case "cashback":
-        return <Gift className="h-5 w-5 text-green-400" />;
-      case "tier-bonus":
-        return <Star className="h-5 w-5 text-yellow-400" />;
-      default:
-        return <div className="h-5 w-5 rounded-full bg-gray-400" />;
+    return () => unsubscribe();
+  }, [user, showAll]);
+
+  const formatDate = (timestamp: Timestamp) => {
+    const date = timestamp.toDate();
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    
+    if (days === 0) {
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      if (hours === 0) {
+        const minutes = Math.floor(diff / (1000 * 60));
+        return minutes === 0 ? 'Just now' : `${minutes} minutes ago`;
+      }
+      return `${hours} hours ago`;
+    } else if (days === 1) {
+      return 'Yesterday';
+    } else if (days < 7) {
+      return `${days} days ago`;
+    } else {
+      return date.toLocaleDateString();
     }
   };
 
-  const formatDate = (timestamp: string) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+  const getIcon = (type: string) => {
+    switch (type) {
+      case "giftcard-purchase":
+        return Gift;
+      case "pxl-purchase":
+        return CreditCard;
+      case "pxl-transfer-sent":
+        return ArrowUpRight;
+      case "pxl-transfer-received":
+        return ArrowDownLeft;
+      case "cashback":
+        return Zap;
+      case "tier-bonus":
+        return Star;
+      default:
+        return ShoppingBag;
+    }
   };
+
+  const getIconColor = (type: string) => {
+    switch (type) {
+      case "pxl-transfer-sent":
+      case "giftcard-purchase":
+        return "text-red-400";
+      case "pxl-transfer-received":
+      case "pxl-purchase":
+      case "cashback":
+      case "tier-bonus":
+        return "text-green-400";
+      default:
+        return "text-gray-400";
+    }
+  };
+
+  // Filter transactions
+  const filteredTransactions = React.useMemo(() => {
+    if (filter === "all") return transactions;
+    
+    switch (filter) {
+      case "purchases":
+        return transactions.filter(tx => 
+          tx.type === "giftcard-purchase" || tx.type === "pxl-purchase"
+        );
+      case "transfers":
+        return transactions.filter(tx => 
+          tx.type === "pxl-transfer-sent" || tx.type === "pxl-transfer-received"
+        );
+      case "rewards":
+        return transactions.filter(tx => 
+          tx.type === "cashback" || tx.type === "tier-bonus"
+        );
+      default:
+        return transactions;
+    }
+  }, [transactions, filter]);
+
+  const displayedTransactions = showAll ? filteredTransactions : filteredTransactions.slice(0, 5);
+
+  const handleExport = () => {
+    // Create CSV content
+    const headers = ['Date', 'Type', 'Description', 'Amount', 'Status'];
+    const rows = filteredTransactions.map(tx => [
+      tx.timestamp.toDate().toISOString(),
+      tx.type,
+      tx.description,
+      tx.amount,
+      tx.status
+    ]);
+    
+    const csv = [headers, ...rows].map(row => row.join(',')).join('\\n');
+    
+    // Download CSV
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pxl-transactions-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (loading) {
+    return (
+      <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-white">Transaction History</h2>
+          <p className="text-gray-400">Loading transactions...</p>
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-16 bg-gray-800 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-bold text-white">Transaction History</h2>
-          <p className="text-gray-400">Your PXL activity and transactions</p>
-        </div>
-        <div className="flex items-center space-x-3">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleExport}
+          >
+            <Download className="h-4 w-4 mr-1" />
             Export
           </Button>
         </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center space-x-2 mb-4">
-        <Filter className="h-5 w-5 text-gray-400" />
-        <div className="flex space-x-2">
+        
+        {/* Filter Tabs */}
+        <div className="flex space-x-1 bg-gray-900 rounded-lg p-1">
           {[
-            { id: "all", label: "All" },
-            { id: "purchases", label: "Purchases" },
-            { id: "transfers", label: "Transfers" },
-            { id: "rewards", label: "Rewards" },
-          ].map((filterOption) => (
+            { value: "all", label: "All" },
+            { value: "purchases", label: "Purchases" },
+            { value: "transfers", label: "Transfers" },
+            { value: "rewards", label: "Rewards" },
+          ].map((tab) => (
             <button
-              key={filterOption.id}
-              onClick={() => setFilter(filterOption.id as any)}
-              className={`rounded-lg border py-1.5 px-3 text-sm font-medium transition-all ${
-                filter === filterOption.id
-                  ? "bg-white text-black border-white"
-                  : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
+              key={tab.value}
+              onClick={() => setFilter(tab.value as any)}
+              className={`flex-1 py-2 px-3 text-sm font-medium rounded-md transition-all ${
+                filter === tab.value
+                  ? "bg-white text-black"
+                  : "text-gray-400 hover:text-white"
               }`}
             >
-              {filterOption.label}
+              {tab.label}
             </button>
           ))}
         </div>
       </div>
 
       {/* Transaction List */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {displayedTransactions.length === 0 ? (
-          <div className="text-center py-6">
-            <p className="text-gray-400">No transactions found</p>
+          <div className="text-center py-8 text-gray-400">
+            <Filter className="h-8 w-8 mx-auto mb-2 opacity-50" />
+            <p>No transactions found</p>
           </div>
         ) : (
-          displayedTransactions.map((transaction) => (
-            <div
-              key={transaction.id}
-              className="flex items-center justify-between rounded-lg border border-gray-800 bg-gray-900 p-3 hover:bg-gray-800 transition-colors"
-            >
-              <div className="flex items-center space-x-4">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 border border-gray-700">
-                  {getTransactionIcon(transaction.type)}
+          displayedTransactions.map((transaction) => {
+            const Icon = getIcon(transaction.type);
+            const iconColor = getIconColor(transaction.type);
+            const isNegative = transaction.amount < 0;
+            
+            return (
+              <div
+                key={transaction.id}
+                className="flex items-center justify-between p-3 bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
+              >
+                <div className="flex items-center space-x-3">
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 ${iconColor}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">{transaction.description}</p>
+                    <p className="text-sm text-gray-400">
+                      {formatDate(transaction.timestamp)}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-white">{transaction.description}</p>
-                  <p className="text-sm text-gray-400">{formatDate(transaction.timestamp)}</p>
+                
+                <div className="text-right">
+                  <p className={`font-medium ${
+                    isNegative ? "text-red-400" : "text-green-400"
+                  }`}>
+                    {isNegative ? "-" : "+"}{formatPXL(Math.abs(transaction.amount))}
+                  </p>
+                  {transaction.status === "pending" && (
+                    <p className="text-xs text-yellow-400">Pending</p>
+                  )}
                 </div>
               </div>
-              <div className="text-right">
-                <p className={`font-medium ${
-                  transaction.amount > 0 ? "text-green-400" : "text-white"
-                }`}>
-                  {transaction.amount > 0 ? "+" : ""}
-                  {transaction.currency} {formatBalance(Math.abs(transaction.amount))}
-                </p>
-                <p className={`text-sm capitalize ${
-                  transaction.status === "completed" 
-                    ? "text-green-400" 
-                    : transaction.status === "pending" 
-                    ? "text-yellow-400" 
-                    : "text-red-400"
-                }`}>
-                  {transaction.status}
-                </p>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* Show More/Less Button */}
-      {filteredTransactions.length > 5 && (
+      {/* Show More Button */}
+      {!showAll && filteredTransactions.length > 5 && (
         <div className="mt-4 text-center">
           <Button
-            variant="outline"
-            onClick={() => setShowAll(!showAll)}
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowAll(true)}
           >
-            {showAll ? "Show Less" : `Show All (${filteredTransactions.length})`}
+            View All Transactions ({filteredTransactions.length})
           </Button>
         </div>
       )}

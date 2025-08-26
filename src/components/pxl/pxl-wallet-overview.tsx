@@ -3,21 +3,36 @@
 import * as React from "react";
 import { TrendingUp, TrendingDown, DollarSign, Coins } from "lucide-react";
 import { formatBalance } from "@/lib/validation";
+import { useAuth } from "@/contexts/auth-context";
+import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 
 /**
  * PXL Wallet Overview component showing current balances and exchange rates
  */
 export function PXLWalletOverview() {
-  // Mock data - would come from API/context in real app
+  const { platformUser } = useAuth();
+  const { currentRate, trend, currencyData } = usePXLCurrency();
+  
+  // Calculate rate change from hourly data
+  const rateChange = React.useMemo(() => {
+    if (!currencyData?.marketData?.hourlyRates || currencyData.marketData.hourlyRates.length < 2) {
+      return 0;
+    }
+    const rates = currencyData.marketData.hourlyRates;
+    const latestRate = rates[rates.length - 1].rate;
+    const firstRate = rates[0].rate;
+    return ((latestRate - firstRate) / firstRate) * 100;
+  }, [currencyData]);
+
   const walletData = {
-    pxlBalance: 12450,
-    usdBalance: 25.50,
-    currentExchangeRate: 99.76, // 1 USD = 99.76 PXL
-    rateChange: -0.24, // Percentage change
-    totalEarned: 15680,
-    totalSpent: 3230,
-    totalSent: 0,
-    totalReceived: 0,
+    pxlBalance: platformUser?.wallets?.pxl?.balance || 0,
+    usdBalance: platformUser?.wallets?.usd?.balance || 0,
+    currentExchangeRate: currentRate,
+    rateChange: rateChange,
+    totalEarned: platformUser?.wallets?.pxl?.totalEarned || 0,
+    totalSpent: platformUser?.wallets?.pxl?.totalSpent || 0,
+    totalSent: platformUser?.wallets?.pxl?.totalSent || 0,
+    totalReceived: platformUser?.wallets?.pxl?.totalReceived || 0,
   };
 
   const usdEquivalent = walletData.pxlBalance / walletData.currentExchangeRate;

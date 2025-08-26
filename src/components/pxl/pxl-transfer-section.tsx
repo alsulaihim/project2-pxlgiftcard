@@ -2,183 +2,173 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
-import { ValidatedInput } from "@/components/ui/validated-input";
-import { Send, User, Mail, MessageSquare } from "lucide-react";
-import { parseFormattedBalance } from "@/lib/validation";
+import { Send, Users, Clock, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { formatPXL } from "@/lib/pxl-currency";
+import { PXLTransferModal } from "./pxl-transfer-modal";
+import { db } from "@/lib/firebase-config";
+import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from "firebase/firestore";
 
 /**
  * PXL Transfer section for sending PXL to other users
  */
 export function PXLTransferSection() {
-  const [recipient, setRecipient] = React.useState<string>("");
-  const [amount, setAmount] = React.useState<string>("");
-  const [message, setMessage] = React.useState<string>("");
-  const [recipientType, setRecipientType] = React.useState<"username" | "email">("username");
+  const { user, platformUser } = useAuth();
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [recentTransfers, setRecentTransfers] = React.useState<any[]>([]);
+  
+  const userBalance = platformUser?.wallets?.pxl?.balance || 0;
 
-  // Mock user balance
-  const availableBalance = 12450;
-  const transferAmount = parseFormattedBalance(amount || "0");
+  // Load recent transfers
+  React.useEffect(() => {
+    if (!user) return;
 
-  const handleTransfer = () => {
-    // Would integrate with transfer API
-    console.log("Transfer PXL:", { recipient, amount: transferAmount, message, recipientType });
+    // Query for sent and received transfers
+    const transfersQuery = query(
+      collection(db, 'pxl-transfers'),
+      where('senderUserId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+
+    const receivedQuery = query(
+      collection(db, 'pxl-transfers'),
+      where('recipientUserId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(5)
+    );
+
+    // Subscribe to transfers
+    const unsubscribeSent = onSnapshot(transfersQuery, (snapshot) => {
+      const sentTransfers = snapshot.docs.map(doc => ({
+        id: doc.id,
+        type: 'sent',
+        ...doc.data()
+      }));
+      
+      setRecentTransfers(prev => {
+        const received = prev.filter(t => t.type === 'received');
+        return [...sentTransfers, ...received].sort((a, b) => 
+          (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+        ).slice(0, 5);
+      });
+    });
+
+    const unsubscribeReceived = onSnapshot(receivedQuery, (snapshot) => {
+      const receivedTransfers = snapshot.docs.map(doc => ({
+        id: doc.id,
+        type: 'received',
+        ...doc.data()
+      }));
+      
+      setRecentTransfers(prev => {
+        const sent = prev.filter(t => t.type === 'sent');
+        return [...sent, ...receivedTransfers].sort((a, b) => 
+          (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+        ).slice(0, 5);
+      });
+    });
+
+    return () => {
+      unsubscribeSent();
+      unsubscribeReceived();
+    };
+  }, [user]);
+
+  const formatTimeAgo = (timestamp: Timestamp) => {
+    const seconds = Math.floor((Date.now() - timestamp.toMillis()) / 1000);
+    
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return timestamp.toDate().toLocaleDateString();
   };
 
-  const isValidTransfer = recipient && transferAmount > 0 && transferAmount <= availableBalance;
-
   return (
-    <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold text-white">Send PXL</h2>
-        <p className="text-gray-400">Transfer PXL to other platform users</p>
-      </div>
-
-      <div className="space-y-4">
-        {/* Recipient Type Toggle */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Send to
-          </label>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <button
-              onClick={() => setRecipientType("username")}
-              className={`flex items-center justify-center space-x-2 rounded-lg border py-2 px-3 transition-all ${
-                recipientType === "username"
-                  ? "bg-white text-black border-white"
-                  : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
-              }`}
-            >
-              <User className="h-4 w-4" />
-              <span className="text-sm font-medium">Username</span>
-            </button>
-            <button
-              onClick={() => setRecipientType("email")}
-              className={`flex items-center justify-center space-x-2 rounded-lg border py-2 px-3 transition-all ${
-                recipientType === "email"
-                  ? "bg-white text-black border-white"
-                  : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
-              }`}
-            >
-              <Mail className="h-4 w-4" />
-              <span className="text-sm font-medium">Email</span>
-            </button>
-          </div>
-
-          {/* Recipient Input */}
-          <div className="relative">
-            {recipientType === "username" ? (
-              <User className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 z-10" />
-            ) : (
-              <Mail className="absolute left-3 top-2.5 h-5 w-5 text-gray-400 z-10" />
-            )}
-            <ValidatedInput
-              type={recipientType === "username" ? "username" : "email"}
-              value={recipient}
-              onChange={setRecipient}
-              placeholder={
-                recipientType === "username" 
-                  ? "Enter @username" 
-                  : "Enter email address"
-              }
-              className="pl-10"
-              required={false}
-            />
-          </div>
+    <>
+      <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-white">Send PXL</h2>
+          <p className="text-sm text-gray-400">
+            Transfer PXL to other users instantly
+          </p>
         </div>
 
-        {/* Amount Input */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            Amount
-          </label>
-          <div className="relative">
-            <span className="absolute left-3 top-2.5 text-gray-400 font-medium z-10">
-              PXL
-            </span>
-            <ValidatedInput
-              type="amount"
-              value={amount}
-              onChange={setAmount}
-              placeholder="0"
-              className="pl-12"
-              required={false}
-            />
-          </div>
-          <div className="flex items-center justify-between mt-2 text-xs">
-            <span className="text-gray-400">
-              Available: PXL {availableBalance.toLocaleString()}
-            </span>
-            <button
-              onClick={() => setAmount(availableBalance.toLocaleString('en-US'))}
-              className="text-white hover:text-gray-300 font-medium"
-            >
-              Send All
-            </button>
-          </div>
+        {/* Current Balance */}
+        <div className="mb-6 p-4 bg-gray-900 rounded-lg">
+          <p className="text-sm text-gray-400 mb-1">Available Balance</p>
+          <p className="text-2xl font-bold text-white">{formatPXL(userBalance)}</p>
         </div>
 
-        {/* Message Input */}
-        <div>
-          <div className="relative">
-            <MessageSquare className="absolute left-3 top-9 h-5 w-5 text-gray-400 z-10" />
-            <ValidatedInput
-              type="message"
-              value={message}
-              onChange={setMessage}
-              placeholder="Add a personal message..."
-              label="Message (Optional)"
-              maxLength={200}
-              className="pl-10"
-              required={false}
-            />
-          </div>
-        </div>
-
-        {/* Transfer Summary */}
-        {transferAmount > 0 && (
-          <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-            <h4 className="font-medium text-white mb-3">Transfer Summary</h4>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Recipient</span>
-                <span className="text-white">{recipient || "Not specified"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Amount</span>
-                <span className="text-white">PXL {transferAmount.toLocaleString()}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-gray-400">Transfer fee</span>
-                <span className="text-white">Free</span>
-              </div>
-              <div className="pt-2 border-t border-gray-800">
-                <div className="flex items-center justify-between font-medium">
-                  <span className="text-white">Remaining balance</span>
-                  <span className="text-white">
-                    PXL {(availableBalance - transferAmount).toLocaleString()}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Transfer Button */}
+        {/* Send Button */}
         <Button
-          onClick={handleTransfer}
-          className="w-full"
-          disabled={!isValidTransfer}
+          onClick={() => setIsModalOpen(true)}
+          className="w-full mb-6"
+          disabled={userBalance === 0}
         >
           <Send className="h-4 w-4 mr-2" />
-          Send PXL {transferAmount > 0 ? transferAmount.toLocaleString() : ""}
+          Send PXL
         </Button>
 
-        {/* Transfer Limits Info */}
-        <div className="text-xs text-gray-400 text-center">
-          <p>Transfer limits: Min 1 PXL • Max 10,000 PXL per transaction</p>
-          <p className="mt-1">Transfers are processed instantly and cannot be reversed</p>
+        {/* Recent Transfers */}
+        <div>
+          <h3 className="text-sm font-medium text-white mb-3 flex items-center">
+            <Clock className="h-4 w-4 mr-2 text-gray-400" />
+            Recent Transfers
+          </h3>
+          
+          {recentTransfers.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">
+              No transfers yet
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {recentTransfers.map((transfer) => (
+                <div
+                  key={transfer.id}
+                  className="flex items-center justify-between p-3 bg-gray-900 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    {transfer.type === 'sent' ? (
+                      <ArrowUpRight className="h-4 w-4 text-red-400" />
+                    ) : (
+                      <ArrowDownLeft className="h-4 w-4 text-green-400" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-white">
+                        {transfer.type === 'sent' 
+                          ? `To ${transfer.recipientUsername}`
+                          : `From ${transfer.senderUsername}`}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {formatTimeAgo(transfer.createdAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <p className={`text-sm font-medium ${
+                    transfer.type === 'sent' ? 'text-red-400' : 'text-green-400'
+                  }`}>
+                    {transfer.type === 'sent' ? '-' : '+'}{formatPXL(transfer.amount)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-    </section>
+
+        {/* Info */}
+        <div className="mt-4 text-xs text-gray-400 text-center">
+          <p>Transfers are instant and free</p>
+          <p className="mt-1">Min: 1 PXL • Max: 10,000 PXL per transfer</p>
+        </div>
+      </section>
+
+      {/* Transfer Modal */}
+      <PXLTransferModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      />
+    </>
   );
 }
