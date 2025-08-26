@@ -21,12 +21,12 @@ import { ValidatedInput } from '@/components/ui/validated-input';
 import { formatBalance } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase-config';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
 
 export default function CheckoutForm() {
   const router = useRouter();
   const { state, dispatch } = useCart();
-  const { user, platformUser } = useAuth();
+  const { user, platformUser, refreshUserData } = useAuth();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pxl' | 'stripe' | 'paypal'>('pxl');
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -136,14 +136,96 @@ export default function CheckoutForm() {
     setCancellationMessage('');
 
     try {
-      // Process PXL payment by deducting from user's balance
-      // In production, this should be done via Cloud Function
+      // Deduct PXL from user's balance and add cashback
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        throw new Error('User document not found');
+      }
+      
+      const userData = userDoc.data();
+      const currentBalance = userData.wallets?.pxl?.balance || 0;
+      const totalSpent = userData.wallets?.pxl?.totalSpent || 0;
+      
+      // Calculate final amount after cashback
+      const pxlToDeduct = state.totals.pxl;
+      const cashbackAmount = state.totals.cashback || 0;
+      const netDeduction = pxlToDeduct - cashbackAmount;
+      
+      if (currentBalance < netDeduction) {
+        throw new Error('Insufficient PXL balance after calculation');
+      }
+      
+      // Update user's PXL balance
+      await updateDoc(userRef, {
+        'wallets.pxl.balance': currentBalance - netDeduction,
+        'wallets.pxl.totalSpent': totalSpent + pxlToDeduct,
+        'timestamps.updated': serverTimestamp()
+      });
+      
+      // Create PXL payment transaction record
+      await addDoc(collection(db, 'transactions'), {
+        userId: user.uid,
+        type: 'giftcard-purchase',
+        amounts: {
+          pxl: -pxlToDeduct,
+          usd: state.totals.usd,
+          exchangeRate: 100 // Current rate
+        },
+        payment: {
+          method: 'pxl',
+          provider: 'firebase'
+        },
+        giftcard: {
+          itemCount: state.items.length,
+          brands: [...new Set(state.items.map(item => item.brand))]
+        },
+        tier: {
+          userTier: userTier,
+          discountApplied: state.totals.savings,
+          cashbackEarned: cashbackAmount
+        },
+        status: 'completed',
+        timestamps: {
+          created: serverTimestamp(),
+          updated: serverTimestamp(),
+          completed: serverTimestamp()
+        }
+      });
+      
+      // If there's cashback, create a separate cashback transaction
+      if (cashbackAmount > 0) {
+        await addDoc(collection(db, 'transactions'), {
+          userId: user.uid,
+          type: 'cashback',
+          amounts: {
+            pxl: cashbackAmount,
+            usd: 0,
+            exchangeRate: 100
+          },
+          relatedTo: 'giftcard-purchase',
+          status: 'completed',
+          timestamps: {
+            created: serverTimestamp(),
+            updated: serverTimestamp(),
+            completed: serverTimestamp()
+          }
+        });
+      }
+      
+      // Process PXL payment by creating the order
       await handlePaymentSuccess({
         method: 'pxl',
         amount: state.totals.pxl,
         currency: 'PXL',
         id: `pxl_${Date.now()}`
       });
+      
+      // Refresh user data to show updated balance
+      if (refreshUserData) {
+        await refreshUserData();
+      }
     } catch (error) {
       console.error('PXL checkout error:', error);
       setErrors(['Payment processing failed. Please try again.']);
