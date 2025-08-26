@@ -2,19 +2,38 @@
 
 import * as React from "react";
 import { Star, Zap, Crown, Trophy, Gem, CheckCircle } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
+import { TIER_THRESHOLDS, DEFAULT_TIER_BENEFITS } from "@/lib/pxl-currency";
 
 /**
  * Tier progression section showing current tier, progress, and benefits
  */
 export function TierProgressSection() {
-  // Mock data - would come from API/context in real app
+  const { platformUser, loading } = useAuth();
+  
+  // Show loading state
+  if (loading) {
+    return (
+      <section className="space-y-4">
+        <div className="rounded-xl border border-gray-800 bg-gray-950 p-4">
+          <div className="animate-pulse space-y-4">
+            <div className="h-8 bg-gray-800 rounded w-1/3"></div>
+            <div className="h-4 bg-gray-800 rounded w-1/2"></div>
+            <div className="h-32 bg-gray-800 rounded"></div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+  
+  // Use real user data or defaults
   const tierData = {
-    currentTier: "pro" as const,
-    currentBalance: 12450,
-    nextTierThreshold: 25000,
+    currentTier: platformUser?.tier?.current || "starter" as const,
+    currentBalance: platformUser?.wallets?.pxl?.balance || 0,
+    nextTierThreshold: 0, // Will be calculated below
     tierBenefits: {
-      discountPercentage: 8,
-      cashbackPercentage: 3,
+      discountPercentage: DEFAULT_TIER_BENEFITS[platformUser?.tier?.current || "starter"]?.discountPercentage || 0,
+      cashbackPercentage: DEFAULT_TIER_BENEFITS[platformUser?.tier?.current || "starter"]?.cashbackPercentage || 0,
     }
   };
 
@@ -22,52 +41,52 @@ export function TierProgressSection() {
     {
       id: "starter",
       name: "Starter",
-      threshold: 0,
+      threshold: TIER_THRESHOLDS.starter,
       icon: Star,
       color: "text-gray-400",
       bgColor: "bg-gray-800",
-      discount: 0,
-      cashback: 0,
+      discount: DEFAULT_TIER_BENEFITS.starter.discountPercentage * 100,
+      cashback: DEFAULT_TIER_BENEFITS.starter.cashbackPercentage * 100,
     },
     {
       id: "rising",
       name: "Rising",
-      threshold: 1000,
+      threshold: TIER_THRESHOLDS.rising,
       icon: Zap,
       color: "text-blue-400",
       bgColor: "bg-blue-500/20",
-      discount: 3,
-      cashback: 1,
+      discount: DEFAULT_TIER_BENEFITS.rising.discountPercentage * 100,
+      cashback: DEFAULT_TIER_BENEFITS.rising.cashbackPercentage * 100,
     },
     {
       id: "pro",
       name: "Pro",
-      threshold: 5000,
+      threshold: TIER_THRESHOLDS.pro,
       icon: Crown,
       color: "text-green-400",
       bgColor: "bg-green-500/20",
-      discount: 8,
-      cashback: 3,
+      discount: DEFAULT_TIER_BENEFITS.pro.discountPercentage * 100,
+      cashback: DEFAULT_TIER_BENEFITS.pro.cashbackPercentage * 100,
     },
     {
       id: "pixlbeast",
       name: "Pixlbeast",
-      threshold: 25000,
+      threshold: TIER_THRESHOLDS.pixlbeast,
       icon: Trophy,
       color: "text-yellow-400",
       bgColor: "bg-yellow-500/20",
-      discount: 13,
-      cashback: 5,
+      discount: DEFAULT_TIER_BENEFITS.pixlbeast.discountPercentage * 100,
+      cashback: DEFAULT_TIER_BENEFITS.pixlbeast.cashbackPercentage * 100,
     },
     {
       id: "pixlionaire",
       name: "Pixlionaire",
-      threshold: 100000,
+      threshold: TIER_THRESHOLDS.pixlionaire,
       icon: Gem,
       color: "text-purple-400",
       bgColor: "bg-purple-500/20",
-      discount: 15,
-      cashback: 8,
+      discount: DEFAULT_TIER_BENEFITS.pixlionaire.discountPercentage * 100,
+      cashback: DEFAULT_TIER_BENEFITS.pixlionaire.cashbackPercentage * 100,
     },
   ];
 
@@ -142,7 +161,7 @@ export function TierProgressSection() {
               <span className="font-medium text-white">Discount</span>
             </div>
             <p className="text-2xl font-bold text-white">
-              {tierData.tierBenefits.discountPercentage}%
+              {Math.round(tierData.tierBenefits.discountPercentage * 100)}%
             </p>
             <p className="text-xs text-gray-400">On PXL purchases</p>
           </div>
@@ -152,7 +171,7 @@ export function TierProgressSection() {
               <span className="font-medium text-white">Cashback</span>
             </div>
             <p className="text-2xl font-bold text-white">
-              {tierData.tierBenefits.cashbackPercentage}%
+              {Math.round(tierData.tierBenefits.cashbackPercentage * 100)}%
             </p>
             <p className="text-xs text-gray-400">PXL earned back</p>
           </div>
