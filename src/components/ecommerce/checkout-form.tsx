@@ -68,8 +68,8 @@ export default function CheckoutForm() {
           externalId: paymentDetails.id || paymentDetails.paymentIntentId || paymentDetails.orderId
         },
         totals: {
-          subtotal: state.totals.subtotal,
-          discount: state.totals.discount,
+          subtotal: state.totals.usd,
+          discount: state.totals.savings,
           cashback: selectedPaymentMethod === 'pxl' ? state.totals.cashback : 0,
           total: selectedPaymentMethod === 'pxl' ? state.totals.pxl : state.totals.usd
         },
