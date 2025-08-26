@@ -8,10 +8,11 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, User, LogOut, Settings, Coins, Store, Home, Grid3X3 } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Coins, Store, Home, Grid3X3, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartIcon } from "@/components/ecommerce/cart-icon";
 import { useAuth } from "@/contexts/auth-context";
+import { formatPXL } from "@/lib/pxl-currency";
 
 /**
  * Tier Ring Component - Shows tier status around user avatar
@@ -153,6 +154,20 @@ export function Navigation() {
 
           {/* Desktop Navigation - Vercel style */}
           <nav className="hidden md:flex items-center space-x-8">
+            {/* PXL Balance Display for logged-in users */}
+            {user && platformUser && (
+              <Link 
+                href="/pxl" 
+                className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-900 hover:border-gray-700 transition-all group"
+              >
+                <Wallet className="h-4 w-4 text-gray-400 group-hover:text-green-400 transition-colors" />
+                <span className="text-sm font-medium text-white">
+                  {formatPXL(platformUser.wallets?.pxl?.balance || 0)}
+                </span>
+                <span className="text-xs text-gray-500">PXL</span>
+              </Link>
+            )}
+            
             {navigationItems.map((item) => (
               <Link
                 key={item.href}
@@ -284,6 +299,26 @@ export function Navigation() {
       {isMenuOpen && (
         <div className="md:hidden border-t border-gray-900 bg-black/95 backdrop-blur-xl">
           <div className="mx-auto max-w-7xl px-6 py-6">
+            {/* PXL Balance Display for mobile - logged-in users */}
+            {user && platformUser && (
+              <Link 
+                href="/pxl" 
+                className="flex items-center justify-between mb-4 p-3 rounded-lg bg-gray-900/50 border border-gray-800"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <div className="flex items-center space-x-2">
+                  <Wallet className="h-5 w-5 text-gray-400" />
+                  <span className="text-base font-medium text-white">PXL Balance</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="text-base font-semibold text-white">
+                    {formatPXL(platformUser.wallets?.pxl?.balance || 0)}
+                  </span>
+                  <span className="text-sm text-gray-500">PXL</span>
+                </div>
+              </Link>
+            )}
+            
             <nav className="space-y-4">
               {navigationItems.map((item) => (
                 <Link
