@@ -78,24 +78,46 @@ export class PXLCurrencyService {
    * Initialize default currency data
    */
   private async initializeDefaultCurrency(): Promise<void> {
-    const mockData = generateMockRateData(100);
-    
-    const defaultCurrency: PXLCurrency = {
-      id: 'pxl-currency',
-      currentRate: mockData.currentRate,
-      baseRate: 100,
-      marketData: {
-        hourlyRates: mockData.hourlyRates,
-        dailyRates: mockData.dailyRates,
-        trend: mockData.trend,
-        volatility: mockData.volatility,
-      },
-      tierMultipliers: DEFAULT_TIER_BENEFITS,
-      purchaseDiscounts: PURCHASE_DISCOUNTS,
-      lastUpdated: Timestamp.now(),
-    };
+    try {
+      const mockData = generateMockRateData(100);
+      
+      const defaultCurrency: PXLCurrency = {
+        id: 'pxl-currency',
+        currentRate: mockData.currentRate,
+        baseRate: 100,
+        marketData: {
+          hourlyRates: mockData.hourlyRates,
+          dailyRates: mockData.dailyRates,
+          trend: mockData.trend,
+          volatility: mockData.volatility,
+        },
+        tierMultipliers: DEFAULT_TIER_BENEFITS,
+        purchaseDiscounts: PURCHASE_DISCOUNTS,
+        lastUpdated: Timestamp.now(),
+      };
 
-    await setDoc(doc(db, 'pxl-currency', 'main'), defaultCurrency);
+      await setDoc(doc(db, 'pxl-currency', 'main'), defaultCurrency);
+      console.log('PXL currency data initialized successfully');
+    } catch (error) {
+      console.error('Failed to initialize currency data:', error);
+      // Set the current data to defaults so the app can still function
+      this.currentData = {
+        id: 'pxl-currency',
+        currentRate: 100,
+        baseRate: 100,
+        marketData: {
+          hourlyRates: [],
+          dailyRates: [],
+          trend: 'stable',
+          volatility: 0,
+        },
+        tierMultipliers: DEFAULT_TIER_BENEFITS,
+        purchaseDiscounts: PURCHASE_DISCOUNTS,
+        lastUpdated: Timestamp.now(),
+      };
+      // Notify listeners with default data
+      this.notifyListeners();
+    }
   }
 
   /**

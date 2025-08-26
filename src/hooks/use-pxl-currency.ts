@@ -3,7 +3,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import { PXLCurrency } from '@/lib/pxl-currency';
+import { PXLCurrency, DEFAULT_TIER_BENEFITS, PURCHASE_DISCOUNTS } from '@/lib/pxl-currency';
 import { pxlCurrencyService } from '@/services/pxl-currency-service';
 import { useAuth } from '@/contexts/auth-context';
 
@@ -86,23 +86,29 @@ export function usePXLCurrency() {
     );
   }, [platformUser]);
 
+  // Provide default values when currency data is not available
+  const defaultRate = 100;
+  const defaultTierBenefits = {
+    discountPercentage: 0,
+    cashbackPercentage: 0,
+  };
+
   return {
     // Data
     currencyData,
-    currentRate: currencyData?.currentRate || 100,
-    trend: currencyData?.marketData.trend || 'stable',
-    volatility: currencyData?.marketData.volatility || 0,
+    currentRate: currencyData?.currentRate || defaultRate,
+    trend: currencyData?.marketData?.trend || 'stable',
+    volatility: currencyData?.marketData?.volatility || 0,
     
     // User tier benefits
     userTier: platformUser?.tier.current || 'starter',
-    tierBenefits: currencyData?.tierMultipliers[platformUser?.tier.current || 'starter'] || {
-      discountPercentage: 0,
-      cashbackPercentage: 0,
-    },
-    purchaseDiscount: currencyData?.purchaseDiscounts?.[platformUser?.tier.current || 'starter'] || 0,
+    tierBenefits: currencyData?.tierMultipliers?.[platformUser?.tier.current || 'starter'] || 
+                  (platformUser?.tier.current ? DEFAULT_TIER_BENEFITS[platformUser.tier.current] : defaultTierBenefits),
+    purchaseDiscount: currencyData?.purchaseDiscounts?.[platformUser?.tier.current || 'starter'] || 
+                      (platformUser?.tier.current ? PURCHASE_DISCOUNTS[platformUser.tier.current] : 0),
     
     // State
-    loading,
+    loading: loading && !currencyData, // Don't show loading if we have cached data
     error,
     
     // Functions
