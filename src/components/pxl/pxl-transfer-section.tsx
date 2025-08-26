@@ -153,13 +153,18 @@ export function PXLTransferSection() {
                     ) : (
                       <ArrowDownLeft className="h-4 w-4 text-green-400" />
                     )}
-                    <div>
+                    <div className="flex-1">
                       <p className="text-sm font-medium text-white">
                         {transfer.type === 'sent' 
                           ? `To ${transfer.recipientUsername}`
                           : `From ${transfer.senderUsername}`}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      {transfer.message && (
+                        <p className="text-xs text-gray-300 mt-0.5 italic">
+                          "{transfer.message}"
+                        </p>
+                      )}
+                      <p className="text-xs text-gray-400 mt-0.5">
                         {formatTimeAgo(transfer.createdAt)}
                       </p>
                     </div>

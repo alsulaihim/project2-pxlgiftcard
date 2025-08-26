@@ -304,7 +304,12 @@ export function TransactionHistory() {
                   </div>
                   <div>
                     <p className="font-medium text-white">{transaction.description}</p>
-                    <p className="text-sm text-gray-400">
+                    {transaction.transfer?.message && (
+                      <p className="text-xs text-gray-300 italic mt-0.5">
+                        "{transaction.transfer.message}"
+                      </p>
+                    )}
+                    <p className="text-sm text-gray-400 mt-0.5">
                       {formatDate(transaction.timestamp)}
                     </p>
                   </div>

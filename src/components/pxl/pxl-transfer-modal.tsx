@@ -239,6 +239,11 @@ export function PXLTransferModal({ isOpen, onClose }: PXLTransferModalProps) {
             <p className="text-gray-400">
               {formatPXL(parsedAmount)} sent to {recipientData.username}
             </p>
+            {message && (
+              <div className="mt-4 p-3 bg-gray-800 rounded-lg">
+                <p className="text-sm text-gray-300 italic">Message: "{message}"</p>
+              </div>
+            )}
           </div>
         ) : (
           <>
