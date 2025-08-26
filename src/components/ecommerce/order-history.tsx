@@ -230,8 +230,8 @@ export function OrderHistory() {
 
               {/* Order Items */}
               <div className="space-y-3 mb-4">
-                {order.items.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
+                {order.items.map((item, itemIndex) => (
+                  <div key={`${order.id}-item-${itemIndex}`} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
                         <span className="text-xs font-medium text-gray-400">
@@ -260,7 +260,7 @@ export function OrderHistory() {
                           </Button>
                           <Button
                             size="sm"
-                            onClick={() => handleDownloadGiftcard(order.id, item.id)}
+                            onClick={() => handleDownloadGiftcard(order.id, item.giftcardId)}
                             className="bg-blue-600 hover:bg-blue-700"
                           >
                             <Download className="h-4 w-4 mr-1" />
@@ -281,9 +281,9 @@ export function OrderHistory() {
               {selectedOrder === order.id && (
                 <div className="border-t border-gray-800 pt-4 space-y-3">
                   <h4 className="font-medium text-white mb-2">Gift Card Codes</h4>
-                  {order.items.map((item) => (
+                  {order.items.map((item, codeIndex) => (
                     item.code && (
-                      <div key={item.id} className="bg-gray-900 rounded-lg p-3">
+                      <div key={`${order.id}-code-${codeIndex}`} className="bg-gray-900 rounded-lg p-3">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-gray-400">{item.productName}</span>
                           <code className="bg-gray-800 px-2 py-1 rounded text-sm font-mono text-green-400">
