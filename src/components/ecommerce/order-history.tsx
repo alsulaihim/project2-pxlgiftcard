@@ -185,7 +185,7 @@ export function OrderHistory() {
                     <h3 className="text-lg font-semibold text-white">{order.id}</h3>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <Calendar className="h-4 w-4" />
-                      <span>{new Date(order.date).toLocaleDateString()}</span>
+                      <span>{new Date(order.date).toLocaleDateString('en-US')}</span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">

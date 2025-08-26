@@ -141,7 +141,7 @@ export function TransactionHistory() {
     } else if (days < 7) {
       return `${days} days ago`;
     } else {
-      return date.toLocaleDateString();
+      return date.toLocaleDateString('en-US');
     }
   };
 
