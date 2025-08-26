@@ -22,9 +22,15 @@ service cloud.firestore {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId);
       
-      // Allow profile updates
-      // TEMPORARY: Allow all updates for testing (REMOVE IN PRODUCTION)
-      allow update: if isOwner(userId);
+      // BUG FIX: 2024-01-27 - PXL transfer failing with permissions error
+      // Problem: PXL transfers need to update recipient's balance
+      // Solution: Allow wallet balance increases from any authenticated user
+      // Impact: PXL transfers can now update recipient balances
+      // SECURITY NOTE: In production, use Cloud Functions for transfers
+      allow update: if isOwner(userId) || (
+        isAuthenticated() && 
+        request.resource.data.wallets.pxl.balance > resource.data.wallets.pxl.balance
+      );
     }
     
     // Giftcards Collection - Public read for active cards
