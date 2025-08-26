@@ -88,6 +88,17 @@ export default function DashboardPage() {
   } = usePXLCurrency();
   const [selectedDenominations, setSelectedDenominations] = useState<{[key: number]: number}>({});
   
+  // Calculate rate change from currency data
+  const rateChange = useMemo(() => {
+    if (!currencyData?.marketData?.hourlyRates || currencyData.marketData.hourlyRates.length < 2) {
+      return 0;
+    }
+    const rates = currencyData.marketData.hourlyRates;
+    const currentRate = rates[rates.length - 1].rate;
+    const hourAgoRate = rates[Math.max(0, rates.length - 60)]?.rate || currentRate;
+    return ((currentRate - hourAgoRate) / hourAgoRate) * 100;
+  }, [currencyData]);
+  
 
 
   // Redirect if not authenticated
