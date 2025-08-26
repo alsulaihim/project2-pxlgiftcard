@@ -82,7 +82,7 @@ export function PXLPurchaseSection() {
 
   const handlePurchase = () => {
     // Legacy button handler - now payment is handled by individual components
-    console.log("Purchase PXL:", { usdAmount, pxlAmount, paymentMethod });
+    console.log("Purchase PXL:", { usdAmount, pxlAmount: pxlCalculation.totalPxl, paymentMethod });
   };
 
   if (currencyLoading) {
@@ -271,7 +271,7 @@ export function PXLPurchaseSection() {
           <StripePayment
             amount={parseFormattedBalance(usdAmount || "0")}
             currency="usd"
-            description={`Purchase PXL ${Math.floor(pxlAmount).toLocaleString()}`}
+            description={`Purchase ${formatPXL(pxlCalculation.totalPxl)}`}
             onSuccess={handlePaymentSuccess}
             onError={handlePaymentError}
             disabled={!usdAmount || parseFloat(usdAmount) < 10}
