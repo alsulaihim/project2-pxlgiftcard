@@ -15,6 +15,9 @@ export {
   simulateRateFluctuation
 } from './pxl-currency';
 
+// Export secure PXL purchase processing
+export { processPXLPurchase as processSecurePXLPurchase } from './process-pxl-purchase';
+
 // TODO: Add more function exports as they are created:
 // - Payment processing functions (Stripe/PayPal webhooks)
 // - Giftcard purchase functions

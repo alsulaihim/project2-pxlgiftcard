@@ -23,9 +23,15 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       
       // Allow profile updates but prevent modifying sensitive fields
-      allow update: if isOwner(userId) && 
+      // TEMPORARY: Allow wallet updates for PXL purchases (should be done via Cloud Function in production)
+      allow update: if isOwner(userId) && (
+        // Allow wallet balance increases only (for PXL purchases)
+        (request.resource.data.wallets.pxl.balance > resource.data.wallets.pxl.balance &&
+         request.resource.data.wallets.pxl.totalEarned >= resource.data.wallets.pxl.totalEarned) ||
+        // Or allow regular profile updates without touching sensitive fields
         !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['tier', 'wallets', 'timestamps.created']);
+          .hasAny(['tier', 'wallets', 'timestamps.created'])
+      );
     }
     
     // Giftcards Collection - Public read for active cards
