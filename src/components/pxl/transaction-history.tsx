@@ -57,7 +57,9 @@ export function TransactionHistory() {
       limit(showAll ? 100 : 10)
     );
 
-    const unsubscribe = onSnapshot(transactionsQuery, (snapshot: QuerySnapshot<DocumentData>) => {
+    const unsubscribe = onSnapshot(
+      transactionsQuery, 
+      (snapshot: QuerySnapshot<DocumentData>) => {
       const txns: Transaction[] = snapshot.docs.map(doc => {
         const data = doc.data();
         
@@ -106,6 +108,16 @@ export function TransactionHistory() {
       
       setTransactions(txns);
       setLoading(false);
+    },
+    (error) => {
+      console.error('Error loading transactions:', error);
+      // Set loading to false even on error to show empty state
+      setLoading(false);
+      
+      // If it's an index error, we can show a message but still allow the app to function
+      if (error.code === 'failed-precondition' && error.message.includes('index')) {
+        console.log('Indexes are being built. Transactions will appear once indexes are ready.');
+      }
     });
 
     return () => unsubscribe();

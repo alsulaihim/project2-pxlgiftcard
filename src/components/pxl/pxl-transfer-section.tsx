@@ -39,35 +39,53 @@ export function PXLTransferSection() {
     );
 
     // Subscribe to transfers
-    const unsubscribeSent = onSnapshot(transfersQuery, (snapshot) => {
-      const sentTransfers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        type: 'sent',
-        ...doc.data()
-      }));
-      
-      setRecentTransfers(prev => {
-        const received = prev.filter(t => t.type === 'received');
-        return [...sentTransfers, ...received].sort((a, b) => 
-          (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
-        ).slice(0, 5);
-      });
-    });
+    const unsubscribeSent = onSnapshot(
+      transfersQuery, 
+      (snapshot) => {
+        const sentTransfers = snapshot.docs.map(doc => ({
+          id: doc.id,
+          type: 'sent',
+          ...doc.data()
+        }));
+        
+        setRecentTransfers(prev => {
+          const received = prev.filter(t => t.type === 'received');
+          return [...sentTransfers, ...received].sort((a, b) => 
+            (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+          ).slice(0, 5);
+        });
+      },
+      (error) => {
+        console.error('Error loading sent transfers:', error);
+        if (error.code === 'failed-precondition' && error.message.includes('index')) {
+          console.log('Transfer indexes are being built. Recent transfers will appear once indexes are ready.');
+        }
+      }
+    );
 
-    const unsubscribeReceived = onSnapshot(receivedQuery, (snapshot) => {
-      const receivedTransfers = snapshot.docs.map(doc => ({
-        id: doc.id,
-        type: 'received',
-        ...doc.data()
-      }));
-      
-      setRecentTransfers(prev => {
-        const sent = prev.filter(t => t.type === 'sent');
-        return [...sent, ...receivedTransfers].sort((a, b) => 
-          (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
-        ).slice(0, 5);
-      });
-    });
+    const unsubscribeReceived = onSnapshot(
+      receivedQuery,
+      (snapshot) => {
+        const receivedTransfers = snapshot.docs.map(doc => ({
+          id: doc.id,
+          type: 'received',
+          ...doc.data()
+        }));
+        
+        setRecentTransfers(prev => {
+          const sent = prev.filter(t => t.type === 'sent');
+          return [...sent, ...receivedTransfers].sort((a, b) => 
+            (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)
+          ).slice(0, 5);
+        });
+      },
+      (error) => {
+        console.error('Error loading received transfers:', error);
+        if (error.code === 'failed-precondition' && error.message.includes('index')) {
+          console.log('Transfer indexes are being built. Recent transfers will appear once indexes are ready.');
+        }
+      }
+    );
 
     return () => {
       unsubscribeSent();
