@@ -5,12 +5,21 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "functions": {
+    "source": "functions",
+    "predeploy": [
+      "npm --prefix \"$RESOURCE_DIR\" run build"
+    ]
+  },
   "storage": {
     "rules": "storage.rules"
   },
   "emulators": {
     "auth": {
       "port": 9099
+    },
+    "functions": {
+      "port": 5001
     },
     "firestore": {
       "port": 8080

@@ -3,10 +3,12 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { ValidatedInput } from "@/components/ui/validated-input";
-import { CreditCard, DollarSign, ArrowRight, Info, AlertCircle } from "lucide-react";
+import { CreditCard, DollarSign, ArrowRight, Info, AlertCircle, TrendingUp } from "lucide-react";
 import { parseFormattedBalance } from "@/lib/validation";
 import StripePayment from "@/components/payments/stripe-payment";
 import PayPalPayment from "@/components/payments/paypal-payment";
+import { usePXLCurrency } from "@/hooks/use-pxl-currency";
+import { formatPXL, formatUSD } from "@/lib/pxl-currency";
 
 /**
  * PXL Purchase section for converting USD to PXL
@@ -19,20 +21,45 @@ export function PXLPurchaseSection() {
   const [paymentResult, setPaymentResult] = React.useState<any>(null);
   const [cancellationMessage, setCancellationMessage] = React.useState<string>('');
 
-  // Mock exchange rate data
-  const exchangeRate = 99.76; // 1 USD = 99.76 PXL
-  const pxlAmount = parseFormattedBalance(usdAmount || "0") * exchangeRate;
+  // Use real PXL currency data
+  const { 
+    currentRate, 
+    calculatePXLAmount, 
+    processPXLPurchase,
+    userTier,
+    purchaseDiscount,
+    loading: currencyLoading 
+  } = usePXLCurrency();
+  
+  const parsedAmount = parseFormattedBalance(usdAmount || "0");
+  const pxlCalculation = React.useMemo(() => {
+    return calculatePXLAmount(parsedAmount);
+  }, [parsedAmount, calculatePXLAmount]);
 
   const presetAmounts = [25, 50, 100, 250, 500];
 
   // Payment success handler
-  const handlePaymentSuccess = (result: any) => {
+  const handlePaymentSuccess = async (result: any) => {
     console.log('PXL Purchase successful:', result);
     setPaymentResult(result);
-    setSuccess(true);
+    
+    try {
+      // Process the PXL purchase and update balances
+      const txResult = await processPXLPurchase(
+        parsedAmount,
+        paymentMethod,
+        result.id || result.paymentIntentId || result.orderId
+      );
+      
+      console.log('PXL transaction completed:', txResult);
+      setSuccess(true);
+    } catch (error) {
+      console.error('Failed to process PXL purchase:', error);
+      handlePaymentError('Failed to credit PXL to your account. Please contact support.');
+    }
+    
     setIsProcessing(false);
     setCancellationMessage('');
-    // TODO: Update user's PXL balance in the backend
   };
 
   // Payment error handler
@@ -57,6 +84,22 @@ export function PXLPurchaseSection() {
     // Legacy button handler - now payment is handled by individual components
     console.log("Purchase PXL:", { usdAmount, pxlAmount, paymentMethod });
   };
+
+  if (currencyLoading) {
+    return (
+      <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
+        <div className="mb-4">
+          <h2 className="text-lg font-bold text-white">Buy PXL</h2>
+          <p className="text-gray-400">Loading exchange rates...</p>
+        </div>
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 bg-gray-800 rounded"></div>
+          <div className="h-32 bg-gray-800 rounded"></div>
+          <div className="h-10 bg-gray-800 rounded"></div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
@@ -111,23 +154,45 @@ export function PXLPurchaseSection() {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-400">You pay</span>
             <span className="font-medium text-white">
-              ${parseFloat(usdAmount || "0").toFixed(2)} USD
+              {formatUSD(parsedAmount)}
             </span>
           </div>
+          
+          {/* Show tier bonus if applicable */}
+          {purchaseDiscount > 0 && (
+            <div className="flex items-center justify-between mb-2 text-green-400">
+              <span className="text-sm flex items-center">
+                <TrendingUp className="h-3 w-3 mr-1" />
+                {userTier} bonus (+{(purchaseDiscount * 100).toFixed(0)}%)
+              </span>
+              <span className="text-sm">
+                +{formatPXL(pxlCalculation.bonusPxl)}
+              </span>
+            </div>
+          )}
+          
           <div className="flex items-center justify-center py-2">
             <ArrowRight className="h-5 w-5 text-gray-400" />
           </div>
+          
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-400">You receive</span>
-            <span className="font-medium text-white">
-              PXL {Math.floor(pxlAmount).toLocaleString()}
+            <span className="font-medium text-white text-lg">
+              {formatPXL(pxlCalculation.totalPxl)}
             </span>
           </div>
-          <div className="mt-3 pt-3 border-t border-gray-800">
+          
+          <div className="mt-3 pt-3 border-t border-gray-800 space-y-1">
             <div className="flex items-center justify-between text-xs text-gray-400">
               <span>Exchange rate</span>
-              <span>1 USD = {exchangeRate} PXL</span>
+              <span>1 USD = {currentRate.toFixed(2)} PXL</span>
             </div>
+            {purchaseDiscount > 0 && (
+              <div className="flex items-center justify-between text-xs text-green-400">
+                <span>Effective rate</span>
+                <span>1 USD = {pxlCalculation.effectiveRate.toFixed(2)} PXL</span>
+              </div>
+            )}
           </div>
         </div>
 

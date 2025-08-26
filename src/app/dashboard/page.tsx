@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/contexts/auth-context';
 import { useCart } from '@/contexts/cart-context';
+import { usePXLCurrency } from '@/hooks/use-pxl-currency';
 import { Card } from '@/components/ui/card';
 import Link from 'next/link';
 import { 
@@ -17,7 +18,7 @@ import {
   Star,
   ChevronRight
 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { SparklineChart } from '@/components/dashboard/sparkline-chart';
 import { TierProgressCard } from '@/components/dashboard/tier-progress-card';
 
@@ -86,10 +87,28 @@ const generateSparklineData = () => {
 export default function DashboardPage() {
   const { user, platformUser, loading } = useAuth();
   const { state: cartState, dispatch: cartDispatch } = useCart();
-  const [currentRate, setCurrentRate] = useState(99.90);
-  const [rateChange, setRateChange] = useState(-0.24);
-  const [sparklineData] = useState(generateSparklineData());
+  const { 
+    currencyData, 
+    currentRate, 
+    trend,
+    loading: currencyLoading 
+  } = usePXLCurrency();
   const [selectedDenominations, setSelectedDenominations] = useState<{[key: number]: number}>({});
+  
+  // Calculate rate change from currency data
+  const rateChange = useMemo(() => {
+    if (!currencyData?.marketData.hourlyRates.length) return 0;
+    const oldRate = currencyData.marketData.hourlyRates[0].rate;
+    return ((currentRate - oldRate) / oldRate) * 100;
+  }, [currencyData, currentRate]);
+  
+  // Extract sparkline data from currency market data
+  const sparklineData = useMemo(() => {
+    if (!currencyData?.marketData.hourlyRates.length) {
+      return generateSparklineData();
+    }
+    return currencyData.marketData.hourlyRates.map(point => point.rate);
+  }, [currencyData]);
 
   // Redirect if not authenticated
   useEffect(() => {
