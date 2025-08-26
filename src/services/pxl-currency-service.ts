@@ -284,11 +284,8 @@ export class PXLCurrencyService {
     effectiveRate: number;
   }> {
     try {
-      console.log('Processing PXL purchase:', { userId, usdAmount, userTier, paymentMethod });
-      
       // Calculate PXL amount with tier discount
       const calculation = this.calculatePXLPurchase(usdAmount, userTier);
-      console.log('PXL calculation:', calculation);
       
       // Create transaction record
       const transaction = {
@@ -319,13 +316,10 @@ export class PXLCurrencyService {
       };
       
       // Add transaction to Firestore
-      console.log('Creating transaction record...');
       const docRef = await addDoc(collection(db, 'transactions'), transaction);
-      console.log('Transaction created:', docRef.id);
       
       // Update user's PXL balance
       // Note: In production, this should be done in a Cloud Function for security
-      console.log('Fetching user document...');
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
       
@@ -334,7 +328,6 @@ export class PXLCurrencyService {
       }
       
       const userData = userDoc.data();
-      console.log('User data found, current wallet:', userData.wallets);
       
       // Ensure wallet structure exists
       if (!userData.wallets) {
@@ -347,16 +340,12 @@ export class PXLCurrencyService {
       const currentBalance = userData.wallets.pxl.balance || 0;
       const currentTotalEarned = userData.wallets.pxl.totalEarned || 0;
       
-      console.log('Updating balance from', currentBalance, 'to', currentBalance + calculation.totalPxl);
-      
       // Update the user's PXL balance and statistics
       await updateDoc(userRef, {
         'wallets.pxl.balance': currentBalance + calculation.totalPxl,
         'wallets.pxl.totalEarned': currentTotalEarned + calculation.totalPxl,
         'timestamps.updated': Timestamp.now()
       });
-      
-      console.log('Balance updated successfully');
       
       return {
         transactionId: docRef.id,
