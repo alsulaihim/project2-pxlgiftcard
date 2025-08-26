@@ -1,14 +1,36 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, TrendingUp, Shield, Zap } from "lucide-react";
+import { ArrowRight, TrendingUp, Shield, Zap, Wallet, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/auth-context";
+import { useRouter } from "next/navigation";
+import { formatPXL } from "@/lib/pxl-currency";
 
 /**
  * Hero section matching Vercel's landing page design
  * Clean, minimal, focused on the main value proposition
  */
 export function HeroSection() {
+  const { user, platformUser, loading } = useAuth();
+  const router = useRouter();
+  
+  const handleGetStarted = () => {
+    router.push('/auth/signup');
+  };
+  
+  const handleExploreMarketplace = () => {
+    router.push('/marketplace');
+  };
+  
+  const handleBuyPXL = () => {
+    router.push('/pxl');
+  };
+  
+  const handleViewDashboard = () => {
+    router.push('/dashboard');
+  };
+
   return (
     <section className="relative">
       {/* Vercel-style background pattern */}
@@ -36,16 +58,71 @@ export function HeroSection() {
               Unlock tier-based savings and join a community of smart shoppers.
             </p>
 
-            {/* CTA Buttons - Vercel style */}
+            {/* CTA Buttons - Different for logged in users */}
             <div className="mt-6 flex items-center justify-center gap-x-6">
-              <Button size="lg" className="bg-white text-black hover:bg-gray-200">
-                Get Started Free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="lg" className="text-white">
-                Explore Marketplace
-              </Button>
+              {loading ? (
+                // Loading state
+                <div className="animate-pulse">
+                  <div className="h-12 w-40 bg-gray-800 rounded-lg"></div>
+                </div>
+              ) : user ? (
+                // Logged in user CTAs
+                <>
+                  <Button 
+                    size="lg" 
+                    className="bg-white text-black hover:bg-gray-200"
+                    onClick={handleExploreMarketplace}
+                  >
+                    <ShoppingBag className="mr-2 h-4 w-4" />
+                    Shop Gift Cards
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="lg" 
+                    className="text-white"
+                    onClick={handleBuyPXL}
+                  >
+                    <Wallet className="mr-2 h-4 w-4" />
+                    Buy PXL
+                  </Button>
+                </>
+              ) : (
+                // Guest user CTAs
+                <>
+                  <Button 
+                    size="lg" 
+                    className="bg-white text-black hover:bg-gray-200"
+                    onClick={handleGetStarted}
+                  >
+                    Get Started Free
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="lg" 
+                    className="text-white"
+                    onClick={handleExploreMarketplace}
+                  >
+                    Explore Marketplace
+                  </Button>
+                </>
+              )}
             </div>
+            
+            {/* Show user's balance if logged in */}
+            {user && platformUser && (
+              <div className="mt-6 flex items-center justify-center gap-4 text-sm text-gray-400">
+                <div className="flex items-center gap-2">
+                  <span>Your Balance:</span>
+                  <span className="font-semibold text-white">{formatPXL(platformUser.wallets?.pxl?.balance || 0)}</span>
+                </div>
+                <div className="w-px h-4 bg-gray-700"></div>
+                <div className="flex items-center gap-2">
+                  <span>Tier:</span>
+                  <span className="font-semibold text-white capitalize">{platformUser.tier?.current || 'starter'}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
