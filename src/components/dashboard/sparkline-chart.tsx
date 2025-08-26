@@ -146,21 +146,7 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
           <p className="text-xs text-gray-500 mt-1">1 USD = {currentValue.toFixed(2)} PXL</p>
         </div>
         
-        {/* Time period selector */}
-        <div className="flex gap-1">
-          {['1H', '1D', '7D', '30D'].map((period) => (
-            <button
-              key={period}
-              className={`px-2 py-1 text-xs rounded transition-colors ${
-                period === '1H' 
-                  ? 'bg-gray-800 text-white' 
-                  : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
-              }`}
-            >
-              {period}
-            </button>
-          ))}
-        </div>
+
       </div>
 
       {/* Chart */}

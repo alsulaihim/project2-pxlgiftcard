@@ -4,7 +4,7 @@
 // Impact: Single navigation header now displays correctly on homepage
 
 import { HeroSection } from "@/components/landing/hero-section";
-import { PXLExchangeSection } from "@/components/landing/pxl-exchange-section";
+import { PXLRateChart } from "@/components/dashboard/pxl-rate-chart";
 import { FeaturedGiftcards } from "@/components/landing/featured-giftcards";
 
 /**
@@ -20,7 +20,11 @@ export default function HomePage() {
         <HeroSection />
 
         {/* PXL Exchange Rate Chart */}
-        <PXLExchangeSection />
+        <section className="py-1 sm:py-2">
+          <div className="mx-auto max-w-7xl px-6 lg:px-8">
+            <PXLRateChart />
+          </div>
+        </section>
 
         {/* Featured Products */}
         <FeaturedGiftcards />

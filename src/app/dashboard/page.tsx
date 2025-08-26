@@ -19,7 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
-import { SparklineChart } from '@/components/dashboard/sparkline-chart';
+import { PXLRateChart } from '@/components/dashboard/pxl-rate-chart';
 import { TierProgressCard } from '@/components/dashboard/tier-progress-card';
 
 // Mock data for user's previously ordered giftcards
@@ -75,14 +75,7 @@ const tierColors = {
   pixlionaire: { bg: 'rgb(185, 43, 228)', text: 'text-white' }
 };
 
-// Mock exchange rate data
-const generateSparklineData = () => {
-  const data = [];
-  for (let i = 0; i < 24; i++) {
-    data.push(98 + Math.random() * 4);
-  }
-  return data;
-};
+
 
 export default function DashboardPage() {
   const { user, platformUser, loading } = useAuth();
@@ -95,20 +88,7 @@ export default function DashboardPage() {
   } = usePXLCurrency();
   const [selectedDenominations, setSelectedDenominations] = useState<{[key: number]: number}>({});
   
-  // Calculate rate change from currency data
-  const rateChange = useMemo(() => {
-    if (!currencyData?.marketData.hourlyRates.length) return 0;
-    const oldRate = currencyData.marketData.hourlyRates[0].rate;
-    return ((currentRate - oldRate) / oldRate) * 100;
-  }, [currencyData, currentRate]);
-  
-  // Extract sparkline data from currency market data
-  const sparklineData = useMemo(() => {
-    if (!currencyData?.marketData.hourlyRates.length) {
-      return generateSparklineData();
-    }
-    return currencyData.marketData.hourlyRates.map(point => point.rate);
-  }, [currencyData]);
+
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -241,13 +221,7 @@ export default function DashboardPage() {
 
         {/* PXL Exchange Rate Chart */}
         <div className="mb-8">
-          <SparklineChart
-            data={sparklineData}
-            previousData={sparklineData.map(v => v - 0.5)}
-            currentValue={currentRate}
-            changePercent={rateChange}
-            height={180}
-          />
+          <PXLRateChart />
         </div>
 
         {/* Quick Stats Overview */}
