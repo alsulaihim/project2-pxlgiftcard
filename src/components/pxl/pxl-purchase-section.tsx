@@ -9,6 +9,7 @@ import StripePayment from "@/components/payments/stripe-payment";
 import PayPalPayment from "@/components/payments/paypal-payment";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 import { formatPXL, formatUSD } from "@/lib/pxl-currency";
+import { useAuth } from "@/contexts/auth-context";
 
 /**
  * PXL Purchase section for converting USD to PXL
@@ -37,6 +38,8 @@ export function PXLPurchaseSection() {
     loading: currencyLoading 
   } = usePXLCurrency();
   
+  const { refreshUserData } = useAuth();
+  
   const parsedAmount = parseFormattedBalance(usdAmount || "0");
   const pxlCalculation = React.useMemo(() => {
     return calculatePXLAmount(parsedAmount);
@@ -59,6 +62,9 @@ export function PXLPurchaseSection() {
       
       console.log('PXL transaction completed:', txResult);
       setSuccess(true);
+      
+      // Refresh user data to update balances across the app
+      await refreshUserData();
     } catch (error) {
       console.error('Failed to process PXL purchase:', error);
       handlePaymentError('Failed to credit PXL to your account. Please contact support.');

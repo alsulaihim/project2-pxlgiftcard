@@ -317,8 +317,25 @@ export class PXLCurrencyService {
     // Add transaction to Firestore
     const docRef = await addDoc(collection(db, 'transactions'), transaction);
     
-    // Update user's PXL balance would happen here
-    // This would be done in a Cloud Function for security
+    // Update user's PXL balance
+    // Note: In production, this should be done in a Cloud Function for security
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    
+    if (!userDoc.exists()) {
+      throw new Error('User not found');
+    }
+    
+    const userData = userDoc.data();
+    const currentBalance = userData.wallets?.pxl?.balance || 0;
+    const currentTotalEarned = userData.wallets?.pxl?.totalEarned || 0;
+    
+    // Update the user's PXL balance and statistics
+    await updateDoc(userRef, {
+      'wallets.pxl.balance': currentBalance + calculation.totalPxl,
+      'wallets.pxl.totalEarned': currentTotalEarned + calculation.totalPxl,
+      'timestamps.updated': Timestamp.now()
+    });
     
     return {
       transactionId: docRef.id,

@@ -81,6 +81,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   updateUserProfile: (profileData: Partial<UserProfile>) => Promise<void>;
   setupUserProfile: (username: string, profileData: UserProfile) => Promise<void>;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -196,6 +197,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (email: string): Promise<void> => {
     await sendPasswordResetEmail(auth, email);
   };
+  
+  // Refresh user data from Firestore
+  const refreshUserData = async (): Promise<void> => {
+    if (user) {
+      await loadPlatformUser(user);
+    }
+  };
 
   // Setup user profile (called after registration)
   // Helper function to remove undefined values from objects
@@ -304,7 +312,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     resetPassword,
     updateUserProfile,
-    setupUserProfile
+    setupUserProfile,
+    refreshUserData
   };
 
   return (
