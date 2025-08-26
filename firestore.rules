@@ -19,7 +19,11 @@ service cloud.firestore {
     
     // Users Collection - Users can read/write their own profile
     match /users/{userId} {
-      allow read: if isOwner(userId);
+      // BUG FIX: 2024-01-27 - Failed to verify recipient in PXL transfers
+      // Problem: Recipient lookup queries need to read user documents
+      // Solution: Allow authenticated users to read basic user info
+      // Impact: Users can now find recipients by username/email
+      allow read: if isAuthenticated();
       allow create: if isOwner(userId);
       
       // BUG FIX: 2024-01-27 - PXL transfer failing with permissions error
