@@ -239,7 +239,7 @@ export default function CheckoutForm() {
               <span className="text-white">${formatBalance(state.totals.usd)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-gray-400">Tier Discount ({mockUser.tier})</span>
+              <span className="text-gray-400">Tier Discount ({userTier})</span>
               <span className="text-green-400">-${formatBalance(state.totals.savings)}</span>
             </div>
             <div className="flex justify-between text-lg font-semibold border-t border-gray-700 pt-2">
@@ -282,7 +282,7 @@ export default function CheckoutForm() {
                   <div>
                     <p className="font-medium text-white">Pay with PXL</p>
                     <p className="text-sm text-gray-400">
-                      Balance: PXL {formatBalance(mockUser.pxlBalance)}
+                      Balance: PXL {formatBalance(userPxlBalance)}
                     </p>
                   </div>
                 </div>
