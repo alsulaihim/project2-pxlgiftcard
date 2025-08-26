@@ -161,10 +161,10 @@ export function Navigation() {
                 className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-900 hover:border-gray-700 transition-all group"
               >
                 <Wallet className="h-4 w-4 text-gray-400 group-hover:text-green-400 transition-colors" />
+                <span className="text-xs text-gray-500">PXL Balance</span>
                 <span className="text-sm font-medium text-white">
                   {formatPXL(platformUser.wallets?.pxl?.balance || 0)}
                 </span>
-                <span className="text-xs text-gray-500">PXL</span>
               </Link>
             )}
             
