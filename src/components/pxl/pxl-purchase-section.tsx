@@ -21,6 +21,12 @@ export function PXLPurchaseSection() {
   const [paymentResult, setPaymentResult] = React.useState<any>(null);
   const [cancellationMessage, setCancellationMessage] = React.useState<string>('');
 
+  // Clear messages when amount or payment method changes
+  React.useEffect(() => {
+    setCancellationMessage('');
+    setSuccess(false);
+  }, [usdAmount, paymentMethod]);
+
   // Use real PXL currency data
   const { 
     currentRate, 
@@ -257,11 +263,24 @@ export function PXLPurchaseSection() {
         {/* Cancellation Message */}
         {cancellationMessage && (
           <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
-            <div className="flex items-center space-x-2">
-              <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
-              <div className="text-sm text-yellow-400">
-                <p>{cancellationMessage}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 text-yellow-400 flex-shrink-0" />
+                <div className="text-sm text-yellow-400">
+                  <p className="font-medium">Payment Cancelled</p>
+                  <p className="text-xs text-yellow-300 mt-0.5">{cancellationMessage}</p>
+                  <p className="text-xs text-yellow-300 mt-1">You can try again or choose a different payment method.</p>
+                </div>
               </div>
+              <button
+                onClick={() => setCancellationMessage('')}
+                className="text-yellow-400 hover:text-yellow-300 p-1"
+                aria-label="Dismiss message"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
         )}
