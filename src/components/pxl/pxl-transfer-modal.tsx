@@ -43,26 +43,29 @@ export function PXLTransferModal({ isOpen, onClose }: PXLTransferModalProps) {
     try {
       // Check if recipient is username or email
       const isEmail = recipient.includes('@') && !recipient.startsWith('@');
-      console.log('Verifying recipient:', recipient, 'isEmail:', isEmail);
       
       const q = isEmail
         ? query(collection(db, 'users'), where('email', '==', recipient))
         : query(collection(db, 'users'), where('username', '==', recipient));
       
       const snapshot = await getDocs(q);
-      console.log('Query result:', snapshot.empty ? 'No users found' : `Found ${snapshot.size} users`);
       
       if (snapshot.empty) {
-        setError('User not found');
+        // BUG FIX: 2024-01-27 - Provide helpful error messages for user not found
+        if (!isEmail && !recipient.startsWith('@')) {
+          setError('Username must start with @ (e.g., @johndoe)');
+        } else if (isEmail) {
+          setError('No user found with this email address');
+        } else {
+          setError('No user found with this username');
+        }
         setRecipientData(null);
       } else {
         const recipientDoc = snapshot.docs[0];
         const data = recipientDoc.data();
-        console.log('Found recipient:', data.username, data.email);
         setRecipientData({ id: recipientDoc.id, ...data });
       }
     } catch (err: any) {
-      console.error('Error verifying recipient:', err);
       // BUG FIX: 2024-01-27 - Show actual error message for debugging
       if (err.code === 'permission-denied') {
         setError('Permission denied: Cannot search for users');
