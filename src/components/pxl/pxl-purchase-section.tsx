@@ -247,7 +247,7 @@ export function PXLPurchaseSection() {
               <div className="text-sm text-green-400">
                 <p className="font-medium">PXL Purchase Successful!</p>
                 <p className="text-xs text-green-300 mt-1">
-                  You've received PXL {Math.floor(pxlAmount).toLocaleString()} in your wallet.
+                  You've received PXL {Math.floor(pxlCalculation.totalPxl).toLocaleString()} in your wallet.
                 </p>
               </div>
             </div>
