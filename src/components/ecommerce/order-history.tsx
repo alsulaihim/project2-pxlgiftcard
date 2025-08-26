@@ -5,9 +5,11 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { formatBalance } from '@/lib/validation';
+import { formatPXL, formatUSD } from '@/lib/pxl-currency';
 import { 
   Download, 
   Eye, 
@@ -17,84 +19,91 @@ import {
   Gift,
   Calendar,
   CreditCard,
-  Coins
+  Coins,
+  ExternalLink
 } from 'lucide-react';
-
-// Mock order data
-const mockOrders = [
-  {
-    id: 'ORD-2024-001',
-    date: '2024-01-15',
-    status: 'completed',
-    paymentMethod: 'pxl',
-    total: {
-      usd: 75.00,
-      pxl: 7425,
-    },
-    items: [
-      {
-        id: '1',
-        brand: 'Amazon',
-        productName: 'Amazon Gift Card',
-        denomination: 25,
-        quantity: 3,
-        code: 'AMZN-XXXX-XXXX-1234',
-      }
-    ],
-    cashbackEarned: 222.75,
-  },
-  {
-    id: 'ORD-2024-002',
-    date: '2024-01-14',
-    status: 'completed',
-    paymentMethod: 'stripe',
-    total: {
-      usd: 100.00,
-      pxl: 0,
-    },
-    items: [
-      {
-        id: '2',
-        brand: 'Apple',
-        productName: 'Apple Gift Card',
-        denomination: 50,
-        quantity: 2,
-        code: 'APPL-XXXX-XXXX-5678',
-      }
-    ],
-  },
-  {
-    id: 'ORD-2024-003',
-    date: '2024-01-13',
-    status: 'processing',
-    paymentMethod: 'paypal',
-    total: {
-      usd: 200.00,
-      pxl: 0,
-    },
-    items: [
-      {
-        id: '3',
-        brand: 'Google Play',
-        productName: 'Google Play Gift Card',
-        denomination: 100,
-        quantity: 2,
-        code: null, // Not yet delivered
-      }
-    ],
-  },
-];
+import { useAuth } from '@/contexts/auth-context';
+import { db } from '@/lib/firebase-config';
+import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from 'firebase/firestore';
 
 type OrderStatus = 'completed' | 'processing' | 'failed' | 'refunded';
+
+interface Order {
+  id: string;
+  userId: string;
+  items: Array<{
+    giftcardId: string;
+    brand: string;
+    productName: string;
+    denomination: number;
+    quantity: number;
+    code?: string;
+  }>;
+  payment: {
+    method: 'pxl' | 'stripe' | 'paypal';
+    amount: number;
+    currency: 'USD' | 'PXL';
+  };
+  totals: {
+    subtotal: number;
+    discount: number;
+    cashback?: number;
+    total: number;
+  };
+  status: OrderStatus;
+  createdAt: Timestamp;
+}
 
 /**
  * Order history component with filtering and detailed view
  */
 export function OrderHistory() {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
 
-  const filteredOrders = mockOrders.filter(order => 
+  // Load orders from Firestore
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const ordersQuery = query(
+      collection(db, 'orders'),
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+      limit(50)
+    );
+
+    const unsubscribe = onSnapshot(
+      ordersQuery,
+      (snapshot) => {
+        const orderList: Order[] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Order));
+        
+        setOrders(orderList);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error loading orders:', error);
+        setLoading(false);
+        
+        if (error.code === 'failed-precondition' && error.message.includes('index')) {
+          console.log('Order indexes are being built. Orders will appear once indexes are ready.');
+        }
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const filteredOrders = orders.filter(order => 
     statusFilter === 'all' || order.status === statusFilter
   );
 
@@ -158,7 +167,12 @@ export function OrderHistory() {
 
       {/* Orders List */}
       <div className="space-y-4">
-        {filteredOrders.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
+            <p className="text-gray-400 mt-4">Loading your orders...</p>
+          </div>
+        ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12">
             <Gift className="h-16 w-16 text-gray-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-white mb-2">No orders found</h3>
@@ -168,7 +182,7 @@ export function OrderHistory() {
                 : `No ${statusFilter} orders found`
               }
             </p>
-            <Button onClick={() => window.location.href = '/marketplace'}>
+            <Button onClick={() => router.push('/marketplace')}>
               Start Shopping
             </Button>
           </div>
@@ -185,7 +199,7 @@ export function OrderHistory() {
                     <h3 className="text-lg font-semibold text-white">{order.id}</h3>
                     <div className="flex items-center space-x-2 text-sm text-gray-400">
                       <Calendar className="h-4 w-4" />
-                      <span>{new Date(order.date).toLocaleDateString('en-US')}</span>
+                      <span>{order.createdAt.toDate().toLocaleDateString('en-US')}</span>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -198,18 +212,18 @@ export function OrderHistory() {
 
                 <div className="text-right">
                   <div className="text-lg font-semibold text-white">
-                    {order.paymentMethod === 'pxl' 
-                      ? `PXL ${formatBalance(order.total.pxl)}`
-                      : `$${formatBalance(order.total.usd)}`
+                    {order.payment.currency === 'PXL' 
+                      ? formatPXL(order.totals.total)
+                      : formatUSD(order.totals.total)
                     }
                   </div>
                   <div className="flex items-center space-x-1 text-sm text-gray-400">
-                    {order.paymentMethod === 'pxl' ? (
+                    {order.payment.method === 'pxl' ? (
                       <Coins className="h-4 w-4" />
                     ) : (
                       <CreditCard className="h-4 w-4" />
                     )}
-                    <span className="capitalize">{order.paymentMethod}</span>
+                    <span className="capitalize">{order.payment.method}</span>
                   </div>
                 </div>
               </div>
@@ -238,11 +252,11 @@ export function OrderHistory() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
+                            onClick={() => router.push(`/order-confirmation/${order.id}`)}
                             className="border-gray-700 text-gray-300 hover:bg-gray-800"
                           >
-                            <Eye className="h-4 w-4 mr-1" />
-                            View Code
+                            <ExternalLink className="h-4 w-4 mr-1" />
+                            View Order
                           </Button>
                           <Button
                             size="sm"
@@ -283,12 +297,12 @@ export function OrderHistory() {
               )}
 
               {/* Cashback Info */}
-              {order.cashbackEarned && (
+              {order.totals.cashback && order.totals.cashback > 0 && (
                 <div className="border-t border-gray-800 pt-4">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-400">PXL Cashback Earned:</span>
                     <span className="text-green-400 font-medium">
-                      +PXL {formatBalance(order.cashbackEarned)}
+                      +{formatPXL(order.totals.cashback)}
                     </span>
                   </div>
                 </div>

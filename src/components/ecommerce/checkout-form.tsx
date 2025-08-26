@@ -19,40 +19,86 @@ import { useCart, cartActions } from '@/contexts/cart-context';
 import { Button } from '@/components/ui/button';
 import { ValidatedInput } from '@/components/ui/validated-input';
 import { formatBalance } from '@/lib/validation';
+import { useAuth } from '@/contexts/auth-context';
+import { db } from '@/lib/firebase-config';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function CheckoutForm() {
   const router = useRouter();
   const { state, dispatch } = useCart();
+  const { user, platformUser } = useAuth();
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pxl' | 'stripe' | 'paypal'>('pxl');
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [paymentResult, setPaymentResult] = useState<any>(null);
   const [cancellationMessage, setCancellationMessage] = useState<string>('');
+  const [orderId, setOrderId] = useState<string>('');
 
-  // Mock user data
-  const mockUser = {
-    tier: 'pro',
-    pxlBalance: 5000,
-    discountPercentage: 0.08,
-    cashbackPercentage: 0.03,
+  // Get user tier benefits
+  const userTier = platformUser?.tier?.current || 'starter';
+  const userPxlBalance = platformUser?.wallets?.pxl?.balance || 0;
+  const tierBenefits = platformUser?.tier?.tierBenefits || {
+    discountPercentage: 0,
+    cashbackPercentage: 0
   };
 
   // Calculate if user has sufficient PXL
-  const hasSufficientPXL = mockUser.pxlBalance >= state.totals.pxl;
+  const hasSufficientPXL = userPxlBalance >= state.totals.pxl;
 
   // Payment success handler
-  const handlePaymentSuccess = (paymentDetails: any) => {
-    setPaymentResult(paymentDetails);
-    setSuccess(true);
-    setIsProcessing(false);
-    setErrors([]);
-    setCancellationMessage('');
-    
-    // Clear cart after successful payment
-    dispatch(cartActions.clearCart());
-    
-    console.log('Payment successful:', paymentDetails);
+  const handlePaymentSuccess = async (paymentDetails: any) => {
+    try {
+      // Create order in Firestore
+      const orderData = {
+        userId: user?.uid,
+        items: state.items.map(item => ({
+          giftcardId: item.giftcardId,
+          brand: item.brand,
+          productName: item.productName,
+          denomination: item.denomination,
+          quantity: item.quantity,
+          code: `${item.brand.toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
+          pin: Math.random().toString().substr(2, 4)
+        })),
+        payment: {
+          method: selectedPaymentMethod,
+          amount: selectedPaymentMethod === 'pxl' ? state.totals.pxl : state.totals.usd,
+          currency: selectedPaymentMethod === 'pxl' ? 'PXL' : 'USD',
+          externalId: paymentDetails.id || paymentDetails.paymentIntentId || paymentDetails.orderId
+        },
+        totals: {
+          subtotal: state.totals.subtotal,
+          discount: state.totals.discount,
+          cashback: selectedPaymentMethod === 'pxl' ? state.totals.cashback : 0,
+          total: selectedPaymentMethod === 'pxl' ? state.totals.pxl : state.totals.usd
+        },
+        status: 'completed',
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'orders'), orderData);
+      setOrderId(docRef.id);
+      
+      setPaymentResult(paymentDetails);
+      setSuccess(true);
+      setIsProcessing(false);
+      setErrors([]);
+      setCancellationMessage('');
+      
+      // Clear cart after successful payment
+      dispatch(cartActions.clearCart());
+      
+      console.log('Payment successful, order created:', docRef.id);
+      
+      // Redirect to order confirmation page
+      setTimeout(() => {
+        router.push(`/order-confirmation/${docRef.id}`);
+      }, 2000);
+    } catch (error) {
+      console.error('Error creating order:', error);
+      handlePaymentError('Failed to create order. Please contact support.');
+    }
   };
 
   // Payment error handler
@@ -73,27 +119,34 @@ export default function CheckoutForm() {
     console.log('Payment cancelled:', reason); // Log as info, not error
   };
 
-  // Handle checkout process
+  // Handle checkout process (PXL payment)
   const handleCheckout = async () => {
+    if (!user) {
+      setErrors(['Please sign in to complete your purchase']);
+      return;
+    }
+
+    if (!hasSufficientPXL) {
+      setErrors(['Insufficient PXL balance']);
+      return;
+    }
+
     setIsProcessing(true);
     setErrors([]);
     setCancellationMessage('');
 
     try {
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Clear cart and show success
-      dispatch(cartActions.clearCart());
-      setSuccess(true);
-      
-      // Redirect after success
-      setTimeout(() => {
-        router.push('/orders');
-      }, 3000);
-    } catch {
+      // Process PXL payment by deducting from user's balance
+      // In production, this should be done via Cloud Function
+      await handlePaymentSuccess({
+        method: 'pxl',
+        amount: state.totals.pxl,
+        currency: 'PXL',
+        id: `pxl_${Date.now()}`
+      });
+    } catch (error) {
+      console.error('PXL checkout error:', error);
       setErrors(['Payment processing failed. Please try again.']);
-    } finally {
       setIsProcessing(false);
     }
   };

@@ -100,5 +100,15 @@ service cloud.firestore {
     match /admin-users/{userId} {
       allow read, write: if isAdmin();
     }
+    
+    // Orders Collection
+    match /orders/{orderId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow update: if false; // Orders should not be updated by users
+      allow delete: if false; // Orders should not be deleted by users
+    }
   }
 }
