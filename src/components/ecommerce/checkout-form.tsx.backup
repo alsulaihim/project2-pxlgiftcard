@@ -1,0 +1,508 @@
+/**
+ * Checkout Form Component
+ * Handles dual payment methods (USD/PXL) with Stripe and PayPal integration
+ */
+
+"use client";
+
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { 
+  CreditCard, 
+  Coins, 
+  ShoppingBag, 
+  Check, 
+  AlertCircle,
+  ArrowLeft,
+  Lock,
+  Zap
+} from 'lucide-react';
+import { useCart, cartActions } from '@/contexts/cart-context';
+import { Button } from '@/components/ui/button';
+import { ValidatedInput } from '@/components/ui/validated-input';
+import { formatBalance } from '@/lib/validation';
+
+type PaymentMethod = 'stripe' | 'paypal' | 'pxl';
+
+/**
+ * Comprehensive checkout form with dual payment support
+ */
+export function CheckoutForm() {
+  const { state, dispatch } = useCart();
+  const router = useRouter();
+  
+  // Form state
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethod>('pxl');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [success, setSuccess] = useState(false);
+  
+  // Form data
+  const [formData, setFormData] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    cardNumber: '',
+    expiryDate: '',
+    cvv: '',
+    billingAddress: '',
+    city: '',
+    zipCode: '',
+    country: 'US',
+  });
+
+  // Mock user PXL balance
+  const userPXLBalance = 15000;
+  const hasSufficientPXL = userPXLBalance >= state.totals.pxl;
+
+  // Handle form input changes
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    setErrors([]); // Clear errors when user starts typing
+  };
+
+  // Validate checkout form
+  const validateCheckout = (): boolean => {
+    const validationErrors: string[] = [];
+
+    // Email validation
+    if (!formData.email.trim()) {
+      validationErrors.push('Email is required');
+    }
+
+    // Name validation
+    if (!formData.firstName.trim()) {
+      validationErrors.push('First name is required');
+    }
+    if (!formData.lastName.trim()) {
+      validationErrors.push('Last name is required');
+    }
+
+    // Payment method specific validation
+    if (selectedPaymentMethod === 'stripe') {
+      if (!formData.cardNumber.trim()) {
+        validationErrors.push('Card number is required');
+      }
+      if (!formData.expiryDate.trim()) {
+        validationErrors.push('Expiry date is required');
+      }
+      if (!formData.cvv.trim()) {
+        validationErrors.push('CVV is required');
+      }
+      if (!formData.billingAddress.trim()) {
+        validationErrors.push('Billing address is required');
+      }
+    }
+
+    if (selectedPaymentMethod === 'pxl' && !hasSufficientPXL) {
+      validationErrors.push('Insufficient PXL balance');
+    }
+
+    setErrors(validationErrors);
+    return validationErrors.length === 0;
+  };
+
+  // Handle checkout submission
+  const handleCheckout = async () => {
+    if (!validateCheckout()) return;
+
+    setIsProcessing(true);
+    setErrors([]);
+
+    try {
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // Mock payment processing based on method
+      switch (selectedPaymentMethod) {
+        case 'stripe':
+          console.log('Processing Stripe payment...', {
+            amount: state.totals.usd,
+            card: formData.cardNumber,
+            customer: formData.email,
+          });
+          break;
+        
+        case 'paypal':
+          console.log('Processing PayPal payment...', {
+            amount: state.totals.usd,
+            customer: formData.email,
+          });
+          break;
+        
+        case 'pxl':
+          console.log('Processing PXL payment...', {
+            amount: state.totals.pxl,
+            customer: formData.email,
+            cashback: state.totals.cashback,
+          });
+          break;
+      }
+
+      // Simulate success
+      setSuccess(true);
+      
+      // Clear cart after successful payment
+      setTimeout(() => {
+        dispatch(cartActions.clearCart());
+        router.push('/orders'); // Redirect to orders page
+      }, 3000);
+
+    } catch {
+      setErrors(['Payment processing failed. Please try again.']);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // BUG FIX: Show loading state during hydration to prevent flash
+  if (!state.isHydrated) {
+    return (
+      <div className="text-center py-12">
+        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <h2 className="text-xl font-semibold text-white mb-2">Loading checkout...</h2>
+        <p className="text-gray-400">Please wait while we load your cart</p>
+      </div>
+    );
+  }
+
+  // Redirect if cart is empty (only after hydration)
+  if (state.items.length === 0 && !success) {
+    return (
+      <div className="text-center py-12">
+        <ShoppingBag className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+        <h2 className="text-xl font-semibold text-white mb-2">Your cart is empty</h2>
+        <p className="text-gray-400 mb-6">Add some items to your cart to checkout</p>
+        <Button onClick={() => router.push('/marketplace')}>
+          Continue Shopping
+        </Button>
+      </div>
+    );
+  }
+
+  // Success state
+  if (success) {
+    return (
+      <div className="text-center py-12">
+        <div className="w-16 h-16 bg-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Check className="h-8 w-8 text-white" />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2">Payment Successful!</h2>
+        <p className="text-gray-400 mb-6">
+          Your order has been processed and you'll receive a confirmation email shortly.
+        </p>
+        <div className="text-sm text-gray-500">
+          Redirecting to your orders...
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* Order Summary */}
+      <div className="order-2 lg:order-1">
+        <div className="bg-gray-950 border border-gray-800 rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Order Summary</h3>
+          
+          {/* Cart Items */}
+          <div className="space-y-3 mb-6">
+            {state.items.map((item) => (
+              <div key={item.id} className="flex items-center space-x-3">
+                <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center flex-shrink-0">
+                  {item.imageUrl && (item.imageUrl.startsWith('http') || item.imageUrl.startsWith('/')) ? (
+                    <Image 
+                      src={item.imageUrl} 
+                      alt={item.productName}
+                      width={48}
+                      height={48}
+                      className="w-full h-full object-cover rounded-lg"
+                    />
+                  ) : (
+                    <span className="text-xs font-medium text-gray-400">
+                      {item.imageUrl || item.brand.charAt(0)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">
+                    {item.productName}
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    ${item.denomination} × {item.quantity}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-white">
+                    ${formatBalance(item.pricing.usd * item.quantity)}
+                  </p>
+                  <p className="text-xs text-green-400">
+                    PXL {formatBalance(item.pricing.pxl * item.quantity)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Totals */}
+          <div className="border-t border-gray-800 pt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-400">Subtotal:</span>
+              <span className="text-white">${formatBalance(state.totals.usd)}</span>
+            </div>
+            {state.totals.savings > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">Tier Savings:</span>
+                <span className="text-blue-400">-${formatBalance(state.totals.savings)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-base font-semibold pt-2 border-t border-gray-700">
+              <span className="text-white">Total:</span>
+              <div className="text-right">
+                <div className="text-white">${formatBalance(state.totals.usd - state.totals.savings)}</div>
+                <div className="text-sm text-green-400">
+                  or PXL {formatBalance(state.totals.pxl)}
+                </div>
+              </div>
+            </div>
+            {state.totals.cashback > 0 && (
+              <div className="flex justify-between text-sm text-green-400">
+                <span>PXL Cashback:</span>
+                <span>+PXL {formatBalance(state.totals.cashback)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Form */}
+      <div className="order-1 lg:order-2 -mt-8 relative">
+        {/* Back to Cart - Positioned absolutely to not affect container alignment */}
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="text-gray-400 hover:text-white p-0 absolute -top-8 left-0 z-10"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Cart
+        </Button>
+
+        {/* Payment Method Selection - Matches Order Summary container exactly */}
+        <div className="bg-gray-950 border border-gray-800 rounded-xl p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Payment Method</h3>
+          <div className="grid grid-cols-1 gap-3">
+              {/* PXL Payment */}
+              <div
+                className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedPaymentMethod === 'pxl'
+                    ? 'border-green-500 bg-green-500/10'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+                onClick={() => setSelectedPaymentMethod('pxl')}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Coins className="h-6 w-6 text-green-400" />
+                    <div>
+                      <p className="font-medium text-white">Pay with PXL</p>
+                      <p className="text-sm text-gray-400">
+                        Balance: PXL {formatBalance(userPXLBalance)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-green-400">
+                      PXL {formatBalance(state.totals.pxl)}
+                    </p>
+                    {state.totals.cashback > 0 && (
+                      <p className="text-xs text-green-400 flex items-center">
+                        <Zap className="h-3 w-3 mr-1" />
+                        +{formatBalance(state.totals.cashback)} cashback
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {!hasSufficientPXL && (
+                  <div className="mt-2 text-sm text-red-400 flex items-center">
+                    <AlertCircle className="h-4 w-4 mr-1" />
+                    Insufficient PXL balance
+                  </div>
+                )}
+              </div>
+
+              {/* Stripe Payment */}
+              <div
+                className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedPaymentMethod === 'stripe'
+                    ? 'border-blue-500 bg-blue-500/10'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+                onClick={() => setSelectedPaymentMethod('stripe')}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <CreditCard className="h-6 w-6 text-blue-400" />
+                    <div>
+                      <p className="font-medium text-white">Credit Card (Stripe)</p>
+                      <p className="text-sm text-gray-400">Visa, MasterCard, Amex</p>
+                    </div>
+                  </div>
+                  <p className="font-medium text-white">
+                    ${formatBalance(state.totals.usd)}
+                  </p>
+                </div>
+              </div>
+
+              {/* PayPal Payment */}
+              <div
+                className={`border rounded-lg p-4 cursor-pointer transition-all ${
+                  selectedPaymentMethod === 'paypal'
+                    ? 'border-yellow-500 bg-yellow-500/10'
+                    : 'border-gray-700 hover:border-gray-600'
+                }`}
+                onClick={() => setSelectedPaymentMethod('paypal')}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-6 h-6 bg-yellow-500 rounded flex items-center justify-center">
+                      <span className="text-xs font-bold text-black">P</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-white">PayPal</p>
+                      <p className="text-sm text-gray-400">Pay with PayPal account</p>
+                    </div>
+                  </div>
+                  <p className="font-medium text-white">
+                    ${formatBalance(state.totals.usd)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Information */}
+          <div>
+            <h3 className="text-lg font-semibold text-white mb-4">Customer Information</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ValidatedInput
+                  type="text"
+                  value={formData.firstName}
+                  onChange={(value) => handleInputChange('firstName', value)}
+                  placeholder="First Name"
+                  label="First Name"
+                  required={false}
+                />
+                <ValidatedInput
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(value) => handleInputChange('lastName', value)}
+                  placeholder="Last Name"
+                  label="Last Name"
+                  required={false}
+                />
+              </div>
+              <ValidatedInput
+                type="email"
+                value={formData.email}
+                onChange={(value) => handleInputChange('email', value)}
+                placeholder="your@email.com"
+                label="Email Address"
+                required={false}
+              />
+            </div>
+          </div>
+
+          {/* Payment Details (for USD payments) */}
+          {(selectedPaymentMethod === 'stripe') && (
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-4">Payment Details</h3>
+              <div className="space-y-4">
+                <ValidatedInput
+                  type="text"
+                  value={formData.cardNumber}
+                  onChange={(value) => handleInputChange('cardNumber', value)}
+                  placeholder="1234 5678 9012 3456"
+                  label="Card Number"
+                  required={false}
+                />
+                <div className="grid grid-cols-2 gap-4">
+                  <ValidatedInput
+                    type="text"
+                    value={formData.expiryDate}
+                    onChange={(value) => handleInputChange('expiryDate', value)}
+                    placeholder="MM/YY"
+                    label="Expiry Date"
+                    required={false}
+                  />
+                  <ValidatedInput
+                    type="text"
+                    value={formData.cvv}
+                    onChange={(value) => handleInputChange('cvv', value)}
+                    placeholder="123"
+                    label="CVV"
+                    required={false}
+                  />
+                </div>
+                <ValidatedInput
+                  type="text"
+                  value={formData.billingAddress}
+                  onChange={(value) => handleInputChange('billingAddress', value)}
+                  placeholder="123 Main St"
+                  label="Billing Address"
+                  required={false}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Error Messages */}
+          {errors.length > 0 && (
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-sm font-medium text-red-400 mb-1">
+                    Please fix the following errors:
+                  </h4>
+                  <ul className="text-sm text-red-300 space-y-1">
+                    {errors.map((error, index) => (
+                      <li key={index}>• {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Submit Button */}
+          <Button
+            onClick={handleCheckout}
+            disabled={isProcessing || (selectedPaymentMethod === 'pxl' && !hasSufficientPXL)}
+            className="w-full bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:text-gray-400"
+            size="lg"
+          >
+            {isProcessing ? (
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+                <span>Processing...</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <Lock className="h-4 w-4" />
+                <span>Complete Order</span>
+              </div>
+            )}
+          </Button>
+
+          {/* Security Notice */}
+          <div className="text-center text-xs text-gray-500 mt-6">
+            <Lock className="h-3 w-3 inline mr-1" />
+            Your payment information is secure and encrypted
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

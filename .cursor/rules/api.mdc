@@ -1,0 +1,708 @@
+---
+alwaysApply: true
+---
+
+# API Documentation
+
+## Base URL
+
+```
+Production: https://api.giftcard-pxl.com/v1
+Staging: https://staging-api.giftcard-pxl.com/v1
+Development: http://localhost:3000/api/v1
+```
+
+## Authentication
+
+All authenticated endpoints require a Firebase Auth token in the Authorization header:
+
+```bash
+Authorization: Bearer <firebase-auth-token>
+```
+
+### Getting an Auth Token
+
+```javascript
+// Client-side token generation
+import { auth } from '@/lib/firebase';
+
+const getAuthToken = async () => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  return await user.getIdToken();
+};
+
+// Usage in API calls
+const token = await getAuthToken();
+const response = await fetch('/api/v1/user/profile', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+## API Endpoints
+
+### Authentication & User Management
+
+#### Register User
+```http
+POST /auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "SecurePassword123!",
+  "username": "@johndoe",
+  "profile": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "country": "US",
+    "region": "CA",
+    "gender": "Male"
+  }
+}
+
+Response: 201 Created
+{
+  "uid": "firebase-uid",
+  "email": "user@example.com",
+  "username": "@johndoe",
+  "tier": "starter",
+  "createdAt": "2024-01-01T00:00:00Z"
+}
+```
+
+#### Complete Profile Setup
+```http
+POST /auth/setup-profile
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "username": "@johndoe",
+  "email": "user@example.com",
+  "profile": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "country": "US",
+    "region": "CA",
+    "gender": "Male"
+  }
+}
+
+Response: 200 OK
+{
+  "success": true,
+  "user": {
+    "uid": "firebase-uid",
+    "username": "@johndoe",
+    "tier": "starter",
+    "rocketchat": {
+      "userId": "rc-user-id",
+      "channels": ["general"]
+    }
+  }
+}
+```
+
+#### Get User Profile
+```http
+GET /user/profile
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "uid": "firebase-uid",
+  "email": "user@example.com",
+  "username": "@johndoe",
+  "profile": {
+    "firstName": "John",
+    "lastName": "Doe",
+    "phone": "+1234567890",
+    "country": "US",
+    "region": "CA",
+    "gender": "Male",
+    "avatarUrl": "https://storage.googleapis.com/avatar.jpg",
+    "kycStatus": "verified"
+  },
+  "tier": {
+    "current": "rising",
+    "pxlBalance": 5000,
+    "nextTierThreshold": 10000,
+    "benefits": {
+      "discountPercentage": 0.05,
+      "cashbackPercentage": 0.02
+    }
+  },
+  "wallets": {
+    "pxl": {
+      "balance": 5000,
+      "lockedBalance": 100
+    },
+    "usd": {
+      "balance": 0
+    }
+  }
+}
+```
+
+### PXL Currency Operations
+
+#### Get Current Exchange Rate
+```http
+GET /pxl/current-rate
+
+Response: 200 OK
+{
+  "rate": 102.5,
+  "baseRate": 100,
+  "lastUpdated": "2024-01-01T12:00:00Z",
+  "trend": "up",
+  "change24h": 2.5
+}
+```
+
+#### Convert USD to PXL
+```http
+POST /pxl/convert
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "usdAmount": 100,
+  "paymentMethodId": "pm_1234567890"
+}
+
+Response: 200 OK
+{
+  "transactionId": "txn_abc123",
+  "usdAmount": 100,
+  "pxlReceived": 10250,
+  "exchangeRate": 102.5,
+  "fee": 0,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Transfer PXL to User
+```http
+POST /pxl/transfer
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "amount": 500,
+  "recipient": "@janedoe",  // or email
+  "message": "Happy birthday!"
+}
+
+Response: 200 OK
+{
+  "transferId": "trf_xyz789",
+  "amount": 500,
+  "recipient": {
+    "uid": "recipient-uid",
+    "username": "@janedoe"
+  },
+  "message": "Happy birthday!",
+  "status": "completed",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Get PXL Transaction History
+```http
+GET /pxl/transactions?limit=20&offset=0
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "transactions": [
+    {
+      "id": "txn_123",
+      "type": "purchase",
+      "amount": 10000,
+      "description": "USD to PXL conversion",
+      "timestamp": "2024-01-01T12:00:00Z"
+    },
+    {
+      "id": "trf_456",
+      "type": "transfer_sent",
+      "amount": -500,
+      "recipient": "@janedoe",
+      "timestamp": "2024-01-01T11:00:00Z"
+    }
+  ],
+  "total": 45,
+  "hasMore": true
+}
+```
+
+### Giftcard Operations
+
+#### Get Giftcard Catalog
+```http
+GET /giftcards?category=retail&limit=20&offset=0
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "giftcards": [
+    {
+      "id": "gc_amazon",
+      "brand": "Amazon",
+      "description": "Amazon Gift Card",
+      "category": "retail",
+      "imageUrl": "https://cdn.example.com/amazon.png",
+      "denominations": [25, 50, 100, 250, 500],
+      "pricing": {
+        "usd": {
+          "25": 25,
+          "50": 50,
+          "100": 100
+        },
+        "pxl": {
+          "25": 2500,
+          "50": 5000,
+          "100": 10000
+        },
+        "tierDiscounts": {
+          "rising": 0.05,
+          "pro": 0.08,
+          "pixlbeast": 0.10,
+          "pixlionaire": 0.13
+        }
+      },
+      "availability": "in_stock"
+    }
+  ],
+  "total": 150,
+  "hasMore": true
+}
+```
+
+#### Purchase Giftcard
+```http
+POST /giftcards/purchase
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "giftcardId": "gc_amazon",
+  "denomination": 100,
+  "paymentMethod": "pxl",  // or "usd"
+  "quantity": 1,
+  "recipientEmail": "friend@example.com"  // optional
+}
+
+Response: 200 OK
+{
+  "orderId": "ord_abc123",
+  "giftcard": {
+    "code": "AMZN-XXXX-XXXX-XXXX",
+    "pin": "1234",
+    "value": 100,
+    "currency": "USD",
+    "expiryDate": "2025-12-31"
+  },
+  "payment": {
+    "method": "pxl",
+    "amount": 9200,  // After tier discount
+    "discount": 800,
+    "cashback": 276  // 3% cashback
+  },
+  "deliveryStatus": "delivered",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Get User's Giftcards
+```http
+GET /giftcards/my-cards?status=active
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "giftcards": [
+    {
+      "id": "ugc_123",
+      "orderId": "ord_abc123",
+      "brand": "Amazon",
+      "code": "AMZN-XXXX-XXXX-XXXX",
+      "value": 100,
+      "remainingBalance": 75.50,
+      "status": "active",
+      "purchasedAt": "2024-01-01T12:00:00Z",
+      "expiryDate": "2025-12-31"
+    }
+  ],
+  "total": 12
+}
+```
+
+### Payment Operations
+
+#### Process USD Payment
+```http
+POST /payments/process-usd
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "amount": 100,
+  "currency": "USD",
+  "paymentProvider": "stripe",  // or "paypal"
+  "paymentMethodId": "pm_1234567890",
+  "description": "PXL Purchase"
+}
+
+Response: 200 OK
+{
+  "paymentId": "pay_xyz123",
+  "status": "succeeded",
+  "amount": 100,
+  "currency": "USD",
+  "provider": "stripe",
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+#### Process PXL Payment
+```http
+POST /payments/process-pxl
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "amount": 5000,
+  "description": "Amazon $50 Gift Card"
+}
+
+Response: 200 OK
+{
+  "paymentId": "pxl_pay_456",
+  "status": "completed",
+  "amount": 5000,
+  "discount": 400,
+  "cashback": 150,
+  "finalAmount": 4600,
+  "newBalance": 5400,
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+### Chat Integration
+
+#### Setup Rocket.Chat Integration
+```http
+POST /chat/setup
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "syncProfile": true
+}
+
+Response: 200 OK
+{
+  "ssoToken": "rc_sso_token",
+  "chatUserId": "rc_user_123",
+  "channels": ["general", "rising-lounge"],
+  "avatarUrl": "https://chat.example.com/avatar/user123-with-tier.png",
+  "websocketUrl": "wss://chat.example.com/websocket"
+}
+```
+
+#### Get Chat Channels
+```http
+GET /chat/channels
+Authorization: Bearer <token>
+
+Response: 200 OK
+{
+  "channels": [
+    {
+      "id": "general",
+      "name": "General",
+      "description": "General discussion",
+      "memberCount": 5420,
+      "unreadCount": 3,
+      "lastMessage": "2024-01-01T12:00:00Z"
+    },
+    {
+      "id": "rising-lounge",
+      "name": "Rising Lounge",
+      "description": "Exclusive for Rising tier and above",
+      "memberCount": 2150,
+      "unreadCount": 0,
+      "requiresTier": "rising"
+    }
+  ]
+}
+```
+
+### Admin Operations
+
+#### Get User List (Admin Only)
+```http
+GET /admin/users?tier=pro&limit=50&offset=0
+Authorization: Bearer <admin-token>
+
+Response: 200 OK
+{
+  "users": [
+    {
+      "uid": "user123",
+      "email": "user@example.com",
+      "username": "@johndoe",
+      "tier": "pro",
+      "pxlBalance": 15000,
+      "kycStatus": "verified",
+      "createdAt": "2024-01-01T00:00:00Z",
+      "lastActive": "2024-01-15T12:00:00Z"
+    }
+  ],
+  "total": 325,
+  "hasMore": true
+}
+```
+
+#### Update Exchange Rate (Admin Only)
+```http
+POST /admin/pxl/update-rate
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{
+  "newRate": 103.0,
+  "reason": "Market adjustment"
+}
+
+Response: 200 OK
+{
+  "oldRate": 102.5,
+  "newRate": 103.0,
+  "change": 0.5,
+  "updatedAt": "2024-01-01T12:00:00Z",
+  "updatedBy": "admin@example.com"
+}
+```
+
+## Error Responses
+
+All endpoints return consistent error responses:
+
+```json
+{
+  "error": {
+    "code": "INSUFFICIENT_BALANCE",
+    "message": "Insufficient PXL balance for this transaction",
+    "details": {
+      "required": 5000,
+      "available": 4500
+    }
+  },
+  "timestamp": "2024-01-01T12:00:00Z"
+}
+```
+
+### Common Error Codes
+
+| Code | HTTP Status | Description |
+|------|-------------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication token |
+| `FORBIDDEN` | 403 | Insufficient permissions for this operation |
+| `NOT_FOUND` | 404 | Resource not found |
+| `VALIDATION_ERROR` | 400 | Invalid request parameters |
+| `INSUFFICIENT_BALANCE` | 400 | Insufficient PXL or USD balance |
+| `RATE_LIMITED` | 429 | Too many requests |
+| `INTERNAL_ERROR` | 500 | Internal server error |
+| `SERVICE_UNAVAILABLE` | 503 | Service temporarily unavailable |
+
+## Rate Limiting
+
+Rate limits are enforced per user:
+
+| Tier | Requests per Minute | Requests per Hour |
+|------|-------------------|-------------------|
+| Starter | 60 | 1,000 |
+| Rising | 120 | 2,500 |
+| Pro | 300 | 5,000 |
+| Pixlbeast | 600 | 10,000 |
+| Pixlionaire | 1,200 | 20,000 |
+
+Rate limit headers are included in all responses:
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 45
+X-RateLimit-Reset: 1704121200
+```
+
+## Webhooks
+
+Configure webhooks to receive real-time events:
+
+### Webhook Events
+
+| Event | Description | Payload |
+|-------|-------------|---------|
+| `user.tier.changed` | User's tier level changed | User object with old/new tier |
+| `pxl.transfer.received` | Received PXL from another user | Transfer details |
+| `giftcard.purchased` | Giftcard purchase completed | Order details |
+| `payment.completed` | Payment processed successfully | Payment details |
+| `kyc.status.changed` | KYC verification status changed | KYC status update |
+
+### Webhook Security
+
+All webhooks include an HMAC signature for verification:
+
+```javascript
+const crypto = require('crypto');
+
+function verifyWebhookSignature(payload, signature, secret) {
+  const expectedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex');
+  
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expectedSignature)
+  );
+}
+```
+
+## SDK Examples
+
+### JavaScript/TypeScript
+
+```typescript
+import { GiftcardPXLClient } from '@giftcard-pxl/sdk';
+
+const client = new GiftcardPXLClient({
+  apiKey: process.env.API_KEY,
+  environment: 'production'
+});
+
+// Get user profile
+const profile = await client.user.getProfile();
+
+// Transfer PXL
+const transfer = await client.pxl.transfer({
+  amount: 500,
+  recipient: '@janedoe',
+  message: 'Thanks!'
+});
+
+// Purchase giftcard
+const order = await client.giftcards.purchase({
+  giftcardId: 'gc_amazon',
+  denomination: 100,
+  paymentMethod: 'pxl'
+});
+```
+
+### React Native
+
+```typescript
+import { GiftcardPXLMobile } from '@giftcard-pxl/mobile-sdk';
+
+const client = new GiftcardPXLMobile({
+  apiKey: Config.API_KEY,
+  environment: 'production'
+});
+
+// Same API as JavaScript SDK
+// Optimized for React Native
+```
+
+## Testing
+
+### Test Environment
+
+```
+Base URL: https://sandbox-api.giftcard-pxl.com/v1
+Test API Key: test_pk_1234567890
+```
+
+### Test Cards
+
+For Stripe payment testing:
+
+| Card Number | Scenario |
+|-------------|----------|
+| 4242 4242 4242 4242 | Successful payment |
+| 4000 0000 0000 9995 | Declined (insufficient funds) |
+| 4000 0000 0000 0002 | Declined (generic) |
+
+### Test Users
+
+Pre-configured test users:
+
+| Username | Tier | PXL Balance |
+|----------|------|-------------|
+| @test_starter | Starter | 100 |
+| @test_rising | Rising | 1,500 |
+| @test_pro | Pro | 5,500 |
+| @test_pixlbeast | Pixlbeast | 15,000 |
+| @test_pixlionaire | Pixlionaire | 55,000 |
+
+## API Versioning
+
+The API uses URL versioning. Current version: `v1`
+
+When breaking changes are introduced:
+1. New version endpoint created (e.g., `/v2`)
+2. Previous version supported for 6 months
+3. Deprecation notices sent via email and headers
+4. Migration guide provided
+
+## Support
+
+- API Status: https://status.giftcard-pxl.com
+- Developer Portal: https://developers.giftcard-pxl.com
+- Support Email: api-support@giftcard-pxl.com
+- Discord: https://discord.gg/giftcard-pxl
+
+---
+
+Last Updated: 2025-08-25
+
+# API Addendum — PXL Purchase Discount
+
+## PXL Purchase Discounts (Calculation Note)
+On USD→PXL conversions, a tier-based **purchase discount** is applied as **bonus PXL** (USD paid is unchanged). Let `base = floor(usdAmount × exchangeRate)`. For tier discount `d`, credit `pxlReceived = base + floor(base × d)`. Responses may include `purchaseDiscountPercentage`, `bonusPxl`, and `effectiveRate = pxlReceived / usdAmount`.
+
+## /pxl/current-rate — Response (append optional field)
+```json
+"purchaseDiscounts": {
+  "starter": 0.00,
+  "rising": 0.03,
+  "pro": 0.07,
+  "pixlbeast": 0.09,
+  "pixlionaire": 0.13
+}
+```
+
+## /pxl/convert — Response (append optional fields)
+```json
+"purchaseDiscountPercentage": 0.07,
+"bonusPxl": 717,
+"effectiveRate": 109.67
+```
+
+## /pxl/transactions — Each transaction item (append optional fields)
+```json
+"appliedDiscount": 0.07,
+"bonusPxl": 700,
+"effectiveRate": 107.0
+```
+
+## /user/profile — tier.benefits (append optional field)
+```json
+"pxlPurchaseDiscountPercentage": 0.07
+```

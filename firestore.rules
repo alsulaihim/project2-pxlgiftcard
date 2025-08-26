@@ -1,0 +1,89 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/admin-users/$(request.auth.uid));
+    }
+    
+    // Users Collection - Users can read/write their own profile
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId);
+      
+      // Allow profile updates but prevent modifying sensitive fields
+      allow update: if isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['tier', 'wallets', 'timestamps.created']);
+    }
+    
+    // Giftcards Collection - Public read for active cards
+    match /giftcards/{giftcardId} {
+      allow read: if true; // Public read for browsing
+      allow write: if isAdmin();
+    }
+    
+    // Transactions Collection - Strict access control
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if false; // Only server functions can create
+      allow write: if isAdmin();
+    }
+    
+    // PXL Currency Collection - Public read, admin write
+    match /pxl-currency/{currencyId} {
+      allow read: if true; // Public read for exchange rates
+      allow write: if isAdmin();
+    }
+    
+    // PXL Transfers Collection - Users can read their own transfers
+    match /pxl-transfers/{transferId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.senderUserId == request.auth.uid || 
+         resource.data.recipientUserId == request.auth.uid);
+      allow create: if false; // Only server functions can create
+      allow write: if isAdmin();
+    }
+    
+    // User Giftcards Collection - Users can read their own giftcards
+    match /user-giftcards/{giftcardId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if false; // Only server functions can create
+      allow write: if isAdmin();
+    }
+    
+    // Admin Actions Collection - Admin only
+    match /admin-actions/{actionId} {
+      allow read, write: if isAdmin();
+    }
+    
+    // Chat Integrations Collection - Users can read/write their own
+    match /chat-integrations/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    // System Config Collection - Public read, admin write
+    match /system-config/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    // Admin Users Collection - Admin only
+    match /admin-users/{userId} {
+      allow read, write: if isAdmin();
+    }
+  }
+}

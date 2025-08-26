@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Geist font import (Vercel's font) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+/* Vercel Geist font (fallback to Inter) */
+@font-face {
+  font-family: 'Geist';
+  src: local('Inter'), local('Inter-Regular');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    /* Vercel's CSS custom properties */
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --muted: 0 0% 9%;
+    --muted-foreground: 0 0% 45%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --primary: 214 100% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 0 0% 100%;
+    --accent: 0 0% 9%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 100% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 214 100% 48%;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-gray-800;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Smooth scrolling for better UX */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-black;
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-900;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-600 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+
+  /* Selection styles */
+  ::selection {
+    @apply bg-blue-500/20 text-white;
+  }
+}
+
+@layer components {
+  /* Utility classes for common patterns */
+  .container {
+    @apply mx-auto max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Animation utilities */
+  .animate-shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  /* Gradient text utility */
+  .gradient-text {
+    @apply bg-gradient-to-r from-blue-500 to-green-500 bg-clip-text text-transparent;
+  }
+
+  /* Glass morphism effect */
+  .glass {
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+@layer utilities {
+  /* Custom utilities for specific use cases */
+  .text-balance {
+    text-wrap: balance;
+    /* Fallback for older browsers */
+    word-wrap: break-word;
+  }
+
+  /* Tier-specific utilities */
+  .tier-ring-starter {
+    @apply ring-2 ring-tier-starter;
+  }
+
+  .tier-ring-rising {
+    @apply ring-2 ring-tier-rising shadow-[0_0_8px_rgba(0,112,243,0.3)];
+  }
+
+  .tier-ring-pro {
+    @apply ring-2 ring-tier-pro shadow-[0_0_12px_rgba(8,205,1,0.3)];
+  }
+
+  .tier-ring-pixlbeast {
+    @apply ring-2 ring-tier-pixlbeast shadow-[0_0_16px_rgba(245,158,11,0.4)];
+  }
+
+  .tier-ring-pixlionaire {
+    @apply ring-2 ring-tier-pixlionaire shadow-[0_0_20px_rgba(185,43,228,0.5)];
+  }
+
+  /* Performance optimizations */
+  .will-change-transform {
+    will-change: transform;
+  }
+
+  .will-change-opacity {
+    will-change: opacity;
+  }
+
+  /* Accessibility utilities */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

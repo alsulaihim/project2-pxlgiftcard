@@ -1,0 +1,1414 @@
+---
+alwaysApply: true
+---
+
+# Giftcard + PXL Platform Fullstack Architecture Document
+
+## Introduction
+
+This document outlines the complete fullstack architecture for **Giftcard + PXL Platform**, including backend systems, frontend implementation, and their integration. It serves as the single source of truth for AI-driven development, ensuring consistency across the entire technology stack.
+
+This unified approach combines what would traditionally be separate backend and frontend architecture documents, streamlining the development process for modern fullstack applications where these concerns are increasingly intertwined.
+
+### Starter Template or Existing Project
+
+Based on my analysis of the PRD, this appears to be a **greenfield project** with specific requirements for:
+- Real-time WebSocket connections (chat system, PXL rate updates)
+- Complex financial transactions with dual currency support
+- Mobile-first responsive design with dark theme
+- PCI DSS compliance for payment processing
+- Tier-based user progression system
+
+**Recommendation**: Given the complexity and specific requirements, I recommend starting with a **Next.js + Firebase** foundation, which provides:
+- Type-safe full-stack development
+- Integrated authentication with social login support
+- Real-time database with offline capabilities
+- Built-in API layer
+- Production-ready deployment patterns
+
+### Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|---------|
+| 2025-08-23 | 1.0 | Initial architecture creation | Winston (Architect Agent) |
+| 2025-08-25 | 1.1 | Updated for enhanced Rocket.Chat integration and mandatory profile fields | Winston (Architect Agent) |
+
+## High Level Architecture
+
+### Technical Summary
+
+The Giftcard + PXL Platform employs a modern **JAMstack architecture** with Firebase backend-as-a-service, Next.js React framework for the frontend, and Rocket.Chat integration for enterprise-grade messaging. The system utilizes **Firebase Firestore** for real-time data synchronization of PXL currency rates and user tier progression, **Firebase Authentication** with social login (Google, Apple, Facebook) and SSO integration to Rocket.Chat, and **Firebase Cloud Functions** for secure payment processing and business logic. The Next.js application provides server-side rendering for optimal SEO and performance while maintaining real-time capabilities through Firebase's WebSocket connections and Rocket.Chat's messaging infrastructure.
+
+### Platform and Infrastructure Choice
+
+**Platform:** Vercel + Firebase + Rocket.Chat Cloud
+**Key Services:** Vercel Edge Functions, Firebase Firestore/Auth/Functions/Storage, Rocket.Chat Enterprise Cloud
+**Deployment Host and Regions:** Global edge deployment (Vercel Edge Network), Firebase multi-region (us-central1 primary)
+
+**Rationale**: This combination provides the fastest development velocity, best AI development experience, and handles all technical requirements without infrastructure management.
+
+### Repository Structure & Version Control
+
+**Structure:** Monorepo with app-specific packages
+**Monorepo Tool:** Turborepo (Vercel's tool, optimized for Next.js)
+**Package Organization:** Apps (web, admin) + Packages (shared types, UI components, Firebase functions)
+**Version Control:** Git with GitHub for hosting and collaboration
+
+#### Version Control Strategy
+
+**Repository Setup:**
+- **Primary Repository:** GitHub (public or private based on preference)
+- **Repository Structure:** Single monorepo containing all applications and packages
+- **Access Control:** Team-based permissions with role-based access (admin, developer, viewer)
+- **Branch Protection:** Main branch protected with required reviews
+
+**Branching Strategy (GitHub Flow):**
+```
+main (production)
+├── staging (pre-production testing)  
+├── develop (integration branch)
+├── feature/user-authentication
+├── feature/pxl-currency-engine
+├── feature/giftcard-marketplace
+├── feature/rocket-chat-integration
+├── hotfix/security-patch-v1.0.1
+└── mobile/phase2-preparation
+```
+
+**Branch Naming Conventions:**
+- **Features:** `feature/description-of-feature`
+- **Bug fixes:** `bugfix/description-of-bug`
+- **Hotfixes:** `hotfix/critical-issue-description`  
+- **Mobile prep:** `mobile/preparation-task`
+- **Documentation:** `docs/document-update`
+
+**Commit Message Standards:**
+```
+type(scope): brief description
+
+feat(auth): add Google and Apple social login
+fix(payments): resolve Stripe webhook timeout issue
+docs(api): update API documentation for mobile endpoints
+style(ui): implement dark theme for tier badges
+refactor(pxl): optimize exchange rate calculation
+test(giftcards): add unit tests for purchase workflow
+chore(deps): update Firebase SDK to v10.7.0
+```
+
+**Git Workflow:**
+1. **Feature Development:**
+   ```bash
+   git checkout -b feature/user-tier-system
+   # Development work...
+   git add .
+   git commit -m "feat(tiers): implement 5-tier progression system"
+   git push origin feature/user-tier-system
+   # Create Pull Request
+   ```
+
+2. **Code Review Process:**
+   - All changes require pull request review
+   - Minimum 1 reviewer for feature branches
+   - Minimum 2 reviewers for hotfixes
+   - Automated checks must pass (CI/CD, tests, linting)
+
+3. **Release Process:**
+   ```bash
+   # Merge to staging for testing
+   git checkout staging
+   git merge develop
+   
+   # After testing, merge to main
+   git checkout main  
+   git merge staging
+   git tag -a v1.0.0 -m "Release version 1.0.0"
+   git push origin main --tags
+   ```
+
+**GitHub Repository Configuration:**
+
+**.gitignore (Comprehensive):**
+```gitignore
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production builds
+.next/
+out/
+dist/
+build/
+lib/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+functions/lib/
+functions/node_modules/
+
+# Service account keys
+**/service-account-key.json
+**/firebase-admin-key.json
+
+# Testing
+coverage/
+.nyc_output
+junit.xml
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# parcel-bundler cache (https://parceljs.org/)
+.cache
+.parcel-cache
+
+# Stores VSCode versions used for testing VSCode extensions
+.vscode-test
+
+# Temporary folders
+tmp/
+temp/
+
+# Vercel
+.vercel
+
+# Turbo
+.turbo
+
+# Mobile preparation files (temporary)
+mobile-prep/temp/
+mobile-prep/generated/
+```
+
+**GitHub Repository Settings:**
+- **Branch Protection Rules:**
+  - Protect `main` branch: Require pull request reviews, dismiss stale reviews
+  - Require status checks to pass: CI/CD, tests, security scans
+  - Require branches to be up to date before merging
+  - Restrict pushes to matching branches (admins only)
+
+- **Required Status Checks:**
+  - ✅ Build successful
+  - ✅ All tests pass  
+  - ✅ Security scan clean
+  - ✅ Code quality checks pass
+  - ✅ Mobile readiness validation (for Phase 2 prep)
+
+**Automated GitHub Actions (CI/CD):**
+Located in `.github/workflows/`:
+- `ci.yaml` - Continuous integration (build, test, lint)
+- `deploy-web.yaml` - Web application deployment
+- `deploy-functions.yaml` - Firebase Functions deployment
+- `security-scan.yaml` - Security vulnerability scanning
+- `mobile-prep.yaml` - Mobile readiness validation
+- `dependency-update.yaml` - Automated dependency updates
+
+**Repository Documentation:**
+- `README.md` - Project overview and quick start guide
+- `CONTRIBUTING.md` - Contribution guidelines and development workflow
+- `SECURITY.md` - Security policies and vulnerability reporting
+- `docs/` - Comprehensive documentation including this architecture document
+
+### High Level Architecture Diagram
+
+```mermaid
+graph TD
+    A[Mobile/Web Users] --> B[Vercel Edge Network]
+    B --> C[Next.js App]
+    C --> D[Firebase Auth]
+    C --> E[Firebase Firestore]
+    C --> F[Firebase Functions]
+    C --> G[Rocket.Chat SDK]
+    
+    D --> H[Custom OAuth Provider]
+    E --> I[Real-time PXL Rates]
+    E --> J[User Tiers & Data]
+    F --> K[Stripe Payments]
+    F --> L[Giftcard APIs]
+    
+    M[Admin Users] --> N[Admin Dashboard]
+    N --> E
+    N --> O[Rocket.Chat Admin]
+    
+    P[Firebase Storage] --> Q[File Uploads]
+    G --> R[Rocket.Chat Cloud]
+    
+    S[External APIs] --> F
+    S --> T[Giftcard Suppliers]
+    S --> U[SMS/Email Services]
+```
+
+### Architectural Patterns
+
+- **JAMstack Architecture:** Static site generation with serverless APIs - _Rationale:_ Optimal performance, security, and scalability for mobile-first platform with real-time features
+- **Backend-as-a-Service (BaaS):** Firebase provides managed backend services - _Rationale:_ Eliminates server management, provides real-time capabilities, and enables rapid AI-driven development
+- **Direct SDK Integration:** Rocket.Chat JavaScript SDK with REST API - _Rationale:_ Superior performance (sub-50ms latency), full UI control, mobile compatibility, and seamless user experience
+- **Repository Pattern:** Firebase service abstractions for data access - _Rationale:_ Enables testing, maintainability, and potential future database migration flexibility
+- **Event-Driven Architecture:** Firebase triggers for tier progression and user lifecycle - _Rationale:_ Decouples business logic and enables real-time tier benefit activation
+- **API Gateway Pattern:** Firebase Functions as serverless API layer - _Rationale:_ Centralized business logic, security, and integration with external services
+
+## Tech Stack
+
+This is the DEFINITIVE technology selection for Phase 1 (web platform) with mobile readiness built-in. All development must use these exact versions.
+
+### Technology Stack Table
+
+| Category | Technology | Version | Purpose | Rationale |
+|----------|------------|---------|---------|-----------|
+| Frontend Language | TypeScript | ^5.3.0 | Type-safe development | Essential for mobile-ready APIs, shared types between web/mobile |
+| Frontend Framework | Next.js | ^14.0.0 | React framework with SSR | Mobile-optimized performance, API routes ready for mobile consumption |
+| UI Component Library | Tailwind CSS + Headless UI | ^3.3.0 + ^1.7.0 | Utility-first styling + accessible components | Mobile-first responsive design, dark theme support |
+| State Management | Zustand + React Query | ^4.4.0 + ^5.8.0 | Client state + server state | Lightweight, mobile-ready caching and sync |
+| Backend Platform | Firebase | ^10.7.0 | Backend-as-a-Service | Native mobile SDKs available, real-time capabilities |
+| Backend Functions | Firebase Cloud Functions | ^4.5.0 | Serverless API layer | RESTful endpoints ready for mobile apps |
+| API Style | REST + Firebase SDK | Firebase v9 | Direct Firebase access + REST endpoints | Mobile apps can use Firebase SDK directly or REST APIs |
+| Database | Firestore | Latest | NoSQL real-time database | Excellent mobile offline support, real-time sync |
+| Cache | Firebase Firestore Cache | Built-in | Client-side caching | Automatic mobile offline capabilities |
+| File Storage | Firebase Storage | Latest | Media and file storage | Direct mobile app integration available |
+| Authentication | Firebase Auth | Latest | Multi-provider authentication | Native iOS/Android SDKs ready for Phase 2, supports Google/Apple/Facebook login |
+| Chat System | Rocket.Chat Cloud | Latest | Enterprise messaging | Native mobile SDKs available for Phase 2 |
+| Payment Processing | Stripe + PayPal + Firebase Functions | Stripe ^14.0.0, PayPal SDK ^6.0.0 | Dual payment provider support | Stripe for cards/Apple Pay/Google Pay, PayPal for alternative payments |
+| Frontend Testing | Jest + Testing Library | ^29.0.0 + ^14.0.0 | Unit and integration testing | Test patterns applicable to React Native later |
+| E2E Testing | Playwright | ^1.40.0 | End-to-end testing | Mobile viewport testing capabilities |
+| Build Tool | Turbo | ^1.10.0 | Monorepo build orchestration | Ready for mobile app addition in Phase 2 |
+| Package Manager | pnpm | ^8.0.0 | Fast, efficient package management | Workspace support for future mobile packages |
+| CI/CD | GitHub Actions + Vercel | Latest | Continuous deployment | Mobile build pipeline ready |
+| Monitoring | Vercel Analytics + Firebase Analytics | Latest | Performance and user analytics | Mobile analytics ready for Phase 2 |
+| Error Tracking | Sentry | ^7.80.0 | Error monitoring and alerting | Mobile crash reporting available |
+| CSS Framework | Tailwind CSS | ^3.3.0 | Utility-first responsive design | Mobile-first approach, dark theme variants |
+| Push Notifications | Firebase Cloud Messaging | Latest | Real-time notifications | Native mobile push notification support |
+
+## Data Models
+
+Based on the PRD requirements, I've identified the core business entities that will be shared between web and mobile applications. These TypeScript interfaces will be used consistently across all platforms.
+
+### User
+
+**Purpose:** Core user entity with tier progression, authentication, and profile management
+
+**TypeScript Interface:**
+```typescript
+interface User {
+  uid: string;                    // Firebase Auth UID
+  email: string;                  // Required, unique
+  username: string;               // @username format, required, unique, used in Rocket.Chat
+  profile: UserProfile;           // Extended profile with all mandatory fields
+  tier: UserTier;
+  wallets: UserWallets;
+  preferences: UserPreferences;
+  rocketchat: RocketChatProfile;  // Enhanced chat integration with SSO and profile sync
+  timestamps: Timestamps;
+}
+
+interface UserProfile {
+  firstName: string;              // Required
+  lastName: string;               // Required
+  phone: string;                  // Required, with country code
+  countryCode: string;            // Auto-selected based on country/region
+  country: string;                // Required, ISO 3166-1 alpha-2
+  region: string;                 // Required
+  gender: 'Male' | 'Female';      // Required, only two options per PRD
+  dateOfBirth?: string;           // ISO date string
+  avatarUrl?: string;             // Profile picture with tier ring overlay in chat
+  kycStatus: 'pending' | 'verified' | 'rejected';
+  kycDocuments?: KYCDocument[];
+}
+
+interface UserTier {
+  current: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
+  pxlBalance: number;             // Current PXL balance
+  nextTierThreshold?: number;     // PXL needed for next tier
+  tierBenefits: TierBenefits;
+  progressHistory: TierProgress[];
+}
+
+interface UserWallets {
+  pxl: {
+    balance: number;
+    lockedBalance: number;        // For pending transactions
+    totalEarned: number;          // Total PXL earned (purchases + transfers received)
+    totalSpent: number;           // Total PXL spent on giftcards
+    totalSent: number;            // Total PXL sent to other users
+    totalReceived: number;        // Total PXL received from other users
+  };
+  usd: {
+    balance: number;              // Store credit balance
+  };
+}
+
+interface RocketChatProfile {
+  userId: string;                 // Rocket.Chat user ID
+  username: string;               // Same as platform @username (preserved)
+  ssoToken: string;               // SSO authentication token
+  tokenExpiry: Timestamp;         // Token expiration for refresh
+  avatarWithTier: string;         // URL to profile picture with tier ring overlay
+  channels: string[];             // List of accessible channels based on tier
+  lastSync: Timestamp;            // Last profile synchronization
+  status: 'active' | 'provisioning' | 'deprovisioned';
+}
+```
+
+### PXLCurrency
+
+**Purpose:** Real-time currency management with exchange rates, market data, tier-based pricing, and one-way USD to PXL conversion system
+
+**TypeScript Interface:**
+```typescript
+interface PXLCurrency {
+  id: 'pxl-currency';            // Singleton document
+  currentRate: number;           // Current exchange rate
+  baseRate: number;              // Baseline (100)
+  marketData: {
+    hourlyRates: RatePoint[];    // Last 24 hours
+    dailyRates: RatePoint[];     // Last 30 days
+    trend: 'up' | 'down' | 'stable';
+    volatility: number;          // Percentage
+  };
+  tierMultipliers: {
+    starter: TierBenefits;
+    rising: TierBenefits;
+    pro: TierBenefits;
+    pixlbeast: TierBenefits;
+    pixlionaire: TierBenefits;
+  };
+  lastUpdated: Timestamp;
+}
+
+interface TierBenefits {
+  discountPercentage: number;    // e.g., 0.13 for 13% discount
+  cashbackPercentage: number;    // e.g., 0.03 for 3% cashback
+}
+```
+
+### Giftcard
+
+**Purpose:** Giftcard catalog management with brands, denominations, and availability
+
+**TypeScript Interface:**
+```typescript
+interface Giftcard {
+  id: string;                    // Unique giftcard identifier
+  brand: GiftcardBrand;
+  denominations: number[];       // [25, 50, 100, 250]
+  pricing: {
+    usd: GiftcardPricing;
+    pxl: GiftcardPricing;
+  };
+  availability: {
+    inStock: boolean;
+    regions: string[];           // Country codes where available
+    maxPurchasePerUser?: number;
+    totalStock?: number;
+  };
+  metadata: {
+    imageUrl: string;
+    thumbnailUrl: string;
+    description: string;
+    termsUrl?: string;
+    category: GiftcardCategory;
+    featured: boolean;
+    popularity: number;          // For sorting/recommendations
+  };
+  supplier: {
+    id: string;
+    name: string;
+    apiEndpoint?: string;        // For real-time inventory
+  };
+  timestamps: Timestamps;
+}
+```
+
+### Transaction
+
+**Purpose:** Complete transaction history for financial tracking, analytics, and audit compliance
+
+**TypeScript Interface:**
+```typescript
+interface Transaction {
+  id: string;                    // Unique transaction ID
+  userId: string;                // User reference
+  type: 'giftcard-purchase' | 'pxl-purchase' | 'pxl-transfer-sent' | 'pxl-transfer-received' | 'cashback' | 'tier-bonus' | 'refund';
+  amounts: {
+    usd: number;                 // USD amount (if applicable)
+    pxl: number;                 // PXL amount
+    exchangeRate: number;        // Rate at time of transaction
+    fees?: {
+      processingFee: number;
+      platformFee: number;
+    };
+  };
+  payment?: {
+    method: 'card' | 'paypal' | 'pxl' | 'store-credit';
+    provider: 'stripe' | 'paypal' | 'firebase';
+    externalId?: string;         // Stripe payment intent ID or PayPal order ID
+    last4?: string;              // For card payments
+    paypalEmail?: string;        // For PayPal payments
+  };
+  
+  // PXL Transfer Details (for transfer transactions)
+  transfer?: {
+    recipientUserId?: string;    // For PXL transfers to other users
+    recipientUsername?: string;  // Username of recipient
+    recipientEmail?: string;     // Email of recipient
+    senderUserId?: string;       // For received transfers
+    senderUsername?: string;     // Username of sender
+    message?: string;            // Personal message with transfer
+    transferStatus: 'pending' | 'completed' | 'failed' | 'cancelled';
+  };
+  giftcard?: {
+    giftcardId: string;
+    denomination: number;
+    code?: string;               // Delivered giftcard code
+  };
+  tier: {
+    userTier: string;
+    discountApplied: number;
+    cashbackEarned: number;
+  };
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
+  timestamps: {
+    created: Timestamp;
+    updated: Timestamp;
+    completed?: Timestamp;
+  };
+}
+```
+
+### PXLTransfer
+
+**Purpose:** Peer-to-peer PXL transfers between platform users with messaging and tracking capabilities
+
+**TypeScript Interface:**
+```typescript
+interface PXLTransfer {
+  id: string;                    // Unique transfer ID
+  senderUserId: string;          // Sender's user ID
+  senderUsername: string;        // Sender's @username
+  recipientUserId: string;       // Recipient's user ID  
+  recipientUsername: string;     // Recipient's @username
+  recipientEmail?: string;       // If transfer initiated via email lookup
+  
+  // Transfer Details
+  amount: number;                // PXL amount transferred
+  message?: string;              // Personal message (max 200 chars)
+  
+  // Status Tracking
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  failureReason?: string;        // Reason if transfer failed
+  
+  // Security & Fraud Detection
+  riskScore?: number;            // Automated fraud detection score
+  requiresReview: boolean;       // Flagged for manual review
+  reviewedBy?: string;           // Admin user ID if manually reviewed
+  reviewNotes?: string;          // Admin review notes
+  
+  // Timestamps
+  createdAt: Timestamp;
+  completedAt?: Timestamp;
+  cancelledAt?: Timestamp;
+  
+  // Related Transaction IDs
+  senderTransactionId: string;   // Transaction ID for sender's record
+  recipientTransactionId: string; // Transaction ID for recipient's record
+}
+```
+
+## API Specification
+
+The API is designed with a **hybrid approach**: Firebase SDK for direct database operations and REST endpoints via Firebase Cloud Functions for complex business logic. This provides optimal performance for both web and native mobile applications.
+
+### REST API Specification
+
+```yaml
+openapi: 3.0.0
+info:
+  title: Giftcard + PXL Platform API
+  version: 1.0.0
+  description: Mobile-ready REST API for complex business operations and third-party integrations
+servers:
+  - url: https://us-central1-giftcard-pxl-platform.cloudfunctions.net/api
+    description: Firebase Cloud Functions API
+
+components:
+  securitySchemes:
+    FirebaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Firebase ID token
+
+paths:
+  # Authentication & User Management
+  /auth/setup-profile:
+    post:
+      summary: Complete user profile setup after Firebase Auth with all mandatory fields
+      description: |
+        Sets up user profile with required fields including:
+        - Unique username (used across platform and Rocket.Chat)
+        - Complete profile information (all fields mandatory)
+        - Automatic country code selection based on country
+      security:
+        - FirebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, profile]
+              properties:
+                username:
+                  type: string
+                  pattern: '^@[a-zA-Z0-9_]{3,20}$'
+                  description: Unique username, preserved in Rocket.Chat
+                email:
+                  type: string
+                  format: email
+                  description: Unique email address (required)
+                profile:
+                  type: object
+                  required: [firstName, lastName, phone, country, region, gender]
+                  properties:
+                    firstName:
+                      type: string
+                      minLength: 1
+                      maxLength: 50
+                    lastName:
+                      type: string
+                      minLength: 1
+                      maxLength: 50
+                    phone:
+                      type: string
+                      pattern: '^\+[1-9]\d{1,14}$'
+                      description: E.164 format with country code (auto-selected)
+                    country:
+                      type: string
+                      description: ISO 3166-1 alpha-2 country code
+                    region:
+                      type: string
+                      description: State/Province/Region
+                    gender:
+                      type: string
+                      enum: [Male, Female]
+
+  # PXL Currency Operations
+  /pxl/current-rate:
+    get:
+      summary: Get current PXL exchange rate
+      description: Public endpoint for real-time rate display
+
+  /pxl/purchase:
+    post:
+      summary: Purchase PXL with USD via Stripe or PayPal (one-way conversion only)
+      security:
+        - FirebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [usdAmount, paymentProvider]
+              properties:
+                usdAmount:
+                  type: number
+                  minimum: 10
+                  maximum: 1000
+                  description: USD amount to convert to PXL (one-way conversion)
+                paymentProvider:
+                  type: string
+                  enum: [stripe, paypal]
+                paymentMethodId:
+                  type: string
+                  description: Required for Stripe payments
+                paypalOrderId:
+                  type: string
+                  description: Required for PayPal payments
+
+  /pxl/transfer:
+    post:
+      summary: Send PXL to another platform user
+      security:
+        - FirebaseAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, recipient]
+              properties:
+                amount:
+                  type: number
+                  minimum: 1
+                  maximum: 10000
+                  description: PXL amount to transfer
+                recipient:
+                  type: string
+                  description: Recipient's @username or email address
+                message:
+                  type: string
+                  maxLength: 200
+                  description: Optional personal message
+      responses:
+        '200':
+          description: Transfer initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transferId:
+                    type: string
+                  recipientUsername:
+                    type: string
+                  status:
+                    type: string
+                  estimatedCompletion:
+                    type: string
+
+  /pxl/transfer/{transferId}/status:
+    get:
+      summary: Check PXL transfer status
+      security:
+        - FirebaseAuth: []
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Transfer status details
+
+  # Giftcard Operations
+  /giftcards:
+    get:
+      summary: Get giftcard catalog with tier-based pricing
+      security:
+        - FirebaseAuth: []
+
+  /giftcards/{id}/purchase:
+    post:
+      summary: Purchase a giftcard with USD (Stripe/PayPal) or PXL
+      security:
+        - FirebaseAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [denomination, paymentMethod]
+              properties:
+                denomination:
+                  type: number
+                paymentMethod:
+                  type: string
+                  enum: [pxl, stripe, paypal]
+                paymentMethodId:
+                  type: string
+                  description: Required for Stripe payments
+                paypalOrderId:
+                  type: string
+                  description: Required for PayPal payments
+
+  # Chat Integration
+  /chat/setup:
+    post:
+      summary: Setup Rocket.Chat integration with SSO and profile synchronization
+      description: |
+        Provisions user in Rocket.Chat with:
+        - SSO authentication using platform credentials
+        - Application @username preservation
+        - Profile picture with tier ring overlay
+        - Tier-based channel access
+        - Custom sidebar display configuration
+      security:
+        - FirebaseAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                syncProfile:
+                  type: boolean
+                  default: true
+                  description: Sync profile picture with tier indicator
+      responses:
+        200:
+          description: Chat integration successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ssoToken:
+                    type: string
+                    description: SSO token for Rocket.Chat authentication
+                  chatUserId:
+                    type: string
+                    description: Rocket.Chat user ID
+                  channels:
+                    type: array
+                    description: List of accessible channels based on tier
+                  avatarUrl:
+                    type: string
+                    description: URL to profile picture with tier ring overlay
+
+  # Admin Operations
+  /admin/users:
+    get:
+      summary: Get user list for admin dashboard
+      security:
+        - FirebaseAuth: []
+
+security:
+  - FirebaseAuth: []
+```
+
+## Components
+
+Based on the architectural patterns, tech stack, and data models, I've identified the major logical components across the fullstack with clear boundaries and mobile-ready interfaces.
+
+### Frontend Web Application
+**Responsibility:** Next.js-based user interface providing giftcard marketplace, PXL currency management, peer-to-peer PXL transfers, user dashboard, and embedded chat functionality
+
+**Key Interfaces:**
+- React components with TypeScript props for type safety
+- Firebase SDK integration for real-time data
+- Rocket.Chat JavaScript SDK with REST API for messaging
+- Stripe Elements and PayPal SDK for payment processing
+- Social login integration (Google, Apple, Facebook)
+- PXL transfer interface for peer-to-peer transactions
+
+**Dependencies:** Firebase Auth, Firestore, Cloud Functions, Rocket.Chat SDK, Stripe SDK, PayPal SDK
+
+**Technology Stack:** Next.js 14, React 18, TypeScript, Tailwind CSS, Zustand + React Query
+
+### Firebase Authentication Service
+**Responsibility:** Multi-provider authentication with social login (Google, Apple, Facebook), session management, and security token generation for cross-platform access
+
+**Key Interfaces:**
+- Firebase Auth SDK (web/mobile compatible)
+- JWT token validation for API access
+- OAuth provider integration (Google, Facebook, Apple)
+- Email/password authentication with secure password reset
+
+### PXL Currency Engine
+**Responsibility:** Core business logic for PXL exchange rate calculations, tier-based pricing, one-way USD to PXL conversion, and real-time rate broadcasting across all connected clients
+
+**Key Interfaces:**
+- Real-time rate calculation algorithms
+- Tier-based discount application
+- One-way conversion enforcement (USD → PXL only)
+- Rate update broadcasting via Firestore listeners
+
+**Dependencies:** Firebase Functions, Firestore for rate storage, external market data APIs
+
+### PXL Transfer Service
+**Responsibility:** Peer-to-peer PXL transfers between platform users with security validation, fraud detection, and transaction management
+
+**Key Interfaces:**
+- Username and email-based recipient lookup
+- Transfer validation and balance verification
+- Fraud detection and risk scoring
+- Real-time transfer processing and notifications
+- Transfer history and status tracking
+
+**Dependencies:** Firebase Functions, Firestore, Email service, Firebase Cloud Messaging
+
+**Technology Stack:** Firebase Cloud Functions, Node.js, TypeScript, automated fraud detection algorithms
+
+### Payment Processing Service
+**Responsibility:** Secure payment processing with dual-provider support (Stripe + PayPal), PCI compliance, multi-currency support, and mobile payment methods
+
+**Key Interfaces:**
+- Stripe Payment Intents API for card payments
+- PayPal Orders API for PayPal payments
+- Mobile payment method support (Apple Pay, Google Pay, PayPal One Touch)
+- Secure payment tokenization and processing
+- Webhook handling for payment status updates
+
+**Dependencies:** Stripe API, PayPal API, Firebase Functions, Firebase Security Rules
+
+### Giftcard Management Service
+**Responsibility:** Giftcard catalog management, supplier API integration, inventory tracking, and digital delivery with QR code generation
+
+### Chat Integration Service
+**Responsibility:** Advanced Rocket.Chat integration with SSO authentication, tier-based channel management, automated user provisioning/de-provisioning, profile picture synchronization with tier ring indicators, and real-time performance optimization for CORE platform functionality
+
+**Key Features:**
+- SSO token management with automatic refresh handling
+- User identity mapping preserving application @username in Rocket.Chat
+- Profile picture API integration with tier ring overlay rendering
+- Custom chat sidebar implementation replacing default room names with user avatars
+- WebSocket connection pooling for optimal performance (sub-100ms latency)
+- Monitoring and alerting for chat system health (99.99% uptime requirement)
+- Automated tier-based channel access control
+- Bi-directional user synchronization between platforms
+
+### Security & Compliance Service
+**Responsibility:** Security rule enforcement, audit logging, fraud detection, KYC document processing, and PCI compliance monitoring
+
+## External APIs
+
+### Stripe API
+- **Purpose:** PCI-compliant payment processing for USD transactions, mobile payment methods, and subscription billing
+- **Documentation:** https://stripe.com/docs/api
+- **Authentication:** Bearer token (secret key for server-side, publishable key for client-side)
+- **Key Endpoints:** Payment Intents, Payment Methods, Customers, Refunds, Webhooks
+- **Mobile Integration:** Native iOS/Android SDKs for Apple Pay and Google Pay
+
+### PayPal API
+- **Purpose:** Alternative payment processing for USD transactions, widely trusted payment method with buyer protection
+- **Documentation:** https://developer.paypal.com/docs/api/overview/
+- **Authentication:** OAuth 2.0 with Client ID and Secret
+- **Key Endpoints:** Orders API v2, Payments API, Refunds API, Disputes API, Webhooks
+- **Mobile Integration:** PayPal Mobile SDK for iOS/Android, PayPal One Touch for seamless mobile checkout
+- **Features:** PayPal Checkout, PayPal Credit, Buy Now Pay Later options, Seller Protection
+
+### Rocket.Chat API
+- **Purpose:** Enterprise chat platform integration with advanced SSO, tier-based channels, profile customization, and moderation tools
+- **Documentation:** https://docs.rocket.chat/developer-guides/rest-api
+- **Key Endpoints:** 
+  - User provisioning/de-provisioning via REST API
+  - SSO authentication with SAML 2.0 or OAuth 2.0
+  - Avatar upload and synchronization endpoints
+  - Channel membership management APIs
+  - Real-time event webhooks for user status
+  - Custom UI embedding configuration
+- **Performance Requirements:** 
+  - Sub-100ms message delivery latency
+  - 99.99% uptime for chat services (CORE functionality)
+  - WebSocket connection resilience with auto-reconnect
+  - Real-time profile picture synchronization
+- **Custom Features:**
+  - Profile picture with tier ring overlay rendering
+  - Chat sidebar customization API
+  - Application username preservation in all contexts
+- **Mobile Integration:** React Native SDK for native chat experience with custom UI components
+
+### Giftcard Supplier APIs
+- **Purpose:** Real-time inventory management, bulk purchasing, and digital giftcard delivery
+- **Providers:** Multiple suppliers (Blackhawk Network, Tango Card, etc.)
+- **Integration:** Firebase Functions handle supplier integration with automatic failover
+
+### Communication APIs
+- **Twilio SMS:** Phone verification and security alerts
+- **SendGrid Email:** Transactional emails and giftcard delivery
+- **Firebase Cloud Messaging:** Push notifications for mobile apps
+
+### KYC Verification Service
+- **Providers:** Jumio/Onfido for identity document verification
+- **Purpose:** Compliance monitoring and fraud prevention
+
+## Database Schema
+
+The Firestore NoSQL database schema is optimized for mobile offline capabilities, real-time synchronization, and efficient querying across web and mobile platforms.
+
+### Firestore Collections Structure
+
+```javascript
+// Root Collections
+giftcard-platform/
+├── users/                          // User profiles and authentication data
+├── giftcards/                      // Giftcard catalog and inventory
+├── transactions/                   // Financial transaction records  
+├── pxl-transfers/                  // PXL peer-to-peer transfer records
+├── pxl-currency/                   // PXL exchange rate and market data
+├── user-giftcards/                 // User's purchased giftcards
+├── admin-actions/                  // Administrative action audit log
+├── chat-integrations/              // Rocket.Chat user mappings
+└── system-config/                  // Platform configuration settings
+```
+
+### Mobile Optimization Strategies
+
+1. **Collection Design for Offline Queries** - Flat document structure reduces query complexity
+2. **Index Optimization** - Single-field and composite indexes for efficient querying
+3. **Document Size Management** - Optimized for mobile bandwidth constraints
+4. **Real-time Listener Efficiency** - Targeted listeners for specific document fields
+
+## Security and Performance
+
+### Security Requirements
+
+**Frontend Security:**
+- **CSP Headers:** Strict Content Security Policy with approved domains only
+- **XSS Prevention:** React's built-in protection + DOMPurify for user content
+- **Secure Storage:** httpOnly cookies for tokens, no financial data in localStorage
+
+**Backend Security:**
+- **Input Validation:** Comprehensive validation schemas for all endpoints
+- **Rate Limiting:** 100 requests/minute per user, 10/minute for financial operations
+- **CORS Policy:** Restricted to approved domains only
+
+**Authentication Security:**
+- **Multi-Provider Support:** Firebase Auth with Google, Apple, Facebook integration
+- **Token Management:** Secure JWT tokens with automatic refresh
+- **Session Security:** 14-day expiration with concurrent session limits
+
+### Firebase Security Rules
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/admin-users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // Users Collection
+    match /users/{userId} {
+      // Users can read/write their own profile
+      allow read, write: if isOwner(userId);
+      
+      // Prevent users from modifying sensitive fields
+      allow update: if isOwner(userId) && 
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['tier', 'wallets', 'status', 'rocketchat']);
+    }
+    
+    // Giftcards Collection (Public Read)
+    match /giftcards/{giftcardId} {
+      allow read: if resource.data.active == true;
+      allow write: if isAdmin();
+    }
+    
+    // Transactions Collection (Strict Access)
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+      allow create: if false; // Only server functions can create
+      allow read: if isAdmin();
+    }
+    
+    // PXL Currency Collection (Public Read, Admin Write)
+    match /pxl-currency/{currencyId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
+```
+
+### Performance Optimization
+
+**Frontend Performance:**
+- **Bundle Size Target:** < 250KB gzipped main bundle
+- **Loading Strategy:** Critical CSS inlined, progressive image loading
+- **Caching Strategy:** Vercel Edge Network + React Query with 5-minute stale time
+
+**Backend Performance:**
+- **Response Time Target:** < 200ms reads, < 500ms writes, < 1s complex calculations
+- **Database Optimization:** Firestore composite indexes, < 1MB document limit
+- **Caching Strategy:** Firebase Functions memory caching + CDN for static assets
+
+## Unified Project Structure
+
+This monorepo structure accommodates the web platform with readiness for Phase 2 mobile app integration, using Turborepo for efficient build orchestration.
+
+```plaintext
+giftcard-pxl-platform/
+├── .github/                          # CI/CD workflows
+│   ├── workflows/
+│   │   ├── ci.yaml
+│   │   ├── deploy-web.yaml
+│   │   ├── deploy-functions.yaml
+│   │   └── mobile-prep.yaml          # Mobile readiness validation
+│
+├── apps/                             # Application packages
+│   ├── web/                          # Next.js web application
+│   │   ├── src/
+│   │   │   ├── components/           # UI components
+│   │   │   │   ├── ui/               # Basic UI primitives
+│   │   │   │   ├── giftcards/        # Giftcard components
+│   │   │   │   ├── chat/             # Chat integration
+│   │   │   │   ├── wallet/           # PXL wallet components
+│   │   │   │   ├── transfers/        # PXL transfer components
+│   │   │   │   ├── payments/         # Stripe/PayPal payment components
+│   │   │   │   └── auth/             # Social login components
+│   │   │   ├── pages/                # Next.js pages
+│   │   │   │   ├── api/              # API routes
+│   │   │   │   ├── auth/             # Auth pages
+│   │   │   │   ├── marketplace/      # Giftcard marketplace
+│   │   │   │   ├── wallet/           # Wallet management
+│   │   │   │   └── transfers/        # PXL transfer pages
+│   │   │   ├── hooks/                # Custom React hooks
+│   │   │   ├── services/             # API services
+│   │   │   └── stores/               # State management
+│   │   └── tests/                    # Frontend tests
+│   │
+│   ├── admin/                        # Admin dashboard
+│   │   ├── src/
+│   │   │   ├── components/           # Admin components
+│   │   │   └── pages/                # Admin pages
+│   │
+│   ├── functions/                    # Firebase Cloud Functions
+│   │   ├── src/
+│   │   │   ├── auth/                 # Authentication functions
+│   │   │   ├── payments/             # Payment processing (Stripe/PayPal)
+│   │   │   ├── pxl/                  # PXL currency functions
+│   │   │   ├── transfers/            # PXL transfer functions
+│   │   │   ├── giftcards/            # Giftcard functions
+│   │   │   ├── chat/                 # Chat integration
+│   │   │   └── notifications/        # Notification functions
+│   │
+│   └── mobile-prep/                  # Mobile preparation
+│       ├── shared-types/             # Types for mobile
+│       └── api-contracts/            # API contracts
+│
+├── packages/                         # Shared packages
+│   ├── shared/                       # Shared types and utilities
+│   │   ├── src/
+│   │   │   ├── types/                # TypeScript interfaces
+│   │   │   ├── constants/            # Shared constants
+│   │   │   ├── utils/                # Utilities
+│   │   │   └── schemas/              # Validation schemas
+│   │
+│   ├── ui/                           # Shared UI components
+│   ├── firebase-config/              # Firebase setup
+│   └── config/                       # Build configurations
+│
+├── infrastructure/                   # Infrastructure as Code
+│   ├── firebase/
+│   │   ├── firestore.rules
+│   │   └── firebase.json
+│   ├── vercel/
+│   └── stripe/
+│
+├── scripts/                          # Build and deployment scripts
+├── docs/                             # Documentation
+├── turbo.json                        # Turborepo configuration
+├── pnpm-workspace.yaml               # Workspace configuration
+└── package.json                      # Root package.json
+```
+
+## Development Workflow
+
+### Local Development Setup
+
+**Prerequisites:**
+```bash
+# Install Node.js (via nvm)
+nvm install 18.18.0 && nvm use 18.18.0
+
+# Install pnpm
+npm install -g pnpm@8.10.0
+
+# Install Firebase CLI
+npm install -g firebase-tools@12.7.0
+
+# Install Vercel CLI
+npm install -g vercel@32.5.0
+
+# Install Turborepo CLI
+pnpm install -g turbo@1.10.16
+```
+
+**Initial Setup:**
+```bash
+# Clone and setup
+git clone <repository-url>
+cd giftcard-pxl-platform
+pnpm install
+
+# Environment setup
+cp .env.example .env
+cp apps/web/.env.local.example apps/web/.env.local
+cp apps/functions/.env.example apps/functions/.env
+
+# Firebase setup
+firebase login
+firebase use <your-project-id>
+firebase init emulators
+```
+
+**Development Commands:**
+```bash
+# Start all services
+pnpm dev
+
+# Start individual apps
+pnpm dev --filter=web          # Web app only
+pnpm dev --filter=admin        # Admin dashboard
+pnpm dev --filter=functions    # Firebase Functions
+
+# Build and test
+pnpm build                     # Build all packages
+pnpm test                      # Run all tests
+pnpm lint                      # Lint all code
+
+# Firebase operations
+pnpm firebase:emulators         # Start Firebase emulators
+pnpm db:seed                   # Seed development data
+
+# Deployment
+pnpm deploy:staging            # Deploy to staging
+pnpm deploy:production         # Deploy to production
+
+# Mobile preparation
+pnpm mobile:validate           # Validate mobile readiness
+```
+
+### Environment Configuration
+
+**Frontend Environment Variables (.env.local):**
+```bash
+# Firebase Configuration
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
+
+# Stripe Configuration
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
+
+# PayPal Configuration
+NEXT_PUBLIC_PAYPAL_CLIENT_ID=your_paypal_client_id
+
+# Social Auth (automatically configured by Firebase)
+# Google Sign-In: Enabled in Firebase Auth
+# Apple Sign-In: Enabled in Firebase Auth
+# Facebook Login: Enabled in Firebase Auth
+
+# Rocket.Chat SDK Configuration
+NEXT_PUBLIC_ROCKETCHAT_HOST=your-chat.rocket.chat
+NEXT_PUBLIC_ROCKETCHAT_SSL=true
+ROCKETCHAT_OAUTH_CLIENT_ID=your-oauth-client-id
+ROCKETCHAT_OAUTH_CLIENT_SECRET=your-oauth-client-secret
+
+# Environment
+NEXT_PUBLIC_ENV=development
+```
+
+**Backend Environment Variables (.env):**
+```bash
+# Firebase Admin SDK
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----..."
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# PayPal
+PAYPAL_CLIENT_ID=your_paypal_client_id
+PAYPAL_CLIENT_SECRET=your_paypal_client_secret
+PAYPAL_WEBHOOK_ID=your_webhook_id
+
+# External APIs
+TWILIO_ACCOUNT_SID=AC...
+SENDGRID_API_KEY=SG...
+JUMIO_API_TOKEN=your_jumio_token
+
+# Environment
+NODE_ENV=development
+```
+
+## Mobile Integration Strategy (Phase 2)
+
+The architecture is designed to seamlessly support native mobile apps:
+
+### Mobile Readiness Features
+
+1. **Shared Firebase Backend** - Works identically across web, iOS, and Android
+2. **TypeScript Interfaces** - Shared types between web and mobile development
+3. **Real-time Capabilities** - Firestore listeners work natively on mobile
+4. **Offline-First Design** - Firebase provides automatic offline persistence
+5. **Push Notifications** - Firebase Cloud Messaging ready for mobile
+6. **Social Authentication** - Firebase Auth supports native mobile social login
+
+### Phase 2 Implementation Path
+
+**iOS App (Swift/SwiftUI):**
+- Firebase iOS SDK integration
+- Native Apple Pay integration
+- Rocket.Chat iOS SDK for chat
+- Biometric authentication (Face ID/Touch ID)
+
+**Android App (Kotlin/Jetpack Compose):**
+- Firebase Android SDK integration  
+- Native Google Pay integration
+- Rocket.Chat Android SDK for chat
+- Biometric authentication (Fingerprint)
+
+**Shared Elements:**
+- Same Firebase project and data
+- Identical business logic and validation
+- Consistent user experience across platforms
+- Real-time synchronization between web and mobile
+
+### Mobile Development Timeline Estimate
+
+- **Setup & Authentication**: 2-3 weeks
+- **Core Features (Marketplace, Wallet)**: 4-6 weeks  
+- **Chat Integration**: 2-3 weeks
+- **Payment Integration**: 2-3 weeks
+- **Testing & Polish**: 2-3 weeks
+- **App Store Submission**: 1-2 weeks
+
+**Total Phase 2 Timeline**: 3-4 months for both iOS and Android apps
+
+## Summary
+
+This comprehensive architecture provides:
+
+### ✅ **Modern Technology Stack**
+- **Frontend**: Next.js + React + TypeScript + Tailwind CSS
+- **Backend**: Firebase (Auth, Firestore, Functions, Storage)
+- **Chat**: Rocket.Chat Enterprise Cloud
+- **Payments**: Stripe + PayPal dual-provider support with PCI compliance
+- **Authentication**: Multi-provider social login (Google, Apple, Facebook)
+
+### ✅ **Key Features Supported**
+- Real-time PXL currency with tier-based benefits (one-way USD → PXL conversion)
+- Peer-to-peer PXL transfers between users via @username or email
+- Comprehensive giftcard marketplace with supplier integration
+- Enterprise chat with tier-based channels via Rocket.Chat SDK
+- Secure dual payment processing (Stripe + PayPal for USD, PXL wallet)
+- Social authentication for seamless user onboarding (Google, Apple, Facebook)
+- KYC verification and compliance
+- Admin dashboard with analytics
+
+### 📚 **Rocket.Chat Implementation Guide**
+
+A comprehensive implementation guide is available for developers:
+
+**`/docs/architecture/rocket-chat-sdk-implementation.md`**
+- Direct SDK integration with REST API (Best Practice)
+- Performance metrics achieving sub-50ms latency
+- Complete code examples with TypeScript
+- Custom OAuth provider setup
+- WebSocket optimization strategies
+- Performance monitoring setup
+- Common issues and solutions
+- Production deployment checklist
+
+### ✅ **Mobile-Ready Design**
+- Phase 1: Web platform with mobile-optimized architecture
+- Phase 2: Native iOS/Android apps using same Firebase backend
+- Shared TypeScript types and business logic
+- Real-time synchronization across all platforms
+
+### ✅ **Security & Compliance**
+- PCI DSS compliant payment processing
+- Comprehensive Firebase Security Rules
+- Multi-layer authentication and authorization
+- Audit logging and compliance monitoring
+
+### ✅ **Development Efficiency**
+- Monorepo structure with Turborepo
+- Shared packages for code reuse
+- AI-friendly technology choices
+- Comprehensive testing strategy
+
+# Architecture Addendum — PXL Purchase Discount
+
+## Data Models — PXLCurrency (append optional field)
+```ts
+interface PXLCurrency {
+  // ...existing fields
+  purchaseDiscounts?: {
+    starter: number;     // 0.00
+    rising: number;      // 0.03
+    pro: number;         // 0.07
+    pixlbeast: number;   // 0.09
+    pixlionaire: number; // 0.13
+  };
+}
+```
+
+## PXL Currency Engine — Responsibilities (append one sentence)
+- Applies **tier-based purchase discounts** on USD→PXL conversion by issuing **bonus PXL**, persisting `appliedDiscount`, `bonusPxl`, and `effectiveRate` with the transaction.
+
+## Payment Processing Service (append one sentence)
+- After a successful USD charge (Stripe/PayPal), calculate **bonus PXL** from the user’s tier and atomically credit `basePxl + bonusPxl`.
+
+## Firestore / Transactions (no schema change required)
+- Existing transaction documents may include **optional** fields: `appliedDiscount`, `bonusPxl`, `effectiveRate` for USD→PXL conversions.
+
+
+This architecture provides a solid foundation for building a scalable, secure, and user-friendly giftcard platform with innovative PXL currency features, while maintaining the flexibility to expand to mobile platforms in Phase 2.
+
+---
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

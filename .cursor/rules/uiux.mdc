@@ -1,0 +1,1207 @@
+---
+alwaysApply: true
+---
+
+# Giftcard + PXL Platform UI/UX Specification
+
+## Introduction
+
+This document defines the user experience goals, information architecture, user flows, and visual design specifications for the Giftcard + PXL Platform's user interface. It serves as the foundation for visual design and frontend development, ensuring a cohesive and user-centered experience.
+
+### Overall UX Goals & Principles
+
+#### Target User Personas
+- **Savings-Conscious Consumer:** Digital-savvy users aged 25-45 who regularly purchase giftcards and are motivated by savings opportunities and status recognition
+- **Cryptocurrency Enthusiast:** Users interested in alternative currencies with appreciation potential who value tier-based benefits
+- **Social Commerce User:** Community-minded users who enjoy sharing experiences, recommendations, and engaging in chat-based commerce discussions
+
+#### Usability Goals
+- **Immediate Value Recognition:** New users can understand PXL benefits and tier advantages within 2 minutes
+- **Effortless Tier Progression:** Users can easily track and understand their path to the next tier
+- **Dual-Currency Fluency:** Users can confidently choose between USD/PXL payment options with clear benefit understanding
+- **Mobile Commerce Excellence:** Smartphone users can complete purchases and access all features seamlessly
+
+#### Design Principles
+1. **Tier-First Design** - User status and progression are prominently visible throughout the experience
+2. **Financial Transparency** - All currency conversions, discounts, and benefits are clearly displayed
+3. **Dark Professional Aesthetic** - Vercel.com-inspired design conveys trust for financial transactions
+4. **Mobile-Native Experience** - Every interaction optimized for smartphone usage first
+5. **Community-Driven Commerce** - Chat and social features seamlessly integrate with purchasing decisions
+
+#### Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|---------|
+| 2025-08-23 | 1.0 | Initial UI/UX specification creation | Sally (UX Expert) |
+| 2025-08-24 | 1.1 | Updated with Vercel design patterns and sparkline dashboard | Sally (UX Expert) |
+| 2025-08-24 | 1.2 | Enhanced with Vercel template patterns from Commerce, AI Chatbot, and Platform templates | Sally (UX Expert) |
+
+## Information Architecture
+
+### Site Map / Screen Inventory
+
+```mermaid
+graph TD
+    A[Landing Page] --> B[Dashboard/Home]
+    A --> C[Register/Login]
+    
+    B --> D[Giftcard Marketplace]
+    B --> E[PXL Wallet]
+    B --> F[Chat System]
+    B --> G[User Profile]
+    
+    D --> D1[Browse Catalog]
+    D --> D2[Search Results]
+    D --> D3[Brand Details]
+    D --> D4[Purchase Flow]
+    D --> D5[Shopping Cart]
+    
+    E --> E1[Balance Overview]
+    E --> E2[Transaction History]
+    E --> E3[Buy PXL]
+    E --> E4[Tier Progress]
+    E --> E5[Benefits Calculator]
+    
+    F --> F1[General Chat]
+    F --> F2[Tier Channels]
+    F --> F3[Private Messages]
+    F --> F4[User Directory]
+    
+    G --> G1[Profile Settings]
+    G --> G2[Security]
+    G --> G3[Notifications]
+    G --> G4[My Giftcards]
+    G --> G5[Tier Benefits]
+    
+    H[Admin Dashboard] --> H1[User Management]
+    H[Admin Dashboard] --> H2[Analytics]
+    H[Admin Dashboard] --> H3[PXL Rate Config]
+    H[Admin Dashboard] --> H4[Supplier Management]
+    H[Admin Dashboard] --> H5[Chat Moderation]
+```
+
+### Navigation Structure
+
+**Primary Navigation:** Bottom tab bar (mobile) / Left sidebar (desktop) with 5 main sections:
+- Dashboard (Home icon) - Overview and quick actions
+- Marketplace (Store icon) - Giftcard browsing and purchasing
+- Wallet (Currency icon) - PXL/USD balance and tier progression
+- Chat (Message icon) - Community and private messaging
+- Profile (User icon) - Settings and account management
+
+**Secondary Navigation:** 
+- Context-dependent top navigation within each section
+- Breadcrumbs for deep navigation paths (Brand > Category > Product)
+- Floating action buttons for primary actions (Buy, Message, etc.)
+
+**Breadcrumb Strategy:** 
+- Show current location within marketplace categories
+- Include "Back" navigation for mobile optimization
+- Display tier context when relevant (e.g., "Pro Member Benefits")
+
+## User Flows
+
+### Flow 1: User Onboarding & KYC Verification
+
+**User Goal:** Complete registration and verification to access platform features
+
+**Entry Points:** Landing page, referral links, social media campaigns
+
+**Success Criteria:** User completes KYC verification and reaches verified status
+
+**Flow Diagram:**
+```mermaid
+graph TD
+    A[Landing Page] --> B{New User?}
+    B -->|Yes| C[Registration Form]
+    B -->|No| D[Login]
+    
+    C --> E[Social Login Options]
+    C --> F[Manual Registration]
+    
+    E --> G[Social Account Connected]
+    F --> H[Form Validation]
+    H --> I[Email Verification]
+    
+    G --> J[Profile Completion]
+    I --> J
+    J --> K[KYC Document Upload]
+    
+    K --> L[Document Verification]
+    L --> M{Auto-Verify Success?}
+    M -->|Yes| N[Account Verified - Starter Tier]
+    M -->|No| O[Manual Review Queue]
+    O --> P[Admin Approval/Rejection]
+    P -->|Approved| N
+    P -->|Rejected| Q[Retry KYC Process]
+    
+    N --> R[Welcome Dashboard]
+```
+
+**Edge Cases & Error Handling:**
+- Document upload failures with retry mechanism
+- KYC rejection with clear guidance for resubmission
+- Email verification timeout with resend option
+- Social login authentication failures
+- Duplicate account detection and account merging options
+
+**Notes:** KYC verification is mandatory before accessing financial features. Users can browse marketplace but cannot purchase until verified.
+
+### Flow 2: Giftcard Purchase with Dual Currency
+
+**User Goal:** Purchase giftcard using optimal payment method (USD or PXL)
+
+**Entry Points:** Marketplace browse, search results, featured cards, chat recommendations
+
+**Success Criteria:** User completes purchase and receives digital giftcard
+
+**Flow Diagram:**
+```mermaid
+graph TD
+    A[Browse Marketplace] --> B[Select Giftcard]
+    B --> C[View Product Details]
+    C --> D[Choose Denomination]
+    
+    D --> E[Payment Method Selection]
+    E --> F{Sufficient PXL Balance?}
+    F -->|Yes| G[PXL Payment Path]
+    F -->|No| H[USD Payment Path]
+    F -->|Partial| I[Combined Payment Option]
+    
+    G --> J[Apply Tier Discount]
+    J --> K[Confirm PXL Transaction]
+    K --> L[Process Payment]
+    
+    H --> M[Credit Card Form]
+    M --> N[Payment Processing]
+    N --> O{Payment Success?}
+    O -->|No| P[Error Handling]
+    O -->|Yes| L
+    
+    I --> Q[Split Payment Interface]
+    Q --> R[PXL + USD Processing]
+    R --> L
+    
+    L --> S[Generate Digital Giftcard]
+    S --> T[Email Delivery]
+    S --> U[Add to Digital Wallet]
+    T --> V[Purchase Confirmation]
+    U --> V
+    
+    V --> W[Tier Progress Update]
+    W --> X[Cashback Credit (if PXL)]
+```
+
+**Edge Cases & Error Handling:**
+- Insufficient funds with top-up options
+- Payment processing failures with retry logic
+- Giftcard generation failures with customer support escalation
+- Network interruptions during payment processing
+- Price changes during checkout flow
+
+**Notes:** Tier-based pricing shown prominently. Real-time PXL rate updates during checkout. Clear breakdown of savings vs USD payment.
+
+### Flow 3: Tier Progression & Benefit Discovery
+
+**User Goal:** Understand tier benefits and track progression to next level
+
+**Entry Points:** Dashboard tier display, wallet section, benefit notifications
+
+**Success Criteria:** User understands current benefits and next tier requirements
+
+**Flow Diagram:**
+```mermaid
+graph TD
+    A[Current Tier Display] --> B[Tier Benefits Overview]
+    B --> C[View All Tiers Comparison]
+    
+    C --> D[Next Tier Requirements]
+    D --> E[Progress Visualization]
+    E --> F[PXL Amount Needed]
+    
+    F --> G{Want to Advance?}
+    G -->|Yes| H[Purchase PXL Options]
+    G -->|No| I[Continue Regular Usage]
+    
+    H --> J[PXL Purchase Flow]
+    J --> K[Automatic Tier Recalculation]
+    K --> L{Tier Advancement?}
+    L -->|Yes| M[Tier Upgrade Celebration]
+    L -->|No| N[Updated Progress Display]
+    
+    M --> O[New Benefits Activation]
+    O --> P[Updated UI Elements]
+    P --> Q[Access New Tier Channels]
+    
+    I --> R[Organic Progression Tracking]
+    R --> S[Benefit Usage Analytics]
+```
+
+**Edge Cases & Error Handling:**
+- Tier calculation errors with manual admin override
+- Benefit activation delays with user notifications
+- Progress tracking discrepancies with audit trail
+- Multiple rapid tier advancements in single session
+
+**Notes:** Tier progression is automatic but celebrated. Benefits apply immediately upon advancement. Visual updates cascade throughout interface.
+
+## Wireframes & Mockups
+
+**Primary Design Files:** To be created in Figma - recommend creating a comprehensive design system with the following structure:
+- 📱 Mobile Screens (Primary)
+- 🖥️ Desktop Layouts  
+- 🎨 Component Library
+- 🏆 Tier Visual System
+- 🌙 Dark Theme Specifications
+
+### Key Screen Layouts
+
+#### Dashboard/Home Screen
+
+**Purpose:** Central hub showing user status, PXL market data, and featured products
+
+**Key Elements:**
+- **Modern Header:** Clean navigation bar with:
+  - Logo (left-aligned)
+  - Main sections (Home, Catalog, PXL, Orders, Chat, Support)
+  - Right section: Cart icon, Admin access (if admin), User avatar with tier ring (40px)
+- **PXL Balance Display:** Prominent balance indicator with real-time value (e.g., "Balance: PXL 0.00") in green accent color
+- **Hero Section:** "Premium Gift Cards" heading with tagline "Shop top brands. Pay in USD or PXL. Instant delivery."
+- **PXL Exchange Rate Dashboard:**
+  - Large title: "PXL to USD Exchange Rate"
+  - Current rate display with percentage change indicator (e.g., "-0.24% past 1h" in red)
+  - USD equivalent display (e.g., "1 USD = 99.90 PXL")
+  - Interactive sparkline graph showing current vs previous period trends
+  - Time period selector (1H, 1D, 7D, 30D)
+  - Hover state showing exact values at graph points
+- **Featured Products Grid:**
+  - Section title with "View all →" link
+  - 2x4 grid layout (8 products visible)
+  - Product cards with Amazon-style "A" badges
+  - Each card shows: Brand, Product name, USD price, PXL price, "In Stock" indicator
+  - Dark card backgrounds (#1a1a1a) with subtle borders
+  - Consistent spacing and alignment
+
+**Interaction Notes:** 
+- Tier badge is tappable to show detailed benefits breakdown
+- PXL balance shows real-time updates with subtle animation
+- Swipe gestures for featured giftcards carousel
+- Pull-to-refresh for real-time data updates
+
+**Design File Reference:** `/mobile-screens/dashboard-home`
+
+#### Giftcard Marketplace
+
+**Purpose:** Browse and purchase giftcards with dual-currency pricing
+
+**Key Elements:**
+- Search bar with voice input and filter chips
+- Category navigation with icon-based design
+- Giftcard grid with brand logos and dual pricing display
+- "Best Deal" badges highlighting optimal payment method
+- Tier discount indicators ("Save 8% more with PXL")
+- Floating action button for cart access
+
+**Interaction Notes:**
+- Infinite scroll with skeleton loading states
+- Long-press for quick preview without navigation
+- Swipe between USD/PXL pricing views
+- Filter overlay slides up from bottom
+
+**Design File Reference:** `/mobile-screens/marketplace-browse`
+
+#### PXL Wallet Interface
+
+**Purpose:** Manage PXL/USD balances and track tier progression
+
+**Key Elements:**
+- Large balance cards with animated countup effects
+- Real-time exchange rate with trend visualization
+- Tier progress ring with celebration animations
+- Transaction history with infinite scroll
+- "Buy More PXL" prominent call-to-action
+- Benefits calculator showing potential savings
+
+**Interaction Notes:**
+- Tap balance cards to toggle between currencies
+- Swipe transaction cards for additional actions
+- Pinch-to-zoom on rate trend charts
+- Haptic feedback for tier progression milestones
+
+**Design File Reference:** `/mobile-screens/wallet-balance`
+
+#### Chat System Interface
+
+**Purpose:** Community engagement with tier-based channels
+
+**Key Elements:**
+- Channel switcher with tier-colored indicators
+- Message composer with media upload options
+- User list with online status and tier badges
+- Message threads with reply functionality
+- File sharing with preview capabilities
+- Typing indicators and read receipts
+
+**Interaction Notes:**
+- Swipe between channels with smooth transitions
+- Long-press messages for additional options
+- Drag-and-drop for file uploads
+- Shake gesture for chat settings access
+
+**Design File Reference:** `/mobile-screens/chat-system`
+
+#### Admin Dashboard
+
+**Purpose:** Comprehensive platform management interface
+
+**Key Elements:**
+- Multi-panel layout with resizable sections
+- Real-time analytics widgets with drill-down capabilities
+- User management table with advanced filtering
+- PXL rate configuration with impact simulation
+- Supplier management with bulk operations
+- Chat moderation queue with quick actions
+
+**Interaction Notes:**
+- Drag-and-drop widget customization
+- Keyboard shortcuts for power users
+- Bulk selection with checkbox interface
+- Modal overlays for detailed operations
+
+**Design File Reference:** `/desktop-layouts/admin-dashboard`
+
+## Component Library / Design System
+
+**Design System Approach:** Build custom component library using shadcn/ui as foundation with Vercel.com dark theme aesthetic and tier-based visual system integration.
+
+### Core Components
+
+#### User Avatar Component
+
+**Purpose:** Display user profile picture with tier status ring
+
+**Structure:**
+```
+     ┌─────────────┐
+   ┌─┤             ├─┐  <- 2px tier-colored ring
+   │ │   [Avatar]  │ │  <- Profile image or placeholder
+   │ │             │ │  <- Inner shadow for depth
+   └─┤             ├─┘  <- Smooth anti-aliasing
+     └─────────────┘
+```
+
+**Sizes:**
+- **Large (64px):** Profile pages, account settings
+- **Medium (40px):** Navigation header, comments
+- **Small (32px):** Chat messages, user lists
+- **Mini (24px):** Inline mentions, compact views
+
+**Placeholder States:**
+- **No Image:** User initials on dark background
+  - Background: `#1a1a1a`
+  - Text: First 1-2 letters of username
+  - Font: Inter 600 (semibold)
+  - Color: `#666666`
+- **Loading:** Skeleton pulse animation
+- **Error:** Generic user icon
+
+**Tier Ring Styles:**
+| Tier | Ring Color | Ring Width | Glow Effect |
+|------|------------|------------|-------------|
+| Starter |rgb(244, 239, 239) | 2px | None |
+| Rising | #0070f3 | 2px | 0 0 4px rgba(0,112,243,0.3) |
+| Pro | rgb(8, 205, 1) | 2px | 0 0 6px rgba(124,58,237,0.3) |
+| Pixlbeast | #f59e0b | 3px | 0 0 8px rgba(245,158,11,0.4) |
+| Pixlionaire |rgb(185, 43, 228) | 3px | 0 0 10px rgba(239,68,68,0.5) |
+
+**Implementation Details:**
+- Border-radius: 50% (perfect circle)
+- Object-fit: cover (for images)
+- Transition: all 150ms ease-out
+- Hover: Slight scale(1.05) on clickable avatars
+- Active online indicator: Green dot (bottom-right)
+
+**Usage Guidelines:** 
+- Always show tier ring when user is authenticated
+- Use lazy loading for images below the fold
+- Implement smooth transitions when tier changes
+- Cache profile images aggressively
+
+#### Tier Badge
+
+**Purpose:** Display user tier status with consistent visual hierarchy
+
+**Variants:** 
+- Ring style (around avatars - see User Avatar Component)
+- Chip style (inline with text)
+- Card style (detailed tier display)
+- Mini style (compact spaces)
+
+**States:** 
+- Default (current tier)
+- Next (preview next tier)
+- Achieved (celebration state)
+- Loading (tier calculation)
+
+**Usage Guidelines:** Always display with appropriate tier color. Ring style for avatars, chip style in lists, card style for detailed views.
+
+#### Currency Display
+
+**Purpose:** Show PXL/USD amounts with conversion and tier benefits
+
+**Variants:**
+- Large (dashboard balances)
+- Medium (transaction amounts)
+- Small (inline pricing)
+- Comparison (side-by-side USD/PXL)
+
+**States:**
+- Static (fixed amount)
+- Live (real-time updates)
+- Loading (fetching rates)
+- Error (rate unavailable)
+
+**Usage Guidelines:** Always show currency symbol. Use live variant for balances, static for historical data. Include tier discount context when relevant.
+
+#### Progress Ring
+
+**Purpose:** Visualize tier progression with animated feedback
+
+**Variants:**
+- Full ring (complete progress view)
+- Arc (compact progress indicator)
+- Mini (small status indicator)
+
+**States:**
+- In progress (partial fill)
+- Complete (full ring with celebration)
+- Milestone (achievement markers)
+- Inactive (not applicable)
+
+**Usage Guidelines:** Use full ring for primary tier displays, arc for secondary locations, mini for list items.
+
+#### Giftcard Cell (Vercel-Style Product Card)
+
+**Purpose:** Display giftcard products in a clean, modern card layout
+
+**Structure:**
+```
+┌─────────────────────────┐
+│  [Brand Logo/Badge]     │  <- 48px height brand identifier
+│                         │
+│  Product Name           │  <- Text Primary, 16px medium
+│  Brand Name             │  <- Text Tertiary, 14px
+│                         │
+│  $XX.XX    In Stock ✓   │  <- USD price prominent
+│  PXL XXX.XX            │  <- PXL price secondary
+└─────────────────────────┘
+```
+
+**Variants:**
+- **Grid Card** (homepage/marketplace): 
+  - Background: #111111 (Surface color)
+  - Border: 1px solid #262626
+  - Hover: Background #1a1a1a, Border #333333
+  - Padding: 20px
+  - Border-radius: 12px
+  
+- **List Card** (search results):
+  - Horizontal layout with image left, details right
+  - Height: 120px fixed
+  
+- **Featured Card** (hero section):
+  - Larger size with gradient overlay
+  - Include savings percentage badge
+
+**States:**
+- **Default:** Surface background, subtle border
+- **Hover:** Elevated background, border highlight, subtle scale (1.02)
+- **Active:** Brief scale down (0.98)
+- **Loading:** Skeleton pulse animation
+- **Out of Stock:** 50% opacity, disabled interaction
+
+**Content Elements:**
+- **Badge:** Amazon-style "A" or brand initial in circle (32px)
+- **Pricing:** USD large and bold, PXL smaller below
+- **Stock Indicator:** Green dot + "In Stock" or red "Out of Stock"
+- **Discount Badge:** When PXL offers >5% savings
+
+**Usage Guidelines:** 
+- Maintain consistent card heights in grid layouts
+- Use CSS Grid for responsive columns (4 on desktop, 2 on tablet, 1 on mobile)
+- Lazy load images below the fold
+- Include microdata for SEO
+
+#### Chat Message
+
+**Purpose:** Display messages in chat system with tier context
+
+**Variants:**
+- Own message (right-aligned)
+- Other message (left-aligned)
+- System message (centered)
+- Admin message (special styling)
+
+**States:**
+- Sending (loading indicator)
+- Sent (default state)
+- Delivered (confirmation)
+- Failed (retry option)
+
+**Usage Guidelines:** Include tier badge for all user messages. Use consistent timestamp formatting. Support media attachments.
+
+#### Sparkline Graph
+
+**Purpose:** Display PXL/USD exchange rate trends with interactive data visualization
+
+**Variants:**
+- Full dashboard (homepage with dual line comparison)
+- Mini widget (compact single line)
+- Detailed view (expanded with volume bars)
+
+**Configuration:**
+- **Data Lines:** Current rate (white), Previous period (orange/amber)
+- **Grid:** Subtle horizontal lines at price intervals
+- **Axes:** Y-axis with price values, hidden X-axis
+- **Interactive Elements:** 
+  - Hover tooltip showing exact time and value
+  - Touch/click to lock tooltip
+  - Smooth animated transitions between time periods
+
+**States:**
+- Loading (skeleton shimmer effect)
+- Live updating (subtle pulse on new data)
+- Error (fallback to static display)
+- Interactive (hover/touch showing data points)
+
+**Time Periods:**
+- 1H (60 data points, 1-minute intervals)
+- 1D (24 data points, hourly)
+- 7D (7 data points, daily)
+- 30D (30 data points, daily)
+
+**Usage Guidelines:** Always show percentage change with color coding (green positive, red negative). Include current rate prominently above graph. Use smooth bezier curves for line rendering. Maintain 16:9 aspect ratio for desktop, 2:1 for mobile.
+
+## Branding & Style Guide
+
+### Visual Identity
+
+**Brand Guidelines:** Vercel.com-inspired dark theme aesthetic with financial trustworthiness and gaming progression elements
+
+### Color Palette (Vercel-Aligned with Gray Headings)
+
+| Color Type | Hex Code | Usage |
+|------------|----------|--------|
+| Background Primary | #000000 | Main app background |
+| Background Secondary | #0a0a0a | Section backgrounds |
+| Surface | #111111 | Card backgrounds, elevated surfaces |
+| Surface Hover | #1a1a1a | Card hover states |
+| Border Default | #1f1f1f | Standard borders |
+| Border Hover | #333333 | Interactive border states |
+| Heading Primary | #e5e5e5 | H1, H2 headings (gray instead of blue) |
+| Heading Secondary | #b3b3b3 | H3, H4 headings |
+| Text Primary | #ffffff | Body text, important content |
+| Text Secondary | #a1a1a1 | Subtitles, secondary content |
+| Text Tertiary | #737373 | Muted text, timestamps |
+| Accent Blue | #0070f3 | Primary CTAs, links |
+| Success Green | #00d72f | Positive states, PXL balance |
+| Error Red | #e00000 | Errors, negative changes |
+| Warning Orange | #f59e0b | Cautions, graph lines |
+
+**Tier-Specific Colors:**
+| Tier | Hex Code | Usage |
+|------|----------|--------|
+| Starter |rgb(226, 223, 223) | Gray - Beginning tier |
+| Rising | #0070f3 | Blue - Growing status |
+| Pro |rgb(8, 205, 1) | Purple - Premium feel |
+| Pixlbeast | #f59e0b | Amber/Gold - Luxury status |
+| Pixlionaire |rgb(185, 43, 228) | Red - Ultimate premium |
+
+### Typography (Vercel System)
+
+#### Font Families
+- **Primary:** Inter var (variable font for optimal rendering)
+- **Fallback Stack:** -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif
+- **Monospace:** "SF Mono", Monaco, Consolas, "Liberation Mono", "Courier New", monospace
+
+#### Type Scale (Vercel-Aligned)
+
+| Element | Size | Weight | Line Height | Letter Spacing |
+|---------|------|--------|-------------|----------------|
+| Display | 48px | 700 (Bold) | 1.1 | -0.03em |
+| H1 | 36px | 700 (Bold) | 1.2 | -0.02em |
+| H2 | 28px | 600 (SemiBold) | 1.3 | -0.02em |
+| H3 | 24px | 600 (SemiBold) | 1.4 | -0.01em |
+| H4 | 20px | 500 (Medium) | 1.4 | -0.01em |
+| Body Large | 18px | 400 (Normal) | 1.6 | 0 |
+| Body | 16px | 400 (Normal) | 1.5 | 0 |
+| Body Small | 14px | 400 (Normal) | 1.5 | 0 |
+| Caption | 12px | 400 (Normal) | 1.4 | 0.01em |
+| Mono | 14px | 400 (Normal) | 1.5 | 0 |
+
+### Iconography
+
+**Icon Library:** Lucide React (consistent with shadcn/ui ecosystem)
+
+**Usage Guidelines:** 
+- 24px standard size for primary actions
+- 16px for secondary/inline usage
+- Consistent stroke width (2px)
+- Use tier colors for status-related icons
+
+### Spacing & Layout (Vercel System)
+
+**Container System:**
+- Max width: 1200px (content)
+- Padding: 24px (mobile), 32px (tablet), 48px (desktop)
+- Section spacing: 80px vertical between major sections
+
+**Grid System:** CSS Grid with flexible columns
+- Mobile: 1 column, 16px gap
+- Tablet: 2-3 columns, 20px gap
+- Desktop: 4-6 columns, 24px gap
+- Wide: up to 8 columns, 24px gap
+
+**Spacing Scale (Vercel-Based):**
+- 0: 0px
+- 1: 4px
+- 2: 8px
+- 3: 12px
+- 4: 16px
+- 5: 20px
+- 6: 24px
+- 8: 32px
+- 10: 40px
+- 12: 48px
+- 16: 64px
+- 20: 80px
+
+### Visual Design Elements (Vercel-Inspired)
+
+**Elevation System:**
+Instead of shadows, use border and background combinations:
+- Level 0: Background #000000, no border
+- Level 1: Background #0a0a0a, border #262626
+- Level 2: Background #111111, border #262626
+- Level 3: Background #1a1a1a, border #333333
+
+**Border Radius:**
+- xs: 6px (small elements)
+- sm: 8px (buttons, inputs)
+- md: 12px (cards, containers)
+- lg: 16px (modals, large panels)
+- full: 9999px (pills, circular badges)
+
+**Animations & Micro-interactions:**
+- Instant: 0ms (color changes on hover)
+- Fast: 150ms (hover states, active states)
+- Normal: 250ms (page transitions, accordions)
+- Slow: 350ms (modals, complex animations)
+- Easing: `cubic-bezier(0.4, 0, 0.2, 1)` (default ease-out)
+- Spring: `cubic-bezier(0.68, -0.55, 0.265, 1.55)` (bouncy animations)
+
+## Accessibility Requirements
+
+### Compliance Target
+
+**Standard:** WCAG 2.1 AA compliance with specific attention to dark theme accessibility and financial application requirements
+
+### Key Requirements
+
+**Visual:**
+- Color contrast ratios: Minimum 4.5:1 for normal text, 3:1 for large text (18pt+) against dark backgrounds
+- Focus indicators: 2px solid outline with 2px offset, using accent color (#0070f3) with sufficient contrast
+- Text sizing: Support up to 200% zoom without horizontal scrolling, minimum 16px base font size
+
+**Interaction:**
+- Keyboard navigation: Full tab order coverage, logical focus flow, no keyboard traps, skip links for main content
+- Screen reader support: Semantic HTML5, ARIA labels for complex components, live regions for real-time updates (PXL rates, tier progression)
+- Touch targets: Minimum 44px × 44px interactive areas, adequate spacing between clickable elements
+
+**Content:**
+- Alternative text: Descriptive alt text for all images, tier badges, charts, and giftcard visuals
+- Heading structure: Logical H1-H6 hierarchy, unique page titles, descriptive section headings
+- Form labels: Explicit labels for all inputs, error messages associated with fields, clear validation feedback
+
+**Financial Application Specific:**
+- Currency announcements: Screen readers announce currency values with proper context
+- Tier status: Clear announcement of tier changes and benefit updates
+- Transaction confirmations: Accessible confirmation messages for all financial actions
+- Error handling: Clear, actionable error messages for payment failures and validation issues
+
+### Testing Strategy
+
+**Automated Testing:**
+- axe-core integration in CI/CD pipeline
+- Lighthouse accessibility audits on all major screens
+- Color contrast validation for all tier color combinations
+
+**Manual Testing:**
+- Keyboard-only navigation testing across all user flows
+- Screen reader testing with NVDA, JAWS, and VoiceOver
+- Mobile accessibility testing with TalkBack and VoiceOver
+- High contrast mode compatibility testing
+
+**User Testing:**
+- Testing with users who use assistive technologies
+- Cognitive load testing for complex financial interfaces
+- Mobile accessibility testing with diverse user abilities
+
+## Responsiveness Strategy
+
+### Breakpoints
+
+| Breakpoint | Min Width | Max Width | Target Devices |
+|------------|-----------|-----------|----------------|
+| Mobile | 320px | 639px | Smartphones, primary target |
+| Tablet | 640px | 1023px | iPads, Android tablets, small laptops |
+| Desktop | 1024px | 1279px | Standard desktops, laptops |
+| Wide | 1280px | - | Large monitors, ultra-wide displays |
+
+### Adaptation Patterns
+
+**Layout Changes:**
+- Mobile: Single column, stacked navigation, full-width components
+- Tablet: Two-column grid for marketplace, collapsible sidebar navigation
+- Desktop: Three-column layouts, persistent sidebar, multi-panel admin views
+- Wide: Four-column marketplace grid, expanded chat panels, detailed analytics dashboards
+
+**Navigation Changes:**
+- Mobile: Bottom tab bar (5 primary sections), hamburger menu for secondary navigation
+- Tablet: Side rail navigation with icons and labels, contextual top navigation
+- Desktop: Full sidebar navigation with nested items, horizontal top navigation for admin
+- Wide: Expanded navigation with additional quick actions and shortcuts
+
+**Content Priority:**
+- Mobile: Tier status and PXL balance prominent, simplified giftcard grid, essential chat features
+- Tablet: Balance overview cards, expanded giftcard details, dual-pane chat interface
+- Desktop: Comprehensive dashboard widgets, detailed analytics, full feature accessibility
+- Wide: Multiple data views, extensive filtering options, power user features
+
+**Interaction Changes:**
+- Mobile: Touch-optimized 44px minimum targets, swipe gestures, pull-to-refresh
+- Tablet: Hybrid touch/cursor support, drag-and-drop for power users, context menus
+- Desktop: Hover states, keyboard shortcuts, right-click contexts, precise cursor interactions
+- Wide: Advanced keyboard navigation, multi-window support, bulk operations
+
+## Animation & Micro-interactions
+
+### Motion Principles
+
+**Purposeful Motion:** Every animation serves a functional purpose - providing feedback, guiding attention, or communicating state changes. No decorative animations that don't enhance usability.
+
+**Performance First:** All animations maintain 60fps on mobile devices, with fallback to reduced motion for accessibility and performance constraints.
+
+**Tier Celebration:** Special emphasis on tier progression animations to reinforce gamification and achievement.
+
+### Key Animations
+
+- **Tier Progression Ring:** Animated fill with bounce easing when user advances (Duration: 1000ms, Easing: spring(1, 80, 10))
+
+- **PXL Balance Counter:** Number countup animation for balance updates (Duration: 800ms, Easing: ease-out)
+
+- **Currency Conversion:** Smooth transition between USD/PXL pricing views (Duration: 300ms, Easing: cubic-bezier(0.4, 0, 0.2, 1))
+
+- **Giftcard Purchase Success:** Scale and fade celebration with tier benefit highlight (Duration: 500ms, Easing: ease-out)
+
+- **Chat Message Send:** Slide-in animation with typing indicator fade (Duration: 200ms, Easing: ease-out)
+
+- **Page Transitions:** Slide transitions between main sections (Duration: 300ms, Easing: cubic-bezier(0.25, 0.46, 0.45, 0.94))
+
+- **Loading States:** Skeleton loading with shimmer effect (Duration: 1500ms loop, Easing: linear)
+
+- **Tier Badge Pulse:** Subtle pulse animation for new tier achievements (Duration: 2000ms, Easing: ease-in-out)
+
+- **Error State Shake:** Gentle shake for form validation errors (Duration: 500ms, Easing: ease-out)
+
+- **Pull-to-Refresh:** Elastic pull animation with PXL rate refresh (Duration: variable, Easing: spring physics)
+
+## Performance Considerations
+
+### Performance Goals
+
+- **Page Load:** First Contentful Paint < 1.5s, Largest Contentful Paint < 2.0s on 3G mobile connections
+- **Interaction Response:** Touch interactions respond within 100ms, complex operations (tier calculations) complete within 500ms
+- **Animation FPS:** Maintain 60fps for all animations, graceful degradation to 30fps on older devices
+
+### Design Strategies
+
+**Image Optimization:**
+- WebP format for all giftcard images with JPEG fallbacks
+- Responsive image sizing with srcset for different device densities
+- Lazy loading for marketplace catalog with intersection observer
+- Brand logo sprite sheets to reduce HTTP requests
+
+**Code Splitting & Lazy Loading:**
+- Route-based code splitting for each main section (Dashboard, Marketplace, Wallet, Chat, Profile)
+- Component-level lazy loading for heavy features (charts, file upload, admin panels)
+- Progressive loading of tier-based features based on user status
+
+**Real-time Performance:**
+- WebSocket connection optimization with reconnection logic
+- Debounced PXL rate updates to prevent excessive re-renders
+- Chat message pagination to limit DOM size
+- Virtual scrolling for transaction history and large lists
+
+**Mobile-First Optimization:**
+- Critical CSS inlined for above-the-fold content
+- Progressive enhancement for non-essential features
+- Touch gesture optimization with passive event listeners
+- Battery-conscious background sync strategies
+
+**Caching Strategy:**
+- Service worker for offline giftcard browsing
+- Aggressive caching of static assets (icons, logos, brand images)
+- Smart cache invalidation for dynamic content (PXL rates, user balances)
+- Local storage optimization for user preferences and tier status
+
+**Bundle Size Management:**
+- Tree shaking for unused component library features
+- Dynamic imports for admin-only functionality
+- Shared chunk optimization for common dependencies
+- Minimal polyfill loading based on browser support
+
+## Vercel Template-Inspired Patterns
+
+### Commerce Template Patterns (from demo.vercel.store)
+
+#### Product Grid System
+**Responsive Grid Layout:**
+- Mobile: 2 columns with 12px gap
+- Tablet: 3 columns with 16px gap  
+- Desktop: 4-6 columns with 20px gap
+- Wide: Up to 8 columns for featured sections
+
+**Carousel Implementation:**
+- Horizontal scroll for featured products
+- Snap-to-grid scrolling behavior
+- Subtle fade edges indicating more content
+- Touch-friendly swipe gestures
+
+#### Enhanced Product Cards
+```
+┌─────────────────────────┐
+│  [Product Image]        │  <- 1:1 aspect ratio
+│  ─────────────────      │  <- Hover: scale(1.05)
+│                         │
+│  Amazon Gift Card       │  <- Font-weight: 500
+│  Digital Delivery      │  <- Text-secondary, smaller
+│                         │
+│  ┌──────────┐ ┌───────┐ │
+│  │ $25.00  │ │ -5%  │ │  <- Price pill + discount
+│  └──────────┘ └───────┘ │
+│                         │
+│  PXL 2,475.00          │  <- Alternative price
+└─────────────────────────┘
+```
+
+#### Shopping Cart Drawer
+**Slide-out Cart (Right Side):**
+- Width: 400px desktop, full-width mobile
+- Background: #0a0a0a with border-left
+- Header: "Shopping Cart (X items)"
+- Item list with thumbnails
+- Subtotal calculation display
+- Checkout CTA button fixed at bottom
+- Empty state with illustration
+
+#### Search & Filter UI
+**Search Bar:**
+- Sticky position below main nav
+- Icon-left layout with clear button
+- Auto-complete dropdown
+- Recent searches section
+- Popular searches chips
+
+**Filter Sidebar:**
+- Collapsible sections (Brand, Price, Category)
+- Checkbox filters with counts
+- Applied filters pills at top
+- Clear all filters button
+- Mobile: Full-screen overlay
+
+### AI Chatbot Interface Patterns
+
+#### Message Interface
+**Chat Layout:**
+- Fixed header with channel/user info
+- Scrollable message area
+- Sticky input footer
+- Max-width: 800px centered on desktop
+
+**Message Bubbles:**
+```
+User Message (Right-aligned):
+                    ┌─────────────┐
+                    │ Your message│
+                    │ here        │
+                    └─────────────┘
+                      12:34 PM ✓✓
+
+Other User (Left-aligned):
+[◉] ┌─────────────┐
+    │ Response    │  <- Avatar (32px) with tier ring
+    │ message     │
+    └─────────────┘
+    Username · 12:35 PM
+```
+
+**Input Area:**
+- Multi-line textarea with auto-resize
+- Attachment button (paperclip icon)
+- Send button (disabled when empty)
+- Typing indicator: "User is typing..."
+- Character limit indicator
+
+### Platform/Multi-Tenant Patterns
+
+#### Tier-Based UI Variations
+**Dynamic Theme by Tier:**
+- Starter: Default dark theme
+- Rising: Blue accent highlights
+- Pro: Purple gradient accents
+- Pixlbeast: Gold shimmer effects
+- Pixlionaire: Red premium elements
+
+**Progressive Feature Reveal:**
+- Locked features show with overlay
+- "Upgrade to unlock" CTAs
+- Preview mode for higher tier features
+- Comparison modal for tier benefits
+
+#### Dashboard Widgets
+**Modular Widget System:**
+- Drag-and-drop rearrangement
+- Resizable grid (2x2, 2x1, 1x1)
+- Collapsible/expandable states
+- Widget library for customization
+- Default layouts per tier
+
+### Blog/Content Patterns
+
+#### Article Cards
+**Blog-Style Product Descriptions:**
+- Hero image with overlay text
+- Read time estimate
+- Author/brand attribution
+- Social sharing buttons
+- Related products section
+
+#### Content Grid
+**Masonry Layout Option:**
+- Variable height cards
+- Pinterest-style arrangement
+- Load more on scroll
+- Filter by category tags
+
+## Vercel Design Patterns
+
+### Navigation Pattern
+**Top Navigation Bar:**
+- Fixed height: 64px
+- Background: rgba(0, 0, 0, 0.5) with backdrop-filter: blur(12px)
+- Logo left-aligned with 24px padding
+- Center navigation items with 32px spacing
+- Right section layout (16px spacing between items):
+  - Shopping cart icon with item count badge
+  - Admin button (if user is admin)
+  - User avatar (40px) with tier ring + dropdown menu
+- Mobile: Hamburger menu with slide-out drawer
+
+**User Avatar Dropdown Menu:**
+```
+┌──────────────────────┐
+│ [Avatar] Username    │  <- User info header
+│ Tier: Pixlbeast     │  <- Current tier badge
+├──────────────────────┤
+│ 👤 My Profile        │
+│ 🎁 My Giftcards     │
+│ 💰 Wallet           │
+│ ⚙️ Settings         │
+├──────────────────────┤
+│ 🚪 Sign Out         │
+└──────────────────────┘
+```
+
+### Button Styles
+**Primary Button (CTA):**
+- Background: #0070f3
+- Text: #ffffff
+- Padding: 12px 24px
+- Border-radius: 8px
+- Hover: Background #0051cc
+- Active: Scale 0.98
+
+**Secondary Button:**
+- Background: transparent
+- Border: 1px solid #333333
+- Text: #ffffff
+- Hover: Background #111111, Border #666666
+
+**Ghost Button:**
+- Background: transparent
+- Text: #a1a1a1
+- Hover: Text #ffffff
+
+### Form Controls
+**Input Fields:**
+- Background: #000000
+- Border: 1px solid #333333
+- Border-radius: 8px
+- Height: 40px
+- Padding: 0 12px
+- Focus: Border #0070f3, outline none
+- Error: Border #e00000
+
+**Select Dropdowns:**
+- Same styling as inputs
+- Custom arrow icon
+- Native select on mobile
+
+### Data Display
+**Tables:**
+- Header background: #0a0a0a
+- Row hover: Background #111111
+- Borders: 1px solid #262626
+- Padding: 12px 16px per cell
+
+**Lists:**
+- Item separator: 1px solid #262626
+- Item padding: 16px 0
+- Hover state: Background #0a0a0a
+
+### Loading States
+**Skeleton Screens:**
+- Background: linear-gradient(90deg, #111111 25%, #1a1a1a 50%, #111111 75%)
+- Animation: shimmer 2s infinite
+- Match content layout exactly
+
+**Spinners:**
+- Use Vercel's signature loading dots
+- Three dots with staggered fade animation
+- Color: #666666
+
+### Empty States
+- Centered content
+- Muted icon (48px)
+- Descriptive text
+- Optional CTA button
+- Padding: 80px vertical
+
+### Toast Notifications
+- Position: Bottom right, 24px margin
+- Max width: 420px
+- Background: #111111
+- Border: 1px solid #333333
+- Auto-dismiss: 5 seconds
+- Types: Success (green accent), Error (red accent), Info (blue accent)
+
+### ISR & Performance Patterns (from ISR Blog template)
+
+#### Incremental Static Regeneration
+**For Product Pages:**
+- Static generation at build time
+- Revalidate every 60 seconds for price updates
+- On-demand revalidation for inventory changes
+- Fallback pages for new products
+
+#### Image Optimization
+**Next.js Image Component:**
+- Lazy loading by default
+- Automatic WebP/AVIF conversion
+- Responsive srcset generation
+- Blur placeholder for LCP optimization
+- Priority loading for above-fold images
+
+### Enterprise Patterns (from Enterprise Boilerplate)
+
+#### Error Boundaries
+**Graceful Error Handling:**
+- Component-level error boundaries
+- Fallback UI for failed sections
+- Error reporting to monitoring service
+- User-friendly error messages
+
+#### Monitoring & Analytics
+**Built-in Observability:**
+- Core Web Vitals tracking
+- Custom event tracking for tier progression
+- Conversion funnel analytics
+- Real User Monitoring (RUM)
+
+### Documentation Patterns (from Nextra Docs)
+
+#### Help System
+**In-App Documentation:**
+- Searchable help center
+- Context-sensitive tooltips
+- Interactive tutorials
+- Video walkthroughs for complex features
+
+### Real-Time Collaboration (from Liveblocks)
+
+#### Live Features
+**Real-Time Updates:**
+- Live PXL rate updates via WebSocket
+- Active user presence indicators
+- Real-time chat with typing indicators
+- Live inventory count updates
+- Collaborative shopping cart for group purchases
+
+**Presence Awareness:**
+- "X users viewing this product"
+- Online status in chat channels
+- Live cursor tracking in admin dashboard
+- Real-time tier progression notifications
+
+## Next Steps
+
+### Immediate Actions
+
+1. **Stakeholder Review & Approval** - Present this specification to product team, engineering leads, and business stakeholders for feedback and approval
+2. **Create Figma Design System** - Build comprehensive design system in Figma with all components, tier colors, and dark theme specifications
+3. **Technical Architecture Handoff** - Collaborate with technical architect to align frontend specifications with backend architecture
+4. **User Testing Validation** - Conduct usability testing of key user flows with target personas to validate design decisions
+5. **Accessibility Compliance Review** - Complete WCAG 2.1 AA audit of all proposed designs and interaction patterns
+
+# UI/UX Addendum — PXL Purchase Discount
+
+## Buy PXL Screen
+- Show “Tier Purchase Bonus” row during quote & confirmation: e.g., `+7% = +717 PXL`.
+- Display **Effective Rate** (e.g., `109.67 PXL/USD`).
+- Add tooltip explaining bonus PXL (USD charge unchanged).
+
+## Currency Display Component
+- Add optional line for **bonus PXL** and **effective rate** when context is USD→PXL.
+
+## Benefits Calculator
+- Toggle “Include PXL purchase bonus” to simulate **bonus PXL** by tier.
+- Show base vs effective PXL and projected tier lift.
+
+## Tier Benefits Display
+- In Profile → Tier Benefits, list **PXL Purchase Discount** alongside existing discounts/cashback.
+
+## Optional Marketplace Price Ribbon
+- Show banner “Buying PXL adds +7% bonus for Pro tier.”
+
+
+### Design Handoff Checklist
+
+- [x] All user flows documented
+- [x] Component inventory complete  
+- [x] Accessibility requirements defined
+- [x] Responsive strategy clear
+- [x] Brand guidelines incorporated
+- [x] Performance goals established
+- [ ] Visual designs created in Figma
+- [ ] Component specifications documented
+- [ ] Animation specifications detailed
+- [ ] Developer handoff assets prepared
+- [ ] Usability testing completed
+- [ ] Stakeholder approval obtained
+
+---
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

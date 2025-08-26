@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for Giftcard + PXL Platform
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Profile Pictures - Users can upload/read their own profile pictures
+    match /profile-pictures/{userId}/{allPaths=**} {
+      // Allow authenticated users to upload their own profile pictures
+      allow write: if request.auth != null 
+        && request.auth.uid == userId
+        && resource == null // Only allow new uploads, not overwrites for now
+        && request.resource.size < 5 * 1024 * 1024 // Max 5MB
+        && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Allow public read access to profile pictures (for displaying in UI)
+      allow read: if true;
+      
+      // Allow users to delete their own profile pictures
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

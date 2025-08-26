@@ -1,0 +1,714 @@
+---
+alwaysApply: true
+---
+
+# Giftcard + PXL Platform Product Requirements Document (PRD)
+
+## Goals and Background Context
+
+### Goals
+• Create a mobile-first electronic giftcard marketplace that rewards user loyalty through tier advancement
+• Implement PXL currency system offering price appreciation and tier-based savings (up to 13% discount + 3% cashback)
+• Build a 5-tier progression system (Starter → Rising → Pro → Pixlbeast → Pixlionaire) with visual status recognition
+• Achieve 10,000 registered users and $1M+ giftcard sales within first year
+• Drive 70%+ transaction adoption of PXL currency over traditional USD payments
+• Establish comprehensive chat system with tier-based channels and community engagement features
+• Maintain 60%+ monthly active user retention through gamification and financial incentives
+
+### Background Context
+
+The traditional giftcard market offers static pricing with no loyalty incentives, creating a significant opportunity for disruption. Users currently pay full retail price with no rewards for frequent purchases or larger platform balances, while lacking engagement features that would drive long-term platform loyalty.
+
+This PRD addresses the market gap by combining giftcard sales with a proprietary currency (PXL) that appreciates over time, creating both utility and investment potential. The solution targets digital-savvy consumers aged 25-45 who regularly purchase giftcards and are motivated by savings opportunities, status recognition, and gamified experiences. The platform's mobile-first approach captures the majority user base effectively while providing a sophisticated dual-currency marketplace with dynamic exchange rates and tier-based benefits.
+
+### Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|---------|
+| 2025-08-23 | 1.0 | Initial PRD creation based on Project Brief | John (PM Agent) |
+| 2025-08-25 | 1.1 | Updated for Rocket.Chat integration, mandatory profile fields, and enhanced chat performance requirements | Claude Assistant |
+
+## Requirements
+
+### Functional Requirements
+
+1. **FR1:** The system shall allow user registration with first name (required), last name (required), email (required, unique), mobile number with country code (required, auto-selected based on country), country/region (required), @username (required, unique), and gender (required, options: Male/Female) with social login options
+2. **FR2:** The system shall implement a complete KYC (Know Your Customer) verification process for user onboarding
+3. **FR3:** The system shall maintain a PXL currency system with dynamic exchange rates starting at 1 USD = 100 PXL baseline
+4. **FR4:** The system shall implement a 5-tier progression system (Starter, Rising, Pro, Pixlbeast, Pixlionaire) with configurable balance thresholds
+5. **FR5:** The system shall provide tier-based discount percentages and cashback rewards that are admin-configurable
+6. **FR6:** The system shall display static tier rings/badges around user avatars for visual status recognition
+7. **FR7:** The system shall offer a giftcard marketplace with major brand catalogs and instant digital delivery
+8. **FR8:** The system shall support dual payment options (USD and PXL) with tier-based pricing advantages
+9. **FR9:** The system shall process credit card payments for USD purchases and manage PXL wallet transactions
+10. **FR10:** The system shall provide real-time PXL exchange rate updates throughout the platform
+11. **FR11:** The system shall integrate with Rocket.Chat platform for all chat functionality, mapping application users to Rocket.Chat via Single Sign-On (SSO) while maintaining application username display
+12. **FR12:** The system shall support file and image sharing within Rocket.Chat integration with seamless user experience
+13. **FR13:** The system shall provide admin dashboard with daily reporting, user management, and supplier management
+14. **FR14:** The system shall support CSV upload functionality for supplier management
+15. **FR15:** The system shall implement transaction limits and fraud detection mechanisms
+16. **FR16:** The system shall allow users to send PXL to other platform users via username or email
+17. **FR17:** The system shall display user profile pictures with tier ring indicators in chat sidebar, replacing default room names with visual user profiles
+18. **FR18:** The system shall maintain visual consistency of tier indicators across all platform features including integrated chat interface
+
+### Non-Functional Requirements
+
+1. **NFR1:** The platform shall achieve sub-2 second page load times across all features
+2. **NFR2:** The system shall maintain 99.9% uptime availability
+3. **NFR3:** The platform shall be fully mobile-responsive and optimized for mobile browsers
+4. **NFR4:** The system shall support modern browsers (Chrome, Safari, Firefox, Edge)
+5. **NFR5:** The system shall encrypt all data at rest and in transit
+6. **NFR6:** The system shall comply with PCI DSS standards for payment processing
+7. **NFR7:** The system shall support real-time WebSocket connections for chat functionality with Rocket.Chat integration
+8. **NFR8:** The system shall handle high-frequency PXL rate updates without performance degradation
+9. **NFR9:** The chat system must perform smoothly and quickly with no lagging or glitches as it is CORE functionality
+10. **NFR10:** The system shall ensure real-time message delivery through Rocket.Chat integration
+11. **NFR11:** The system shall implement secure API design patterns for all endpoints
+12. **NFR12:** The system shall support concurrent user sessions without data conflicts
+
+## User Interface Design Goals
+
+### Overall UX Vision
+The platform embodies a sleek, modern dark theme aesthetic inspired by Vercel's clean design language. The interface emphasizes clarity and functionality with subtle visual progression indicators, clear currency exchange information, and mobile-optimized interaction patterns. The design prioritizes readability and professional appearance suitable for financial operations while maintaining the tier-based gamification elements through static visual indicators.
+
+### Key Interaction Paradigms
+- **Tier-First Navigation**: User's current tier status prominently displayed with clean, static visual indicators
+- **Dual-Currency Interface**: Seamless switching between USD/PXL pricing with clear exchange rate visibility
+- **Progressive Disclosure**: Advanced features unlock as users advance through tiers
+- **Real-time Feedback**: Immediate textual and color-coded feedback for PXL rate changes, tier progression, and transaction confirmations
+- **Chat-Integrated Commerce**: Shopping discussions and recommendations flow naturally within tier-based chat channels
+
+### Core Screens and Views
+- **Dashboard/Home**: Tier status display, PXL balance, recent transactions, featured giftcards
+- **Giftcard Marketplace**: Catalog with dual pricing, search/filter, brand categories
+- **Wallet/Balance**: PXL/USD balances, exchange rates, transaction history, tier progression tracker
+- **Chat System**: General channels, tier-specific rooms, private messaging interface
+- **Profile/Settings**: User info, tier benefits overview, notification preferences, security settings
+- **Admin Dashboard**: Comprehensive admin interface for user management, supplier controls, analytics, rate configuration, moderation tools
+
+### Accessibility: WCAG AA
+The platform will meet WCAG AA standards with particular attention to dark theme contrast ratios and text readability.
+
+### Branding
+Dark theme design system inspired by Vercel's aesthetic - clean typography, subtle shadows, high contrast elements, and minimal color palette. Tier differentiation achieved through badge colors and subtle visual hierarchy. Professional appearance suitable for financial transactions while maintaining gaming-inspired progression elements.
+
+### Target Device and Platforms: Web Responsive
+Mobile-responsive web application optimized for smartphone usage, with full desktop functionality for both regular users and dedicated admin interface.
+
+## Technical Assumptions
+
+### Repository Structure: Monorepo
+Given the need for shared components between user interface, admin dashboard, chat system, and API services, a monorepo structure will facilitate code sharing and consistent deployment pipelines.
+
+### Service Architecture
+**Monolith with Modular Design**: For MVP, a well-structured monolithic application will provide faster development and simpler deployment while maintaining clear separation of concerns for future microservices extraction. Key modules: Authentication, PXL Currency Engine, Giftcard Marketplace, Chat System, Admin Panel, Payment Processing.
+
+### Testing Requirements
+**Unit + Integration Testing**: Comprehensive testing strategy including unit tests for business logic (especially PXL exchange rate calculations), integration tests for payment flows and chat functionality, and API endpoint testing. Manual testing convenience methods needed for tier progression and admin workflows.
+
+### Additional Technical Assumptions and Requests
+
+**Frontend Technology Stack:**
+- Modern JavaScript framework capable of real-time updates and mobile responsiveness
+- Dark theme component library or custom design system
+- WebSocket client for real-time chat and PXL rate updates
+- Payment form integration (Stripe/similar) with PCI compliance support
+
+**Backend Technology Stack:**
+- RESTful API with WebSocket support for real-time features
+- Database system supporting complex financial transactions and chat message storage
+- Background job processing for PXL rate calculations and email notifications
+- Session management and JWT authentication system
+
+**Infrastructure & Deployment:**
+- Cloud hosting with auto-scaling capabilities for traffic spikes
+- CDN for static asset delivery and global performance
+- Database backup and disaster recovery procedures
+- SSL/TLS encryption for all data transmission
+
+**Security & Compliance:**
+- PCI DSS compliant payment processing integration
+- User data encryption at rest and in transit
+- API rate limiting and DDoS protection
+- Audit logging for financial transactions and admin actions
+
+**Integration Requirements:**
+- Payment processor APIs (credit card processing)
+- SMS verification service for phone number validation
+- Email delivery service for notifications and verifications
+- Rocket.Chat platform integration with SSO authentication
+- WebSocket infrastructure for real-time chat and rate updates through Rocket.Chat
+- File storage service for chat media (images, files) integrated with Rocket.Chat
+- Single Sign-On (SSO) service for Rocket.Chat user mapping and authentication
+
+### Rocket.Chat Integration Technical Requirements
+
+**SSO and User Mapping:**
+- Single Sign-On (SSO) implementation to automatically authenticate platform users into Rocket.Chat
+- User mapping system to synchronize application user profiles with Rocket.Chat accounts
+- Application @username preservation in Rocket.Chat (users must appear with their platform usernames)
+- Automated user provisioning and de-provisioning based on platform account status
+
+**Profile Picture and Tier Integration:**
+- API integration to sync user profile pictures with tier ring indicators into Rocket.Chat
+- Custom chat sidebar implementation replacing default room names with user profile pictures and tier rings
+- Real-time synchronization of tier status changes reflected in chat interface
+- Visual consistency enforcement between platform tier indicators and chat display
+
+**Performance and Reliability:**
+- High-performance integration ensuring chat functionality operates smoothly without lag or glitches
+- Real-time message delivery optimization through Rocket.Chat WebSocket connections
+- Failover mechanisms for SSO authentication and user synchronization
+- Monitoring and alerting for chat system performance as CORE platform functionality
+
+**Security and Access Control:**
+- Secure SSO token management and refresh handling
+- Tier-based channel access control automated through platform integration
+- User authentication state synchronization between platform and Rocket.Chat
+- Audit logging for chat access and administrative actions
+
+## Epic List
+
+**Epic 1: Foundation & Authentication Infrastructure**
+Establish project setup, user registration, KYC verification, and authentication system with basic security measures.
+
+**Epic 2: PXL Currency & Tier System**
+Implement the core PXL currency engine, dynamic exchange rates, 5-tier progression system, and wallet management functionality.
+
+**Epic 3: Giftcard Marketplace & Payment Processing**
+Create the giftcard catalog, dual-currency purchasing system, payment integration, and digital delivery mechanisms.
+
+**Epic 4: Rocket.Chat Integration & Community Features**
+Integrate Rocket.Chat platform for all chat functionality with Single Sign-On (SSO), application username mapping, profile picture integration with tier ring indicators, and community features that drive user engagement.
+
+**Epic 5: Admin Dashboard & Platform Management**
+Develop administrative controls for user management, supplier management, analytics, rate configuration, and platform oversight.
+
+## Epic 1: Foundation & Authentication Infrastructure
+
+**Epic Goal:** Establish secure project infrastructure, user onboarding pipeline, and authentication system while delivering initial platform access and user verification capabilities that serve as the foundation for all subsequent platform features.
+
+### Story 1.1: Project Foundation & Development Environment
+**As a** development team,
+**I want** complete project setup with development environment, CI/CD pipeline, and deployment infrastructure,
+**so that** we can develop, test, and deploy platform features consistently and reliably.
+
+#### Acceptance Criteria
+1. Repository structure established with clear separation of frontend, backend, and shared components
+2. Development environment setup documentation completed and tested
+3. Basic CI/CD pipeline configured with automated testing and deployment to staging environment
+4. Production hosting environment provisioned with SSL certificates and domain configuration
+5. Database setup completed with initial schema and migration system
+6. Environment variable management and secrets handling implemented
+7. Basic health check endpoint responds successfully from deployed application
+8. Development team can successfully run the application locally and deploy to staging
+
+### Story 1.2: User Registration System
+**As a** potential platform user,
+**I want** to create an account with my basic information and verify my identity,
+**so that** I can access the platform and begin using giftcard services securely.
+
+#### Acceptance Criteria
+1. Registration form captures: first name (required), last name (required), email (required, unique), mobile number with country code (required, auto-selected based on country), country/region (required), @username (required, unique), gender (required, options: Male/Female)
+2. Social login integration (Google, Facebook, Apple) functional as alternative registration method
+3. Email verification required before account activation with automated email delivery
+4. Phone number verification via SMS with 6-digit code validation
+5. Username uniqueness validation with real-time availability checking
+6. Password strength requirements enforced with clear user feedback
+7. Terms of service and privacy policy acceptance required during registration
+8. User data stored securely with encryption at rest for sensitive information
+9. Country code automatically selected based on user's selected country/region
+10. All mandatory fields clearly marked and validated before form submission
+
+### Story 1.3: Authentication & Session Management
+**As a** registered user,
+**I want** to securely log in and maintain my session across the platform,
+**so that** I can access my account safely and stay logged in during normal usage.
+
+#### Acceptance Criteria
+1. Login system supports both email/password and social login methods
+2. JWT token-based authentication implemented with appropriate expiration times
+3. "Remember me" functionality for extended session management
+4. Password reset flow via email with secure token-based reset links
+5. Account lockout protection after multiple failed login attempts
+6. Session management handles concurrent sessions appropriately
+7. Secure logout functionality clears all authentication tokens
+8. Authentication state properly maintained across page refreshes and browser sessions
+
+### Story 1.4: Basic KYC Verification System
+**As a** platform administrator,
+**I want** to verify user identities for compliance and security purposes,
+**so that** we can prevent fraud and meet regulatory requirements for financial services.
+
+#### Acceptance Criteria
+1. KYC verification workflow integrated into user onboarding process
+2. Identity document upload functionality supports common ID types (driver's license, passport, etc.)
+3. Basic automated verification checks implemented for document validity
+4. Manual review queue for admin staff to approve/reject verification requests
+5. User verification status tracked and displayed in user profiles
+6. Verification requirement enforced before accessing financial features
+7. Document storage meets security and privacy compliance requirements
+8. Email notifications sent to users upon verification status changes
+
+### Story 1.5: Core Security & Data Protection
+**As a** platform user,
+**I want** my personal and financial data protected with industry-standard security measures,
+**so that** I can trust the platform with my sensitive information and transactions.
+
+#### Acceptance Criteria
+1. All data transmission encrypted with TLS/SSL protocols
+2. User passwords hashed using industry-standard algorithms (bcrypt or similar)
+3. Sensitive data encrypted at rest in database
+4. API rate limiting implemented to prevent abuse and DDoS attacks
+5. Input validation and sanitization prevents injection attacks
+6. Audit logging captures all authentication events and security-related actions
+7. GDPR/privacy compliance measures implemented for data handling
+8. Security headers configured properly (HSTS, CSP, X-Frame-Options, etc.)
+
+## Epic 2: PXL Currency & Tier System
+
+**Epic Goal:** Implement the core PXL currency engine with dynamic exchange rates, complete 5-tier user progression system, and wallet management functionality that enables tier-based benefits and serves as the platform's primary value differentiator.
+
+### Story 2.1: PXL Currency Foundation
+**As a** platform user,
+**I want** a PXL digital currency system with real-time exchange rates,
+**so that** I can hold, spend, and benefit from an appreciating currency alternative to USD.
+
+#### Acceptance Criteria
+1. PXL currency system initialized with 1 USD = 100 PXL baseline exchange rate
+2. Dynamic exchange rate calculation engine implemented with configurable variables
+3. Real-time exchange rate updates propagated throughout the platform via WebSocket
+4. Exchange rate history tracking for analytics and user transparency
+5. PXL balance management with precision handling for fractional amounts
+6. Exchange rate API endpoints for frontend consumption
+7. Admin interface for monitoring and adjusting exchange rate parameters
+8. Exchange rate displayed prominently across all currency-related interfaces
+9. PXL transactions are one-way only (USD to PXL conversion, no PXL to USD conversion available)
+
+### Story 2.2: User Tier System Implementation
+**As a** platform user,
+**I want** to progress through 5 distinct tiers based on my PXL balance and activity,
+**so that** I can unlock increasing benefits and achieve status recognition on the platform.
+
+#### Acceptance Criteria
+1. 5-tier system implemented: Starter, Rising, Pro, Pixlbeast, Pixlionaire
+2. Balance-based tier thresholds configurable by admin with automatic tier calculation
+3. Tier progression automatically triggered when user meets balance requirements
+4. User's current tier prominently displayed throughout platform interface
+5. Tier benefits system with configurable discount percentages and cashback rates
+6. Tier progression notifications sent to users via email and in-platform alerts
+7. Tier history tracking for user profiles and analytics
+8. Admin dashboard showing tier distribution and progression analytics
+
+### Story 2.3: Visual Tier Status System
+**As a** platform user,
+**I want** clear visual indicators of my tier status and progression,
+**so that** I can easily understand my current benefits and progress toward the next tier.
+
+#### Acceptance Criteria
+1. Static tier rings/badges displayed around user avatars throughout the platform
+2. Tier-specific color coding consistent across all user interface elements
+3. Tier progression bar showing progress toward next tier with PXL amount needed
+4. Tier benefits clearly displayed in user profile with current tier highlighted
+5. Tier comparison chart showing benefits across all 5 tiers
+6. Mobile-optimized tier status display for responsive design
+7. Tier status visible in chat system and user profiles
+8. Dark theme compatibility for all tier visual elements
+
+### Story 2.4: PXL Wallet Management
+**As a** platform user,
+**I want** to manage my PXL balance, view transaction history, and understand my currency holdings,
+**so that** I can track my investments and make informed spending decisions.
+
+#### Acceptance Criteria
+1. PXL wallet interface displaying current balance with USD equivalent value
+2. Transaction history showing all PXL purchases, spending, and balance changes
+3. Balance change notifications for significant PXL movements or tier changes
+4. Transaction categorization (purchases, deposits, tier bonuses, etc.)
+5. Export functionality for transaction history (CSV format)
+6. Real-time balance updates when transactions occur
+7. PXL purchase interface allowing USD to PXL conversion (one-way only)
+8. Security features for wallet access including transaction confirmation
+
+### Story 2.5: PXL Transfer Between Users
+**As a** platform user,
+**I want** to send PXL to other users on the platform,
+**so that** I can share currency with friends, gift PXL balances, or facilitate peer-to-peer transactions.
+
+#### Acceptance Criteria
+1. PXL transfer interface allowing users to send PXL via recipient's username or email
+2. Transfer amount validation ensuring sender has sufficient PXL balance
+3. Transfer confirmation with recipient details before processing
+4. Real-time balance updates for both sender and recipient upon transfer completion
+5. Transfer history tracking for both sender and recipient with transaction details
+6. Transfer limits and fraud detection for large PXL transfers between users
+7. Email notifications to both parties upon successful transfer completion
+8. Option to add personal message or note with PXL transfers
+
+### Story 2.6: Tier-Based Benefits Engine
+**As a** platform administrator,
+**I want** configurable tier benefits that automatically apply to user transactions,
+**so that** I can optimize business performance while rewarding loyal users appropriately.
+
+#### Acceptance Criteria
+1. Admin-configurable discount percentages for each tier level
+2. Admin-configurable cashback rates for each tier level
+3. Automatic application of tier benefits during transaction processing
+4. Benefit calculation engine with audit trail for all applied discounts/cashback
+5. Tier benefit preview functionality showing potential savings for users
+6. Historical tracking of benefits provided to users for business analytics
+7. A/B testing capability for tier benefit adjustments
+8. Admin reporting on tier benefit impact on revenue and user behavior
+
+## Epic 3: Giftcard Marketplace & Payment Processing
+
+**Epic Goal:** Create a comprehensive giftcard marketplace with major brand catalogs, dual-currency purchasing system (USD/PXL), secure payment processing, instant digital delivery, and tier-based pricing advantages that generate primary platform revenue.
+
+### Story 3.1: Giftcard Catalog & Brand Management
+**As a** platform user,
+**I want** to browse and search a comprehensive catalog of giftcards from major brands,
+**so that** I can find and purchase giftcards for my preferred retailers and services.
+
+#### Acceptance Criteria
+1. Giftcard catalog displays major brand giftcards with brand logos, descriptions, and denominations
+2. Search functionality allows filtering by brand name, category, and price range
+3. Category-based organization (retail, dining, entertainment, travel, etc.)
+4. Brand detail pages showing available denominations and purchase options
+5. Popular/featured giftcards highlighted on marketplace homepage
+6. Mobile-optimized catalog display with responsive grid layout
+7. Out-of-stock indicators and inventory management for limited availability cards
+8. Admin interface for adding, editing, and managing giftcard catalog
+
+### Story 3.2: Dual-Currency Pricing System
+**As a** platform user,
+**I want** to see giftcard prices in both USD and PXL with tier-based discounts applied,
+**so that** I can choose the most advantageous payment method and understand my savings.
+
+#### Acceptance Criteria
+1. All giftcards display both USD and PXL pricing with current exchange rates
+2. Tier-based discount pricing automatically calculated and displayed for logged-in users
+3. Price comparison showing savings when using PXL vs USD payment
+4. Real-time price updates when PXL exchange rates change
+5. Clear indication of tier-based discount amounts and percentages
+6. "Best Deal" indicators highlighting optimal payment method for user's tier
+7. Price history tracking for transparency and user confidence
+8. Bulk purchase pricing for multiple giftcards
+
+### Story 3.3: USD Payment Processing
+**As a** platform user,
+**I want** to purchase giftcards using traditional payment methods with secure processing,
+**so that** I can buy giftcards even when I don't have sufficient PXL balance.
+
+#### Acceptance Criteria
+1. Credit card payment integration (Visa, MasterCard, American Express, Discover)
+2. PCI DSS compliant payment form with secure card data handling
+3. Real-time payment validation and fraud detection
+4. Payment confirmation with transaction receipt via email
+5. Support for saved payment methods for returning customers
+6. International payment support for multiple currencies
+7. Payment failure handling with clear error messages and retry options
+8. Refund processing capability for failed deliveries or customer issues
+
+### Story 3.4: PXL Payment Processing
+**As a** platform user,
+**I want** to purchase giftcards using my PXL balance with tier benefits applied,
+**so that** I can maximize my savings and benefit from my tier status.
+
+#### Acceptance Criteria
+1. PXL wallet integration allowing direct payment from user's PXL balance
+2. Automatic application of tier-based discounts during PXL transactions
+3. Automatic cashback calculation and crediting to user's PXL wallet
+4. Insufficient balance handling with clear messaging about PXL purchase options
+5. Transaction confirmation with detailed breakdown of discounts and cashback applied
+6. PXL transaction processing with atomic balance updates
+7. Transaction limits and fraud detection for large PXL purchases
+8. PXL payment history tracking with detailed transaction records
+
+### Story 3.5: Digital Giftcard Delivery System
+**As a** platform user,
+**I want** instant digital delivery of purchased giftcards with secure access,
+**so that** I can immediately use or gift my purchased giftcards.
+
+#### Acceptance Criteria
+1. Instant digital giftcard generation upon successful payment processing
+2. Secure giftcard code delivery via email and in-platform digital wallet
+3. Giftcard storage in user's platform account with access to all purchased cards
+4. QR code generation for easy mobile redemption at retail locations
+5. Giftcard sharing functionality for sending gifts to other users or email addresses
+6. Print-friendly giftcard format for physical gifting
+7. Giftcard expiration tracking and reminder notifications
+8. Customer support integration for giftcard issues and replacements
+
+### Story 3.6: Transaction Management & Analytics
+**As a** platform administrator,
+**I want** comprehensive transaction tracking and analytics for all giftcard sales,
+**so that** I can monitor platform performance, revenue, and user purchasing behavior.
+
+#### Acceptance Criteria
+1. Complete transaction logging for all USD and PXL purchases
+2. Real-time dashboard showing sales volume, revenue, and transaction counts
+3. Analytics reporting on popular brands, average transaction values, and tier-based purchasing patterns
+4. Payment method performance tracking and failure rate monitoring
+5. Revenue analytics with breakdown by payment method and tier-based benefits provided
+6. Customer transaction history accessible via admin interface
+7. Automated daily/weekly/monthly sales reports
+8. Integration with supplier reporting requirements and settlement processes
+
+## Epic 4: Rocket.Chat Integration & Community Features
+
+**Epic Goal:** Integrate Rocket.Chat platform for all chat functionality with Single Sign-On (SSO), application username mapping, profile picture integration with tier ring indicators, and community features that drive user engagement, community building, and platform retention through social commerce features.
+
+### Story 4.1: Rocket.Chat Integration Foundation
+**As a** platform user,
+**I want** to participate in general chat channels through integrated Rocket.Chat with my application identity,
+**so that** I can engage with the community using my platform username and profile while maintaining seamless experience.
+
+#### Acceptance Criteria
+1. Rocket.Chat platform integration with Single Sign-On (SSO) authentication
+2. Application users automatically mapped to Rocket.Chat accounts using SSO
+3. Users display their application @username in Rocket.Chat (NOT Rocket.Chat usernames)
+4. General chat channel accessible to all verified users through integrated interface
+5. Message history persistence with pagination for chat history browsing
+6. User online/offline status indicators synchronized between platforms
+7. Message timestamps and read receipts through Rocket.Chat functionality
+8. Basic text formatting support (bold, italic, links) via Rocket.Chat features
+9. Message character limits and spam prevention through Rocket.Chat moderation
+10. Mobile-optimized chat interface with responsive design integrating Rocket.Chat
+
+### Story 4.2: Tier-Based Chat Channels with Profile Integration
+**As a** platform user,
+**I want** access to exclusive chat channels based on my tier level with my profile picture and tier ring displayed,
+**so that** I can connect with users at similar engagement levels while showcasing my tier status visually.
+
+#### Acceptance Criteria
+1. Separate Rocket.Chat channels for each tier: Rising, Pro, Pixlbeast, Pixlionaire
+2. Automatic channel access granted/revoked based on user tier progression via SSO integration
+3. User profile pictures with tier ring indicators displayed in chat sidebar
+4. Chat interface replaces default room names/"Direct Message" text with user profile pictures and tier rings
+5. Tier-specific channel branding with appropriate visual indicators matching platform design
+6. Higher-tier channels remain exclusive to qualifying users through automated access control
+7. Channel switching interface allowing easy navigation between accessible channels
+8. Channel member lists showing tier status of participants with visual tier indicators
+9. Tier-based channel announcements and exclusive content delivery
+10. Admin ability to create temporary special event channels for specific tiers
+11. Visual consistency maintained between platform tier indicators and chat interface
+
+### Story 4.3: Private Messaging with Profile Display
+**As a** platform user,
+**I want** to send private messages to other users with their profile pictures and tier status visible,
+**so that** I can have personal conversations while maintaining visual recognition of user identities and tier status.
+
+#### Acceptance Criteria
+1. One-on-one private messaging between platform users through Rocket.Chat integration
+2. Private message interface displays user profile pictures with tier ring indicators
+3. Application usernames displayed (not Rocket.Chat usernames) for consistent identity
+4. Private message history with search functionality through Rocket.Chat
+5. Message delivery confirmations and read receipts via Rocket.Chat functionality
+6. Block/unblock functionality for unwanted communications
+7. Private message notifications via email and in-platform alerts
+8. Message encryption for privacy and security through Rocket.Chat
+9. File and image sharing in private conversations
+10. Report functionality for inappropriate private messages
+11. Profile pictures and tier rings replace default "Direct Message" text in chat sidebar
+
+### Story 4.4: File & Media Sharing through Rocket.Chat
+**As a** platform user,
+**I want** to share images and files through the integrated Rocket.Chat system,
+**so that** I can share giftcard screenshots, receipts, and other relevant content with the community seamlessly.
+
+#### Acceptance Criteria
+1. Image upload and display functionality through Rocket.Chat integration
+2. File upload support for common formats (PDF, DOC, etc.) with size limitations
+3. Image preview and lightbox viewing for shared images via Rocket.Chat interface
+4. Automatic image compression and optimization for mobile users
+5. File virus scanning and security validation before sharing
+6. Storage quotas and file retention policies managed through Rocket.Chat
+7. Admin controls for file sharing permissions per channel/tier
+8. Content moderation tools for inappropriate image detection
+9. Seamless file sharing experience maintaining platform visual consistency
+10. Integration with platform's existing file storage and security policies
+
+### Story 4.5: Moderation & Admin Controls through Rocket.Chat
+**As a** platform administrator,
+**I want** comprehensive moderation tools integrated with Rocket.Chat to maintain healthy community discussions,
+**so that** I can prevent abuse, enforce community guidelines, and ensure positive user experience across the integrated chat system.
+
+#### Acceptance Criteria
+1. Message reporting system through Rocket.Chat allowing users to report inappropriate content
+2. Admin dashboard integration for reviewing reported messages and user behavior from both platforms
+3. User timeout/ban functionality with configurable duration synchronized between platform and Rocket.Chat
+4. Message deletion and editing capabilities for moderators through Rocket.Chat integration
+5. Automated content filtering for profanity and inappropriate content via Rocket.Chat moderation
+6. Channel moderation controls including message approval queues
+7. Moderator role assignment with limited administrative permissions synchronized across platforms
+8. Audit logging for all moderation actions and admin interventions
+9. Platform admin controls for managing Rocket.Chat channel permissions and access
+10. Integration with platform user management for chat-based administrative actions
+
+### Story 4.6: Chat Analytics & Community Insights from Rocket.Chat Integration
+**As a** platform administrator,
+**I want** analytics on integrated Rocket.Chat usage and community engagement,
+**so that** I can understand user behavior, optimize community features, and identify successful engagement patterns across the integrated chat system.
+
+#### Acceptance Criteria
+1. Chat activity analytics from Rocket.Chat showing message volume by channel and time period
+2. User engagement metrics including active participants and message frequency through integration APIs
+3. Popular discussion topics and keyword analysis from Rocket.Chat data
+4. Tier-based participation rates and channel usage statistics correlated with platform tiers
+5. Community growth tracking and user retention through integrated chat engagement metrics
+6. Moderation effectiveness metrics and reported content statistics from both platforms
+7. Integration with overall platform analytics for holistic user behavior analysis including chat data
+8. Automated reports on community health and engagement trends
+9. Performance monitoring of Rocket.Chat integration and SSO authentication success rates
+10. User satisfaction metrics for chat functionality and integration experience
+
+## Epic 5: Admin Dashboard & Platform Management
+
+**Epic Goal:** Develop comprehensive administrative controls for user management, supplier management, platform analytics, rate configuration, and operational oversight that enable effective platform management and business optimization.
+
+### Story 5.1: User Management Dashboard
+**As a** platform administrator,
+**I want** comprehensive user management tools to monitor, support, and manage all platform users,
+**so that** I can ensure platform security, provide customer support, and maintain user account integrity.
+
+#### Acceptance Criteria
+1. User search and filtering by name, email, tier, registration date, and activity status
+2. Individual user profile views showing complete account details, transaction history, and tier progression
+3. User account status management (active, suspended, banned) with reason tracking
+4. KYC verification status management with approve/reject functionality
+5. User support ticket integration with account context
+6. Bulk user operations for administrative efficiency
+7. User activity monitoring including login patterns and suspicious behavior detection
+8. Export functionality for user data and compliance reporting
+
+### Story 5.2: Supplier Management System
+**As a** platform administrator,
+**I want** tools to manage giftcard suppliers, inventory, and wholesale relationships,
+**so that** I can maintain giftcard catalog quality, pricing, and availability.
+
+#### Acceptance Criteria
+1. Supplier profile management with contact information, terms, and performance metrics
+2. CSV upload functionality for bulk giftcard catalog updates from suppliers
+3. Inventory management showing available stock levels and automatic reorder alerts
+4. Wholesale pricing management with margin calculation tools
+5. Supplier performance tracking including delivery times and quality metrics
+6. Contract and agreement document storage for each supplier relationship
+7. Automated supplier reporting and settlement processes
+8. Integration with giftcard catalog for real-time availability updates
+
+### Story 5.3: Platform Analytics Dashboard
+**As a** platform administrator,
+**I want** comprehensive analytics and reporting on all platform metrics,
+**so that** I can make data-driven decisions about platform operations and business strategy.
+
+#### Acceptance Criteria
+1. Real-time dashboard showing key metrics: active users, transaction volume, revenue, PXL exchange rates
+2. User analytics including registration trends, tier distribution, and engagement patterns
+3. Financial reporting with revenue breakdown by payment method, tier benefits provided, and profitability analysis
+4. Giftcard sales analytics showing popular brands, average transaction values, and inventory turnover
+5. Chat system analytics including participation rates, message volumes, and community health metrics
+6. Customizable date ranges and filtering for all analytics views
+7. Automated daily, weekly, and monthly report generation with email delivery
+8. Export functionality for all analytics data in multiple formats (CSV, PDF)
+
+### Story 5.4: PXL Rate Configuration & Management
+**As a** platform administrator,
+**I want** tools to monitor and configure PXL exchange rates and tier benefit parameters,
+**so that** I can optimize platform economics while maintaining user value proposition.
+
+#### Acceptance Criteria
+1. PXL exchange rate monitoring with historical trend visualization
+2. Exchange rate parameter configuration for algorithm variables
+3. Manual exchange rate override capability for market interventions
+4. Tier threshold configuration with balance requirements per tier level
+5. Tier benefit percentage configuration for discounts and cashback rates
+6. A/B testing tools for tier benefit optimization
+7. Rate change impact simulation showing effects on user costs and platform revenue
+8. Audit logging for all rate and benefit configuration changes
+
+### Story 5.5: Platform Security & Compliance Management
+**As a** platform administrator,
+**I want** security monitoring and compliance management tools,
+**so that** I can ensure platform security, detect fraud, and maintain regulatory compliance.
+
+#### Acceptance Criteria
+1. Security event monitoring dashboard showing login anomalies, failed authentication attempts, and suspicious activities
+2. Transaction fraud detection with automated alerts and manual review queues
+3. Compliance reporting tools for financial regulations and data protection requirements
+4. Audit log viewer with search and filtering capabilities for all platform actions
+5. User verification status tracking and KYC compliance monitoring
+6. Payment processing security metrics and PCI compliance status monitoring
+7. Data backup and recovery status monitoring with automated alerts
+8. System health monitoring including server performance, database status, and third-party service availability
+
+### Story 5.6: Platform Configuration & Settings
+**As a** platform administrator,
+**I want** centralized configuration management for all platform settings,
+**so that** I can efficiently manage platform behavior, features, and business rules.
+
+#### Acceptance Criteria
+1. Global platform settings management including maintenance mode, feature flags, and system announcements
+2. Email template management for all automated communications
+3. Chat system configuration including channel settings, moderation rules, and automatic filtering parameters
+4. Payment processing configuration with fee structures and processing limits
+5. User tier configuration with naming, visual elements, and progression rules
+6. Platform branding and UI configuration including logos, colors, and messaging
+7. API configuration and rate limiting settings for system integrations
+8. Backup and restore functionality for all platform configurations
+
+## Checklist Results Report
+
+### Executive Summary
+- **Overall PRD Completeness**: 88% - Strong foundation with minor gaps
+- **MVP Scope Appropriateness**: Just Right - Well-balanced scope for 6-month timeline
+- **Readiness for Architecture Phase**: Nearly Ready - Needs minor clarifications on technical preferences
+- **Most Critical Concerns**: Technical stack preferences undefined, supplier integration details needed
+
+### Category Analysis
+
+| Category                         | Status  | Critical Issues |
+| -------------------------------- | ------- | --------------- |
+| 1. Problem Definition & Context  | PASS    | None - Clear problem statement and target users defined |
+| 2. MVP Scope Definition          | PASS    | Well-defined scope with clear boundaries |
+| 3. User Experience Requirements  | PASS    | Comprehensive UI goals and user journey coverage |
+| 4. Functional Requirements       | PASS    | Complete feature set with testable requirements |
+| 5. Non-Functional Requirements   | PASS    | Strong security and performance requirements |
+| 6. Epic & Story Structure        | PASS    | Logical epic sequencing with appropriate story breakdown |
+| 7. Technical Guidance            | PARTIAL | Needs specific technology stack recommendations |
+| 8. Cross-Functional Requirements | PARTIAL | Supplier integration APIs need definition |
+| 9. Clarity & Communication       | PASS    | Clear, well-structured documentation |
+
+### Recommendations
+
+**Immediate Actions:**
+1. **Define Technology Stack**: Work with technical architect to select specific languages, frameworks, and databases
+2. **Supplier Integration Research**: Identify major giftcard suppliers and their API capabilities
+3. **PXL Algorithm Specification**: Define exchange rate calculation variables and update frequency
+
+**Quality Improvements:**
+1. Expand technical assumptions section with specific technology preferences
+2. Add supplier partnership requirements to functional requirements
+3. Define chat system architecture approach (custom WebSocket vs third-party service)
+
+# PRD Addendum — PXL Purchase Discount
+
+## Functional Requirements — Add
+- **FR-PXL-BUY-DISCOUNT:** On USD→PXL conversions, the platform applies a **tier-based purchase discount** as **bonus PXL** (USD paid does not decrease). Discount schedule by tier: Starter 0%, Rising 3%, Pro 7%, Pixlbeast 9%, Pixlionaire 13%. Discounts apply only to USD→PXL conversions and follow existing risk/fraud limits.
+
+## Epic 2: PXL Currency & Tier System — Story 2.1 (Acceptance Criteria) — Add
+- Conversion engine credits **basePxl + bonusPxl**, where `basePxl = floor(usdAmount × exchangeRate)` and `bonusPxl = floor(basePxl × d)` for tier discount `d`. Record `appliedDiscount`, `bonusPxl`, and `effectiveRate = (basePxl + bonusPxl)/usdAmount` in the transaction log.
+
+
+## Next Steps
+
+### UX Expert Prompt
+Please review this PRD and initiate UX architecture design mode, focusing on the dark theme Vercel-inspired design system, mobile-first responsive layouts, and tier-based visual hierarchy for the 5-tier progression system.
+
+### Architect Prompt
+Please review this PRD and initiate technical architecture design mode, focusing on the monorepo structure, real-time WebSocket requirements, PXL currency engine, dual payment processing, and comprehensive chat system architecture.
+
+---
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>

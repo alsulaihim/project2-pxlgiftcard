@@ -1,0 +1,138 @@
+---
+alwaysApply: true
+---
+
+# Bug Fix Protocol
+
+## CRITICAL: Read This Before Fixing Any Errors
+
+This protocol MUST be followed when fixing bugs or errors in the codebase.
+
+## Core Principles
+
+1. **Preserve Existing Architecture**
+   - Don't refactor unrelated code
+   - Follow patterns already established in the codebase
+   - Maintain TypeScript interfaces from master-story-document.md
+   - Respect the tech stack defined in architecture.md
+
+2. **Minimal Change Approach**
+   - Fix ONLY the reported issue
+   - Don't add features while fixing bugs
+   - Don't "improve" working code
+   - If you see other issues, note them but don't fix them
+
+3. **Document Every Fix**
+   ```typescript
+   // BUG FIX: [Date] - [Issue description]
+   // Problem: PayPal webhook was failing due to missing async handler
+   // Solution: Added async/await to webhook handler
+   // Impact: PayPal payments now process correctly
+   ```
+
+4. **Test Your Fix**
+   - Verify the specific issue is resolved
+   - Check that related features still work
+   - For payments: test BOTH Stripe and PayPal paths
+   - For auth: test both regular and admin users
+   - For tiers: verify progression still calculates correctly
+
+5. **Maintain Consistency**
+   - Use existing error handling patterns
+   - Follow existing naming conventions
+   - Match existing code style
+   - Use established utility functions
+
+## Bug Fix Checklist
+
+Before committing any bug fix, verify:
+
+- [ ] Fix addresses the specific reported issue
+- [ ] No unrelated code was modified
+- [ ] Fix is documented with inline comments
+- [ ] Related features tested and working
+- [ ] Existing tests still pass
+- [ ] No new features were added
+- [ ] Code follows existing patterns
+
+## Fix Reporting Template
+
+After fixing, provide this information:
+
+```markdown
+### Bug Fix Report
+
+**Issue:** [What was broken]
+**Root Cause:** [Why it was broken]
+**Solution:** [What was changed]
+**Files Modified:** [List of files]
+**Testing Done:** [How you verified the fix]
+**Side Effects:** [Any potential impacts]
+```
+
+## Common Patterns to Follow
+
+### Error Handling
+```typescript
+// Use existing error pattern:
+try {
+  // operation
+} catch (error) {
+  console.error('[Component/Function Name]:', error);
+  throw new Error(`Specific error message: ${error.message}`);
+}
+```
+
+### API Responses
+```typescript
+// Maintain consistent response format:
+return {
+  success: boolean,
+  data?: any,
+  error?: string
+};
+```
+
+### State Updates
+```typescript
+// Use existing state update patterns
+setState(prev => ({
+  ...prev,
+  updatedField: newValue
+}));
+```
+
+## Payment-Specific Fixes
+
+When fixing payment issues:
+- Check both Stripe and PayPal code paths
+- Verify webhook handling for both providers
+- Ensure proper error messages for users
+- Maintain PCI compliance standards
+
+## Authentication-Specific Fixes
+
+When fixing auth issues:
+- Verify both regular and admin user flows
+- Check Firebase security rules aren't broken
+- Ensure JWT tokens are handled correctly
+- Test social login providers if affected
+
+## DO NOT
+
+- ❌ Refactor working code "while you're there"
+- ❌ Change architectural decisions
+- ❌ Add console.logs and leave them in production code
+- ❌ Modify database schemas without explicit approval
+- ❌ Change API contracts defined in stories
+- ❌ Add new dependencies without discussion
+
+## References
+
+- Architecture: `/docs/architecture.md`
+- Stories: `/docs/master-story-document.md`
+- PRD: `/docs/prd.md`
+
+---
+
+**Remember:** The goal is to fix the bug with minimal disruption to the working system. When in doubt, ask before making architectural changes.
