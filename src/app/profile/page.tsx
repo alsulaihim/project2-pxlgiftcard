@@ -434,7 +434,13 @@ export default function ProfilePage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">Member Since</label>
                     <p className="text-white">
-                      {platformUser.timestamps.created.toDate().toLocaleDateString()}
+                      {platformUser.timestamps?.created ? 
+                        (platformUser.timestamps.created.toDate ? 
+                          platformUser.timestamps.created.toDate().toLocaleDateString('en-US') : 
+                          new Date(platformUser.timestamps.created).toLocaleDateString('en-US')
+                        ) : 
+                        'N/A'
+                      }
                     </p>
                   </div>
                   
