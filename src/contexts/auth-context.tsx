@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
 import { auth, db, googleProvider, facebookProvider, appleProvider } from '@/lib/firebase-config';
+import { calculateTier } from '@/lib/pxl-currency';
 
 // User profile interface based on PRD requirements
 export interface UserProfile {
@@ -103,6 +104,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
       if (userDoc.exists()) {
         const userData = userDoc.data() as PlatformUser;
+        
+        // Recalculate tier based on actual PXL balance
+        const currentBalance = userData.wallets?.pxl?.balance || 0;
+        const correctTier = calculateTier(currentBalance);
+        
+        // If tier is incorrect, update it
+        if (userData.tier.current !== correctTier) {
+          console.log(`Tier mismatch detected. Current: ${userData.tier.current}, Should be: ${correctTier}`);
+          
+          // Update in Firestore
+          await updateDoc(doc(db, 'users', firebaseUser.uid), {
+            'tier.current': correctTier,
+            'tier.pxlBalance': currentBalance,
+            'timestamps.updated': Timestamp.now()
+          });
+          
+          // Update local data
+          userData.tier.current = correctTier;
+          userData.tier.pxlBalance = currentBalance;
+        }
+        
         setPlatformUser(userData);
       } else {
         // User exists in Firebase Auth but not in Firestore - needs profile setup
