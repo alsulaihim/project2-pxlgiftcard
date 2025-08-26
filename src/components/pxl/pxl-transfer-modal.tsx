@@ -43,22 +43,32 @@ export function PXLTransferModal({ isOpen, onClose }: PXLTransferModalProps) {
     try {
       // Check if recipient is username or email
       const isEmail = recipient.includes('@') && !recipient.startsWith('@');
+      console.log('Verifying recipient:', recipient, 'isEmail:', isEmail);
+      
       const q = isEmail
         ? query(collection(db, 'users'), where('email', '==', recipient))
         : query(collection(db, 'users'), where('username', '==', recipient));
       
       const snapshot = await getDocs(q);
+      console.log('Query result:', snapshot.empty ? 'No users found' : `Found ${snapshot.size} users`);
       
       if (snapshot.empty) {
         setError('User not found');
         setRecipientData(null);
       } else {
         const recipientDoc = snapshot.docs[0];
-        setRecipientData({ id: recipientDoc.id, ...recipientDoc.data() });
+        const data = recipientDoc.data();
+        console.log('Found recipient:', data.username, data.email);
+        setRecipientData({ id: recipientDoc.id, ...data });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error verifying recipient:', err);
-      setError('Failed to verify recipient');
+      // BUG FIX: 2024-01-27 - Show actual error message for debugging
+      if (err.code === 'permission-denied') {
+        setError('Permission denied: Cannot search for users');
+      } else {
+        setError(`Failed to verify recipient: ${err.message || 'Unknown error'}`);
+      }
     } finally {
       setVerifyingRecipient(false);
     }
