@@ -86,6 +86,8 @@ export default function ChatPage() {
 
       console.log("🔍 Session data:", sessionData);
       console.log("🔍 Attempting to create chat session document...");
+      console.log("🔍 Firebase project:", db.app.options.projectId);
+      console.log("🔍 Collection path: chat-sessions");
       
       const docRef = await addDoc(collection(db, "chat-sessions"), sessionData);
       console.log("✅ Chat session created successfully:", docRef.id);
@@ -102,6 +104,8 @@ export default function ChatPage() {
       };
 
       console.log("🔍 Attempting to add greeting message...");
+      console.log("🔍 Messages collection path:", `chat-sessions/${docRef.id}/messages`);
+      console.log("🔍 Greeting message data:", greetingMessage);
       await addDoc(collection(db, "chat-sessions", docRef.id, "messages"), greetingMessage);
       console.log("✅ Greeting message added successfully");
       
@@ -122,17 +126,27 @@ export default function ChatPage() {
   useEffect(() => {
     if (!session) return;
 
+    console.log("🔍 Setting up message listener for session:", session.id);
     const q = query(
       collection(db, "chat-sessions", session.id, "messages"),
       orderBy("timestamp", "asc")
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("🔍 Message snapshot received, docs count:", snapshot.docs.length);
       const newMessages: Message[] = [];
       snapshot.forEach((doc) => {
         newMessages.push({ id: doc.id, ...doc.data() } as Message);
       });
+      console.log("🔍 Processed messages:", newMessages.length);
       setMessages(newMessages);
+    }, (error) => {
+      console.error("❌ Error in message listener:", error);
+      console.error("❌ Error details:", {
+        code: error?.code,
+        message: error?.message,
+        name: error?.name
+      });
     });
 
     return () => unsubscribe();
