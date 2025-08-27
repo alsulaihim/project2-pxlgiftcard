@@ -111,7 +111,7 @@ function UserAvatar({ user, size = 48 }: { user: any; size?: number }) {
 export function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
-  const { user, platformUser, logout } = useAuth();
+  const { user, platformUser, logout, isAdmin } = useAuth();
 
   const publicNavigationItems = [
     { href: "/", label: "Home", icon: Home },
@@ -128,6 +128,12 @@ export function Navigation() {
   ];
 
   const navigationItems = user && platformUser ? authenticatedNavigationItems : publicNavigationItems;
+  
+  // Add admin link if user is admin
+  const finalNavigationItems = [...navigationItems];
+  if (isAdmin && user && platformUser) {
+    finalNavigationItems.push({ href: "/admin", label: "Admin", icon: Settings });
+  }
 
   const handleLogout = async () => {
     try {
@@ -168,7 +174,7 @@ export function Navigation() {
               </Link>
             )}
             
-            {navigationItems.map((item) => (
+            {finalNavigationItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -249,6 +255,17 @@ export function Navigation() {
                       Profile
                     </Link>
                     
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        className="flex items-center px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
+                        onClick={() => setIsUserMenuOpen(false)}
+                      >
+                        <Settings className="h-4 w-4 mr-3" />
+                        Admin Dashboard
+                      </Link>
+                    )}
+                    
                     <div className="border-t border-gray-800 mt-2 pt-2">
                       <button
                         onClick={handleLogout}
@@ -320,7 +337,7 @@ export function Navigation() {
             )}
             
             <nav className="space-y-4">
-              {navigationItems.map((item) => (
+              {finalNavigationItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}

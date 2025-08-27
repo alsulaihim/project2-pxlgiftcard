@@ -72,6 +72,7 @@ interface AuthContextType {
   user: User | null;
   platformUser: PlatformUser | null;
   loading: boolean;
+  isAdmin: boolean;
   signUp: (email: string, password: string) => Promise<User>;
   signIn: (email: string, password: string) => Promise<User>;
   signInWithGoogle: () => Promise<User>;
@@ -94,10 +95,14 @@ export function useAuth() {
   return context;
 }
 
+// Admin email list - in production, this should come from Firestore admin-users collection
+const ADMIN_EMAILS = ['coco1@sample.com'];
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [platformUser, setPlatformUser] = useState<PlatformUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Load platform user data from Firestore
   const loadPlatformUser = async (firebaseUser: User) => {
@@ -127,9 +132,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         
         setPlatformUser(userData);
+        
+        // Check if user is admin
+        setIsAdmin(ADMIN_EMAILS.includes(userData.email));
       } else {
         // User exists in Firebase Auth but not in Firestore - needs profile setup
         setPlatformUser(null);
+        setIsAdmin(false);
       }
     } catch (error) {
       console.error('Error loading platform user:', error);
@@ -146,6 +155,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await loadPlatformUser(firebaseUser);
       } else {
         setPlatformUser(null);
+        setIsAdmin(false);
       }
       
       setLoading(false);
@@ -191,6 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Logout
   const logout = async (): Promise<void> => {
     await signOut(auth);
+    setIsAdmin(false);
   };
 
   // Reset password
@@ -304,6 +315,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     platformUser,
     loading,
+    isAdmin,
     signUp,
     signIn,
     signInWithGoogle,
