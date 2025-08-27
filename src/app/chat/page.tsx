@@ -282,13 +282,13 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-black overflow-hidden">
+    <div className="h-screen bg-black flex overflow-hidden">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
 
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
+        <div className="flex-1 overflow-y-auto px-6 py-4 pb-40">
           <div className="max-w-3xl mx-auto">
             {/* Initial Screen Content */}
             {showInitialScreen && !session ? (
@@ -357,42 +357,42 @@ export default function ChatPage() {
           </div>
         )}
 
-                  {/* Input Area - Fixed at Bottom */}
-          <div className="px-6 py-1 flex-shrink-0">
-          <div className="max-w-3xl mx-auto">
-            <div className="relative">
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*,.pdf,.doc,.docx"
+      {/* Input Area - Fixed at Bottom */}
+      <div className="fixed bottom-0 left-0 right-0 bg-black px-6 py-6 border-t border-gray-800">
+        <div className="max-w-3xl mx-auto">
+          <div className="relative">
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*,.pdf,.doc,.docx"
+            />
+            <div className="relative bg-gray-900 rounded-2xl px-6 py-6">
+              <textarea
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Send a message..."
+                className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[80px] max-h-40"
+                rows={3}
+                style={{ 
+                  height: 'auto',
+                  minHeight: '80px',
+                  outline: 'none',
+                  border: 'none',
+                  boxShadow: 'none'
+                }}
+                onInput={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  target.style.height = 'auto';
+                  target.style.height = Math.min(target.scrollHeight, 160) + 'px';
+                }}
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-2">
-                                     <textarea
-                       value={inputMessage}
-                       onChange={(e) => setInputMessage(e.target.value)}
-                       onKeyPress={(e) => {
-                         if (e.key === "Enter" && !e.shiftKey) {
-                           e.preventDefault();
-                           handleSendMessage();
-                         }
-                       }}
-                       placeholder="Send a message..."
-                       className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[36px] max-h-24"
-                       rows={1}
-                       style={{ 
-                         height: 'auto',
-                         minHeight: '36px',
-                         outline: 'none',
-                         border: 'none',
-                         boxShadow: 'none'
-                       }}
-                       onInput={(e) => {
-                         const target = e.target as HTMLTextAreaElement;
-                         target.style.height = 'auto';
-                         target.style.height = Math.min(target.scrollHeight, 96) + 'px';
-                       }}
-                     />
                 
                 {/* Buttons inside input */}
                 <div className="absolute right-3 bottom-3 flex items-center space-x-2">
@@ -432,7 +432,7 @@ export default function ChatPage() {
       </div>
 
       {/* Right Sidebar - Chat Info */}
-      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto">
+      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto pb-40">
         <div className="space-y-6">
           {/* User Info */}
           {user && platformUser && (
