@@ -8,7 +8,7 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, User, LogOut, Settings, Coins, Store, Home, Grid3X3, Wallet, Headphones } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Coins, Store, Home, LayoutGrid, Wallet, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartIcon } from "@/components/ecommerce/cart-icon";
 import { useAuth } from "@/contexts/auth-context";
@@ -121,7 +121,7 @@ export function Navigation() {
 
   const authenticatedNavigationItems = [
     { href: "/", label: "Home", icon: Home },
-    { href: "/dashboard", label: "Dashboard", icon: Grid3X3 },
+    { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
     { href: "/marketplace", label: "Marketplace", icon: Store },
     { href: "/pxl", label: "PXL Wallet", icon: Coins },
     { href: "/orders", label: "Orders" },
@@ -188,16 +188,13 @@ export function Navigation() {
           {/* Right Section - Vercel style */}
           <div className="flex items-center space-x-4">
             {/* Live Chat Link */}
-            <button
-              onClick={() => {
-                const chatButton = document.querySelector('[aria-label="Open chat support"]') as HTMLButtonElement;
-                if (chatButton) chatButton.click();
-              }}
+            <Link
+              href="/chat"
               className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors"
             >
               <Headphones className="h-4 w-4" />
               <span className="hidden sm:inline">Live Chat</span>
-            </button>
+            </Link>
             
             {/* Cart Icon */}
             <CartIcon />
