@@ -109,7 +109,12 @@ service cloud.firestore {
       // Solution: Allow users to read their own admin document
       // Impact: Admin check can work properly
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId) && !exists(/databases/$(database)/documents/admin-users/$(userId));
+      // BUG FIX: 2024-01-27 - Admin setup failing on existing documents
+      // Problem: Write rule only allowed if document doesn't exist
+      // Solution: Allow create and update for own document
+      // Impact: Admin setup can update existing documents
+      allow create, update: if isOwner(userId);
+      allow delete: if false;
     }
     
     // Orders Collection
