@@ -429,74 +429,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Right Sidebar - Chat Info */}
-      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto">
-        <div className="space-y-6">
-          {/* User Info */}
-          {user && platformUser && (
-            <div>
-              <h3 className="text-sm font-medium text-gray-400 mb-3">Your Info</h3>
-              <div className="bg-gray-800 rounded-lg p-4 space-y-3">
-                <div>
-                  <p className="text-xs text-gray-500">Username</p>
-                  <p className="text-sm text-white">{platformUser.username}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">Tier</p>
-                  <p className="text-sm text-white capitalize">{platformUser.tier.current}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500">PXL Balance</p>
-                  <p className="text-sm text-white">{platformUser.wallets?.pxl?.balance || 0} PXL</p>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {/* Quick Actions */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Quick Actions</h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => handleSendMessage("I need help with my account")}
-                className="w-full text-left bg-gray-800 hover:bg-gray-700 rounded-lg px-4 py-3 text-sm text-gray-300 transition-colors"
-              >
-                Account Help
-              </button>
-              <button
-                onClick={() => handleSendMessage("Tell me about PXL currency")}
-                className="w-full text-left bg-gray-800 hover:bg-gray-700 rounded-lg px-4 py-3 text-sm text-gray-300 transition-colors"
-              >
-                PXL Information
-              </button>
-              <button
-                onClick={() => handleSendMessage("How do tiers work?")}
-                className="w-full text-left bg-gray-800 hover:bg-gray-700 rounded-lg px-4 py-3 text-sm text-gray-300 transition-colors"
-              >
-                Tier Benefits
-              </button>
-              <button
-                onClick={() => handleSendMessage("I want to speak to a human agent")}
-                className="w-full text-left bg-gray-800 hover:bg-gray-700 rounded-lg px-4 py-3 text-sm text-gray-300 transition-colors"
-              >
-                Human Support
-              </button>
-            </div>
-          </div>
-
-          {/* Platform Features */}
-          <div>
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Platform Features</h3>
-            <ul className="space-y-2 text-sm text-gray-500">
-              <li>• 5-tier progression system</li>
-              <li>• Up to 13% discount on giftcards</li>
-              <li>• PXL currency with appreciation</li>
-              <li>• Instant giftcard delivery</li>
-              <li>• 24/7 AI support</li>
-            </ul>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
