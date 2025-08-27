@@ -36,10 +36,17 @@ const tierGreetings = {
 };
 
 const suggestedQuestions = [
-  "What are the advantages of using Next.js?",
-  "Write code to demonstrate Dijkstra's algorithm",
-  "What is the weather in San Francisco?",
-  "Help me write an essay about silicon valley"
+  // Platform-focused quick actions and FAQs
+  "Show my PXL balance and today’s exchange rate",
+  "Buy PXL with my card — how does the bonus PXL work?",
+  "Purchase an Amazon $100 giftcard using PXL",
+  "What are my tier benefits and how do I level up?",
+  "Send 500 PXL to @friend with a message",
+  "View my recent orders and giftcards",
+  "Help me complete KYC verification",
+  "Join my tier chat channel and set up chat",
+  "Show my PXL transactions (purchases, transfers, cashback)",
+  "Create a support ticket for a failed payment"
 ];
 
 export default function ChatPage() {
@@ -60,6 +67,9 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Suggestions stay until user sends first message
+  const hasUserMessage = messages.some((m) => m.sender === "user");
 
   // Initialize chat session
   const initializeSession = async (): Promise<ChatSession | null> => {
@@ -336,8 +346,8 @@ export default function ChatPage() {
           </div>
         </div>
 
-        {/* Suggested Questions - Above Input */}
-        {showInitialScreen && !session && (
+        {/* Suggested Questions - Above Input (visible until first user message) */}
+        {!hasUserMessage && (
           <div className="px-6 pb-4 flex-shrink-0">
             <div className="max-w-3xl mx-auto">
               <div className="grid grid-cols-2 gap-4">
