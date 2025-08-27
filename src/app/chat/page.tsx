@@ -351,7 +351,7 @@ export default function ChatPage() {
           <div className="px-6 pb-4 flex-shrink-0">
             <div className="max-w-3xl mx-auto">
               <div className="grid grid-cols-2 gap-4">
-                {suggestedQuestions.map((question, index) => (
+                {suggestedQuestions.slice(0, 6).map((question, index) => (
                   <button
                     key={index}
                     onClick={() => handleSendMessage(question)}
@@ -375,7 +375,7 @@ export default function ChatPage() {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-4">
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-4 border border-white/80">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
