@@ -244,24 +244,33 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
               strokeDasharray="4 4"
               opacity="0.5"
             />
-            
-            {/* Circle on current line */}
-            <circle
-              cx={getX(hoveredPoint)}
-              cy={getY(data[hoveredPoint])}
-              r="8"
-              fill="#3b82f6"
-              stroke="#fff"
-              strokeWidth="3"
-            />
-            
-            {/* Inner circle */}
-            <circle
-              cx={getX(hoveredPoint)}
-              cy={getY(data[hoveredPoint])}
-              r="4"
-              fill="#fff"
-            />
+            {/* Marker circles */}
+            <circle cx={getX(hoveredPoint)} cy={getY(data[hoveredPoint])} r="8" fill="#3b82f6" stroke="#fff" strokeWidth="3" />
+            <circle cx={getX(hoveredPoint)} cy={getY(data[hoveredPoint])} r="4" fill="#fff" />
+
+            {/* SVG Tooltip */}
+            {(() => {
+              const tipWidth = 180;
+              const tipHeight = 58;
+              const x = Math.min(Math.max(getX(hoveredPoint) - tipWidth / 2, padding.left), width - padding.right - tipWidth);
+              const y = Math.max(padding.top + 10, getY(data[hoveredPoint]) - tipHeight - 10);
+              const label = timeLabels[Math.floor(hoveredPoint / data.length * timeLabels.length)];
+              return (
+                <g>
+                  <rect x={x} y={y} rx={12} ry={12} width={tipWidth} height={tipHeight} fill="#0b0b0b" stroke="#374151" strokeWidth={1} opacity={0.95} />
+                  <circle cx={x + 14} cy={y + 16} r={4} fill="#3b82f6" />
+                  <text x={x + 24} y={y + 20} fill="#ffffff" fontSize={12} fontWeight={600}>
+                    {`${data[hoveredPoint].toFixed(2)} ${currency}`}
+                  </text>
+                  <text x={x + 14} y={y + 36} fill="#9ca3af" fontSize={11}>
+                    {`≈ $${(data[hoveredPoint] / currentValue).toFixed(2)} USD`}
+                  </text>
+                  <text x={x + 14} y={y + 50} fill="#6b7280" fontSize={10}>
+                    {label}
+                  </text>
+                </g>
+              );
+            })()}
           </>
         )}
 
@@ -282,25 +291,6 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
           );
         })}
       </svg>
-
-      {/* Tooltip */}
-      {hoveredPoint !== null && (
-        <div
-          className={`absolute bg-gray-950/95 backdrop-blur-sm border border-gray-700 rounded-xl px-4 py-3 shadow-2xl pointer-events-none z-10 top-[140px] -translate-x-1/2`}
-          style={{ left: `${getX(hoveredPoint)}px` }}
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"></div>
-            <span className="font-semibold text-white text-lg">{data[hoveredPoint].toFixed(2)} {currency}</span>
-          </div>
-          <div className="text-gray-400 text-sm">
-            ≈ ${(data[hoveredPoint] / currentValue).toFixed(2)} USD
-          </div>
-          <div className="text-gray-500 text-xs mt-2">
-            {timeLabels[Math.floor(hoveredPoint / data.length * timeLabels.length)]}
-          </div>
-        </div>
-      )}
 
       {/* Legend and USD Conversion Info */}
       <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-800">
