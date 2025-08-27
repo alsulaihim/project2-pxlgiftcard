@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, Search, Plus } from "lucide-react";
+// BUG FIX: 2025-01-27 - Remove unused icons to fix build/lint warnings
+import { Send, Paperclip } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase-config";
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
@@ -281,8 +282,10 @@ export default function ChatPage() {
     }
   };
 
+  // BUG FIX: 2025-01-27 - Guard against undefined/invalid timestamps to avoid runtime errors
   // Format timestamp
-  const formatTime = (timestamp: Timestamp) => {
+  const formatTime = (timestamp?: Timestamp) => {
+    if (!timestamp || typeof timestamp.toDate !== 'function') return '';
     const date = timestamp.toDate();
     return date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
