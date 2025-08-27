@@ -375,7 +375,7 @@ export default function ChatPage() {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-4 border border-white/80">
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-4 border border-[#C0C0C0]">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
