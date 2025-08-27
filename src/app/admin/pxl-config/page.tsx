@@ -16,6 +16,7 @@ import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 import { logAdminAction, AdminActionTypes } from "@/lib/admin-logging";
 import { db } from "@/lib/firebase-config";
 import { formatPXL } from "@/lib/pxl-currency";
+import { useAuth } from "@/contexts/auth-context";
 
 interface TierConfig {
   threshold: number;
@@ -32,6 +33,7 @@ interface TierConfigs {
 }
 
 export default function PXLConfigPage() {
+  const { user, platformUser } = useAuth();
   const { currencyData, loading: rateLoading } = usePXLCurrency();
   const [exchangeRate, setExchangeRate] = useState(100);
   const [tierConfigs, setTierConfigs] = useState<TierConfigs>({
