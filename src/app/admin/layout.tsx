@@ -5,13 +5,14 @@ import { useAuth } from "@/contexts/auth-context";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Users, TrendingUp, Package, Shield, Settings } from "lucide-react";
+import { LayoutDashboard, Users, TrendingUp, Package, Shield, Settings, MessageSquare } from "lucide-react";
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
   { name: 'Users', href: '/admin/users', icon: Users },
   { name: 'PXL Config', href: '/admin/pxl-config', icon: TrendingUp },
   { name: 'Suppliers', href: '/admin/suppliers', icon: Package },
+  { name: 'Support', href: '/admin/support', icon: MessageSquare },
   { name: 'Security', href: '/admin/security', icon: Shield },
   { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];

@@ -132,5 +132,33 @@ service cloud.firestore {
       allow read: if isAdmin();
       allow write: if isAdmin();
     }
+    
+    // Chat Sessions Collection
+    match /chat-sessions/{sessionId} {
+      // Allow users to create new sessions
+      allow create: if true;
+      // Allow users to read their own sessions or admins to read all
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      // Allow updates to own sessions
+      allow update: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Allow creating messages in own session or as guest
+        allow create: if true;
+        // Allow reading messages in own session or as admin
+        allow read: if (isAuthenticated() && get(/databases/$(database)/documents/chat-sessions/$(sessionId)).data.userId == request.auth.uid) || isAdmin() || !isAuthenticated();
+      }
+    }
+    
+    // Support Tickets Collection
+    match /support-tickets/{ticketId} {
+      // Allow creating tickets
+      allow create: if true;
+      // Allow users to read their own tickets or admins to read all
+      allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
+      // Allow admins to update tickets
+      allow update: if isAdmin();
+    }
   }
 }

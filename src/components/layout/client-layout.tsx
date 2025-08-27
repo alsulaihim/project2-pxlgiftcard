@@ -15,6 +15,7 @@ import { CartProvider } from '@/contexts/cart-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { CartDrawer } from '@/components/ecommerce/cart-drawer';
 import { Navigation } from '@/components/layout/navigation';
+import ChatWidget from '@/components/chat/chat-widget';
 
 interface ClientLayoutProps {
   children: React.ReactNode;
@@ -30,6 +31,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         <Navigation />
         {children}
         <CartDrawer />
+        <ChatWidget />
       </CartProvider>
     </AuthProvider>
   );
