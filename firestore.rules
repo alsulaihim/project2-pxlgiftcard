@@ -45,8 +45,14 @@ service cloud.firestore {
     
     // Transactions Collection - Strict access control
     match /transactions/{transactionId} {
-      allow read: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
+      // BUG FIX: 2024-01-27 - Admin dashboard needs to read all transactions
+      // Problem: Admin pages couldn't access transaction data for analytics
+      // Solution: Allow admins to read all transactions
+      // Impact: Admin dashboard can now show transaction metrics
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
       // BUG FIX: 2024-01-27 - Transaction creation failing with permissions error
       // Problem: Rule was checking non-existent field path
       // Solution: Simplified to check authentication only (userId validation happens in code)
