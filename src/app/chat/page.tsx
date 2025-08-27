@@ -186,7 +186,8 @@ export default function ChatPage() {
       userTier: platformUser?.tier?.current || (user ? "starter" : undefined),
       userName: platformUser?.username,
       userEmail: platformUser?.email,
-      isAuthenticated: !!user
+      isAuthenticated: !!user,
+      hasIntroduced: messages.some(m => m.sender === "agent")
     };
     
     // Check if we should create a support ticket
