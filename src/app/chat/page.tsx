@@ -284,11 +284,9 @@ export default function ChatPage() {
   return (
     <div className="h-screen bg-black flex overflow-hidden">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-h-0">
-
-
+      <div className="flex-1 flex flex-col">
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 pb-40">
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto">
             {/* Initial Screen Content */}
             {showInitialScreen && !session ? (
@@ -357,17 +355,17 @@ export default function ChatPage() {
           </div>
         )}
 
-      {/* Input Area - Fixed at Bottom */}
-      <div className="fixed bottom-0 left-0 right-0 bg-black px-6 py-6 border-t border-gray-800">
-        <div className="max-w-3xl mx-auto">
-          <div className="relative">
-            <input
-              type="file"
-              ref={fileInputRef}
-              className="hidden"
-              accept="image/*,.pdf,.doc,.docx"
-            />
-            <div className="relative bg-gray-900 rounded-2xl px-6 py-6">
+        {/* Input Area */}
+        <div className="px-6 py-4 flex-shrink-0">
+          <div className="max-w-3xl mx-auto">
+            <div className="relative">
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx"
+              />
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-4">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
@@ -432,7 +430,7 @@ export default function ChatPage() {
       </div>
 
       {/* Right Sidebar - Chat Info */}
-      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto pb-40">
+      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto">
         <div className="space-y-6">
           {/* User Info */}
           {user && platformUser && (
