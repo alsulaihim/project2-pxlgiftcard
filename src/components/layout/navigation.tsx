@@ -146,28 +146,28 @@ export function Navigation() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-gray-900 bg-black/50 backdrop-blur-xl">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+      <div className="mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo - Vercel style */}
           <Link href={user && platformUser ? "/dashboard" : "/"} className="flex items-center space-x-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white">
               <span className="text-sm font-bold text-black">PXL</span>
             </div>
-            <span className="text-lg font-semibold text-white">
-              GiftCard Platform
+            <span className="hidden sm:inline text-lg font-semibold text-white">
+              GiftCard
             </span>
           </Link>
 
           {/* Desktop Navigation - Vercel style */}
-          <nav className="hidden md:flex items-center space-x-8">
+          <nav className="hidden lg:flex items-center space-x-4 xl:space-x-6">
             {/* PXL Balance Display for logged-in users */}
             {user && platformUser && (
               <Link 
                 href="/pxl" 
-                className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-900 hover:border-gray-700 transition-all group"
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-gray-900/50 border border-gray-800 hover:bg-gray-900 hover:border-gray-700 transition-all group"
               >
                 <Wallet className="h-4 w-4 text-gray-400 group-hover:text-green-400 transition-colors" />
-                <span className="text-xs text-gray-500">PXL Balance</span>
+                <span className="text-xs text-gray-500 hidden xl:inline">PXL Balance</span>
                 <span className="text-sm font-medium text-white">
                   {formatPXL(platformUser.wallets?.pxl?.balance || 0)}
                 </span>
@@ -186,7 +186,7 @@ export function Navigation() {
           </nav>
 
           {/* Right Section - Vercel style */}
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 lg:space-x-3">
             {/* Live Chat Link */}
             <Link
               href="/chat"
@@ -307,7 +307,7 @@ export function Navigation() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden text-gray-400 hover:text-white"
+              className="lg:hidden text-gray-400 hover:text-white"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               aria-label="Toggle menu"
             >
@@ -323,7 +323,7 @@ export function Navigation() {
 
       {/* Mobile Menu - Vercel style */}
       {isMenuOpen && (
-        <div className="md:hidden border-t border-gray-900 bg-black/95 backdrop-blur-xl">
+        <div className="lg:hidden border-t border-gray-900 bg-black/95 backdrop-blur-xl">
           <div className="mx-auto max-w-7xl px-6 py-6">
             {/* PXL Balance Display for mobile - logged-in users */}
             {user && platformUser && (
