@@ -358,7 +358,7 @@ export default function ChatPage() {
         )}
 
                   {/* Input Area - Fixed at Bottom */}
-          <div className="px-6 py-3 flex-shrink-0">
+          <div className="px-6 py-1 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="relative">
               <input
@@ -367,7 +367,7 @@ export default function ChatPage() {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-4">
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-2">
                                      <textarea
                        value={inputMessage}
                        onChange={(e) => setInputMessage(e.target.value)}
@@ -378,11 +378,11 @@ export default function ChatPage() {
                          }
                        }}
                        placeholder="Send a message..."
-                       className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[48px] max-h-32"
-                       rows={2}
+                       className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[36px] max-h-24"
+                       rows={1}
                        style={{ 
                          height: 'auto',
-                         minHeight: '48px',
+                         minHeight: '36px',
                          outline: 'none',
                          border: 'none',
                          boxShadow: 'none'
@@ -390,7 +390,7 @@ export default function ChatPage() {
                        onInput={(e) => {
                          const target = e.target as HTMLTextAreaElement;
                          target.style.height = 'auto';
-                         target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+                         target.style.height = Math.min(target.scrollHeight, 96) + 'px';
                        }}
                      />
                 
@@ -419,7 +419,7 @@ export default function ChatPage() {
               </div>
             </div>
             
-            <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center justify-between mt-1">
               <p className="text-xs text-gray-500">
                 {user ? `Logged in as ${platformUser?.username || user.email}` : "Chatting as guest"}
               </p>
