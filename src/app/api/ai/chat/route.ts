@@ -35,7 +35,7 @@ Follow platform rules: one-way USD→PXL, tier-based discounts and cashback, ins
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userMessage },
