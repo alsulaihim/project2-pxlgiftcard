@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
+import { logAdminAction, AdminActionTypes } from "@/lib/admin-logging";
 import { db } from "@/lib/firebase-config";
 import { formatPXL } from "@/lib/pxl-currency";
 
@@ -94,10 +95,22 @@ export default function PXLConfigPage() {
 
     setSaving(true);
     try {
+      const oldRate = currencyData?.currentRate || 100;
       await updateDoc(doc(db, 'pxl-currency', 'main'), {
         currentRate: exchangeRate,
         lastUpdated: Timestamp.now(),
       });
+      
+      // Log admin action
+      if (user && platformUser) {
+        await logAdminAction(
+          AdminActionTypes.RATE_CHANGE,
+          user.uid,
+          platformUser.email,
+          'pxl-currency/main',
+          `Changed exchange rate from ${oldRate} to ${exchangeRate}`
+        );
+      }
       
       alert('Exchange rate updated successfully! Changes will reflect shortly.');
     } catch (error) {
@@ -142,6 +155,17 @@ export default function PXLConfigPage() {
         tierMultipliers,
         lastUpdated: Timestamp.now(),
       });
+      
+      // Log admin action
+      if (user && platformUser) {
+        await logAdminAction(
+          AdminActionTypes.TIER_UPDATE,
+          user.uid,
+          platformUser.email,
+          'pxl-currency/main',
+          'Updated tier benefit configurations'
+        );
+      }
       
       alert('Tier configurations updated successfully! Changes will reflect shortly.');
     } catch (error) {
