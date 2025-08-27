@@ -225,11 +225,11 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="flex h-screen bg-black">
+    <div className="flex h-screen bg-black overflow-hidden">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Chat Header */}
-        <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+        <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-white">PXL Support Chat</h1>
             <span className="text-sm text-gray-400">Always here to help</span>
@@ -241,7 +241,7 @@ export default function ChatPage() {
 
         {/* Messages Area or Initial Screen */}
         {showInitialScreen && !session ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="flex-1 flex flex-col items-center justify-center px-6 min-h-0">
             <h2 className="text-3xl font-bold text-white mb-2">Hello there!</h2>
             <p className="text-gray-400 mb-8">How can I help you today?</p>
             
@@ -258,7 +258,7 @@ export default function ChatPage() {
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
             <div className="max-w-3xl mx-auto space-y-4">
               {messages.map((message) => (
                 <div
@@ -300,44 +300,65 @@ export default function ChatPage() {
         )}
 
         {/* Input Area */}
-        <div className="border-t border-gray-800 px-6 py-4">
+        <div className="border-t border-gray-800 px-6 py-6 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
-            <div className="flex items-center space-x-2">
+            <div className="relative">
               <input
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="p-2 text-gray-400 hover:text-white transition-colors"
-                aria-label="Attach file"
-              >
-                <Paperclip className="h-5 w-5" />
-              </button>
-              <input
-                type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
-                placeholder="Send a message..."
-                className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-gray-600"
-              />
-              <button
-                onClick={() => handleSendMessage()}
-                disabled={!inputMessage.trim() || isTyping}
-                className={`p-2 rounded-lg transition-colors ${
-                  inputMessage.trim() && !isTyping
-                    ? "bg-blue-600 text-white hover:bg-blue-700"
-                    : "bg-gray-800 text-gray-500 cursor-not-allowed"
-                }`}
-                aria-label="Send message"
-              >
-                <Send className="h-5 w-5" />
-              </button>
+              <div className="relative bg-gray-900 border border-gray-700 rounded-2xl px-4 py-4 focus-within:border-gray-600 transition-colors">
+                <textarea
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                  }}
+                  placeholder="Send a message..."
+                  className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none pr-20 min-h-[24px] max-h-32"
+                  rows={1}
+                  style={{ 
+                    height: 'auto',
+                    minHeight: '24px'
+                  }}
+                  onInput={(e) => {
+                    const target = e.target as HTMLTextAreaElement;
+                    target.style.height = 'auto';
+                    target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+                  }}
+                />
+                
+                {/* Buttons inside input */}
+                <div className="absolute right-2 bottom-2 flex items-center space-x-2">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
+                    aria-label="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleSendMessage()}
+                    disabled={!inputMessage.trim() || isTyping}
+                    className={`p-2 rounded-lg transition-colors ${
+                      inputMessage.trim() && !isTyping
+                        ? "bg-blue-600 text-white hover:bg-blue-700"
+                        : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                    }`}
+                    aria-label="Send message"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center justify-between mt-2">
+            
+            <div className="flex items-center justify-between mt-3">
               <p className="text-xs text-gray-500">
                 {user ? `Logged in as ${platformUser?.username || user.email}` : "Chatting as guest"}
               </p>
@@ -350,7 +371,7 @@ export default function ChatPage() {
       </div>
 
       {/* Right Sidebar - Chat Info */}
-      <div className="w-80 bg-gray-900 border-l border-gray-800 p-6 hidden lg:block">
+      <div className="w-80 bg-gray-900 border-l border-gray-800 p-6 hidden lg:block overflow-y-auto">
         <div className="space-y-6">
           {/* User Info */}
           {user && platformUser && (
