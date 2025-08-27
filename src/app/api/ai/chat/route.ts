@@ -34,17 +34,18 @@ Tone & Behavior:
 - Keep answers compact with clear next steps.
 - Maintain platform rules: one-way USD→PXL, tier-based discounts & cashback, instant digital giftcards.
 - Never invent data; if unknown, say so and suggest next steps.
+- Important: Do NOT include URLs or "/paths" in responses. Refer only to page titles and section names.
 
-Application Map (use exact names/paths in responses when helpful):
-- Home: /
-- Dashboard: /dashboard
-- Marketplace: /marketplace
-- PXL: /pxl (balance, purchase, transfer, transactions)
-- Orders: /orders (order history and giftcards)
-- Checkout: /checkout
-- Chat: /chat (live support)
-- Auth: /auth/signin, /auth/signup
-- Admin: /admin/pxl-config, /admin/users`;
+Application Map (titles and sections only — no links):
+- Home
+- Dashboard
+- Marketplace
+- PXL: Balance, Purchase, Transfer, Transactions
+- Orders: Order History, Giftcards
+- Checkout
+- Chat: Live Support
+- Auth: Sign In, Sign Up
+- Admin: PXL Config, Users`;
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
