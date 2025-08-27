@@ -64,6 +64,11 @@ export default function ChatPage() {
   // Initialize chat session
   const initializeSession = async () => {
     try {
+      console.log("🔍 Initializing chat session...");
+      console.log("🔍 User authenticated:", !!user);
+      console.log("🔍 User UID:", user?.uid);
+      console.log("🔍 Platform user:", !!platformUser);
+      
       const sessionData: Partial<ChatSession> = {
         status: "active",
         createdAt: Timestamp.now(),
@@ -79,7 +84,12 @@ export default function ChatPage() {
         sessionData.userTier = "guest";
       }
 
+      console.log("🔍 Session data:", sessionData);
+      console.log("🔍 Attempting to create chat session document...");
+      
       const docRef = await addDoc(collection(db, "chat-sessions"), sessionData);
+      console.log("✅ Chat session created successfully:", docRef.id);
+      
       const newSession = { id: docRef.id, ...sessionData } as ChatSession;
       setSession(newSession);
 
@@ -91,10 +101,18 @@ export default function ChatPage() {
         timestamp: Timestamp.now(),
       };
 
+      console.log("🔍 Attempting to add greeting message...");
       await addDoc(collection(db, "chat-sessions", docRef.id, "messages"), greetingMessage);
+      console.log("✅ Greeting message added successfully");
+      
       setShowInitialScreen(false);
     } catch (error) {
-      console.error("Error initializing chat session:", error);
+      console.error("❌ Error initializing chat session:", error);
+      console.error("❌ Error details:", {
+        code: error?.code,
+        message: error?.message,
+        name: error?.name
+      });
     }
   };
 
@@ -177,8 +195,12 @@ export default function ChatPage() {
     const messageToSend = messageText || inputMessage.trim();
     if (!messageToSend) return;
 
+    console.log("🔍 Sending message:", messageToSend);
+    console.log("🔍 Current session:", session?.id);
+
     // Initialize session if needed
     if (!session) {
+      console.log("🔍 No session found, initializing...");
       await initializeSession();
     }
 
@@ -187,28 +209,40 @@ export default function ChatPage() {
 
     // Add user message
     try {
+      console.log("🔍 Adding user message to session:", session!.id);
       await addDoc(collection(db, "chat-sessions", session!.id, "messages"), {
         content: messageToSend,
         sender: "user",
         timestamp: Timestamp.now(),
       });
+      console.log("✅ User message added");
 
       // Get AI response
+      console.log("🔍 Getting AI response...");
       const aiResponse = await getAIResponse(messageToSend);
 
       // Add AI response
+      console.log("🔍 Adding AI response...");
       await addDoc(collection(db, "chat-sessions", session!.id, "messages"), {
         content: aiResponse,
         sender: "agent",
         timestamp: Timestamp.now(),
       });
+      console.log("✅ AI response added");
 
       // Update session last message time
+      console.log("🔍 Updating session last activity...");
       await updateDoc(doc(db, "chat-sessions", session!.id), {
         lastMessageAt: Timestamp.now(),
       });
+      console.log("✅ Session updated");
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("❌ Error sending message:", error);
+      console.error("❌ Error details:", {
+        code: error?.code,
+        message: error?.message,
+        name: error?.name
+      });
     } finally {
       setIsTyping(false);
     }
