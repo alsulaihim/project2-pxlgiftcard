@@ -62,7 +62,7 @@ export default function ChatPage() {
   }, [messages]);
 
   // Initialize chat session
-  const initializeSession = async () => {
+  const initializeSession = async (): Promise<ChatSession | null> => {
     try {
       console.log("🔍 Initializing chat session...");
       console.log("🔍 User authenticated:", !!user);
@@ -106,6 +106,7 @@ export default function ChatPage() {
       console.log("✅ Greeting message added successfully");
       
       setShowInitialScreen(false);
+      return newSession;
     } catch (error) {
       console.error("❌ Error initializing chat session:", error);
       console.error("❌ Error details:", {
@@ -113,6 +114,7 @@ export default function ChatPage() {
         message: error?.message,
         name: error?.name
       });
+      return null;
     }
   };
 
@@ -198,10 +200,17 @@ export default function ChatPage() {
     console.log("🔍 Sending message:", messageToSend);
     console.log("🔍 Current session:", session?.id);
 
-    // Initialize session if needed
-    if (!session) {
+    // Initialize session if needed and wait for it
+    let currentSession = session;
+    if (!currentSession) {
       console.log("🔍 No session found, initializing...");
-      await initializeSession();
+      currentSession = await initializeSession();
+      
+      // If still no session, there was an error in initialization
+      if (!currentSession) {
+        console.error("❌ Failed to initialize session");
+        return;
+      }
     }
 
     setInputMessage("");
@@ -209,8 +218,8 @@ export default function ChatPage() {
 
     // Add user message
     try {
-      console.log("🔍 Adding user message to session:", session!.id);
-      await addDoc(collection(db, "chat-sessions", session!.id, "messages"), {
+      console.log("🔍 Adding user message to session:", currentSession.id);
+      await addDoc(collection(db, "chat-sessions", currentSession.id, "messages"), {
         content: messageToSend,
         sender: "user",
         timestamp: Timestamp.now(),
@@ -223,7 +232,7 @@ export default function ChatPage() {
 
       // Add AI response
       console.log("🔍 Adding AI response...");
-      await addDoc(collection(db, "chat-sessions", session!.id, "messages"), {
+      await addDoc(collection(db, "chat-sessions", currentSession.id, "messages"), {
         content: aiResponse,
         sender: "agent",
         timestamp: Timestamp.now(),
@@ -232,7 +241,7 @@ export default function ChatPage() {
 
       // Update session last message time
       console.log("🔍 Updating session last activity...");
-      await updateDoc(doc(db, "chat-sessions", session!.id), {
+      await updateDoc(doc(db, "chat-sessions", currentSession.id), {
         lastMessageAt: Timestamp.now(),
       });
       console.log("✅ Session updated");
