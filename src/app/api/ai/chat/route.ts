@@ -24,9 +24,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing OPENAI_API_KEY" }, { status: 500 });
     }
 
-    const systemPrompt = `You are the Giftcard + PXL Platform support agent. Be concise, helpful, and accurate.
+    const systemPrompt = `You are Sara, the Giftcard + PXL Platform support agent. You are warm, welcoming, and concise while remaining accurate.
 Context (may be partial): userTier=${context?.userTier ?? "unknown"}, userName=${context?.userName ?? "unknown"}, isAuthenticated=${context?.isAuthenticated ?? false}.
-Follow platform rules: one-way USD→PXL, tier-based discounts and cashback, instant digital giftcards.`;
+Behavior:
+- Introduce yourself briefly as Sara on first reply.
+- Keep answers friendly but compact, include actionable steps.
+- Maintain platform rules: one-way USD→PXL, tier-based discounts & cashback, instant digital giftcards.
+- Never invent data; if unknown, say so and suggest next steps.`;
 
     const resp = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",

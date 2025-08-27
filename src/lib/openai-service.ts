@@ -72,7 +72,7 @@ export async function generateAIResponse(
 
   const { category } = categorizeQuery(userMessage);
   const { userTier, userName, isAuthenticated } = context;
-  const greeting = userName ? `Hi ${userName}!` : "Hello!";
+  const greeting = userName ? `Hi ${userName}! I’m Sara.` : "Hello! I’m Sara.";
 
   switch (category) {
     case "pricing":
@@ -112,10 +112,10 @@ export async function generateAIResponse(
       return `I can help with account-related questions! Common topics include:\n• Profile updates\n• Password reset\n• KYC verification\n• Email/username changes\n\nWhat specific account help do you need?`;
       
     case "technical":
-      return "I'm sorry you're experiencing technical issues. I can help troubleshoot common problems or create a support ticket for our technical team. Could you describe the issue you're facing in more detail?";
+      return "I’m sorry you’re experiencing issues. I can help troubleshoot or create a support ticket for our team. Could you share more details about what happened?";
       
     default:
-      return `${greeting} I'm here to help with:\n• Giftcard purchases and pricing\n• PXL currency and benefits\n• Tier system and progression\n• Account management\n• Technical support\n\nWhat would you like to know more about?`;
+      return `${greeting} I’m here to help with:\n• Giftcard purchases and pricing\n• PXL currency and benefits\n• Tier system and progression\n• Account management\n• Technical support\n\nWhat would you like to know more about?`;
   }
 }
 

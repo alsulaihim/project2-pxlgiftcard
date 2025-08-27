@@ -3,10 +3,23 @@
 import React, { useState, useEffect, useRef } from "react";
 // BUG FIX: 2025-01-27 - Remove unused icons to fix build/lint warnings
 import { Send, Paperclip } from "lucide-react";
+// BUG FIX: 2025-01-27 - Order imports: external before internal per lint rule
+import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase-config";
-import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
 import { generateAIResponse, shouldCreateTicket, extractTicketInfo } from "@/lib/openai-service";
+
+// Utility: safe error details without using 'any'
+function getErrorInfo(err: unknown): { code?: string; message?: string; name?: string } {
+  const info: { code?: string; message?: string; name?: string } = {};
+  if (typeof err === 'object' && err !== null) {
+    const rec = err as Record<string, unknown>;
+    if (typeof rec.code === 'string') info.code = rec.code;
+    if (typeof rec.message === 'string') info.message = rec.message;
+    if (typeof rec.name === 'string') info.name = rec.name;
+  }
+  return info;
+}
 
 interface Message {
   id: string;
@@ -28,12 +41,12 @@ interface ChatSession {
 }
 
 const tierGreetings = {
-  starter: "Welcome! 👋 How can I assist you today with your giftcard needs?",
-  rising: "Hello Rising member! 🌟 Great to see you. How can I help enhance your experience today?",
-  pro: "Welcome back, Pro member! 💎 I'm here to provide you with premium support. What can I do for you?",
-  pixlbeast: "Greetings, Pixlbeast! 🦁 Your dedication is inspiring. How may I provide VIP assistance today?",
-  pixlionaire: "Welcome, esteemed Pixlionaire! 👑 It's an honor to assist you. How may I serve you today?",
-  guest: "Hello! 👋 Welcome to PXL Giftcard Platform. I'm here to help. How can I assist you today?"
+  starter: "Hi, I’m Sara. 👋 How can I help you with giftcards or PXL today?",
+  rising: "Hello Rising member, I’m Sara! 🌟 Great to see you. How can I help today?",
+  pro: "Welcome back, Pro member! I’m Sara 💎 How can I support you right now?",
+  pixlbeast: "Hi Pixlbeast! I’m Sara 🦁 Thanks for being with us. How may I help?",
+  pixlionaire: "Hello, esteemed Pixlionaire! I’m Sara 👑 It’s a pleasure to assist. What can I do for you?",
+  guest: "Hi! I’m Sara. 👋 Welcome to the PXL Giftcard Platform. How can I help today?"
 };
 
 const suggestedQuestions = [
@@ -107,7 +120,11 @@ export default function ChatPage() {
       setSession(newSession);
 
       // Send initial greeting
-      const greeting = tierGreetings[sessionData.userTier || "guest"];
+      // BUG FIX: 2025-01-27 - Ensure safe indexing by narrowing to known keys
+      const userTierKey = (sessionData.userTier && ["starter","rising","pro","pixlbeast","pixlionaire","guest"].includes(sessionData.userTier))
+        ? (sessionData.userTier as keyof typeof tierGreetings)
+        : "guest";
+      const greeting = tierGreetings[userTierKey];
       const greetingMessage: Partial<Message> = {
         content: greeting,
         sender: "agent",
@@ -122,13 +139,9 @@ export default function ChatPage() {
       
       setShowInitialScreen(false);
       return newSession;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error initializing chat session:", error);
-      console.error("❌ Error details:", {
-        code: error?.code,
-        message: error?.message,
-        name: error?.name
-      });
+      console.error("❌ Error details:", getErrorInfo(error));
       return null;
     }
   };
@@ -151,13 +164,9 @@ export default function ChatPage() {
       });
       console.log("🔍 Processed messages:", newMessages.length);
       setMessages(newMessages);
-    }, (error) => {
+    }, (error: unknown) => {
       console.error("❌ Error in message listener:", error);
-      console.error("❌ Error details:", {
-        code: error?.code,
-        message: error?.message,
-        name: error?.name
-      });
+      console.error("❌ Error details:", getErrorInfo(error));
     });
 
     return () => unsubscribe();
@@ -168,7 +177,8 @@ export default function ChatPage() {
     if (user && platformUser && !session) {
       initializeSession();
     }
-  }, [user, platformUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, platformUser, session]);
 
   // Send message to OpenAI and get response
   const getAIResponse = async (userMessage: string): Promise<string> => {
@@ -270,13 +280,9 @@ export default function ChatPage() {
         lastMessageAt: Timestamp.now(),
       });
       console.log("✅ Session updated");
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("❌ Error sending message:", error);
-      console.error("❌ Error details:", {
-        code: error?.code,
-        message: error?.message,
-        name: error?.name
-      });
+      console.error("❌ Error details:", getErrorInfo(error));
     } finally {
       setIsTyping(false);
     }
@@ -295,7 +301,7 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="bg-black flex overflow-hidden" style={{ height: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+    <div className="bg-black flex h-[calc(100vh-64px)] overflow-hidden">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Messages Area */}
@@ -337,8 +343,8 @@ export default function ChatPage() {
                     <div className="bg-gray-900 rounded-2xl px-4 py-3">
                       <div className="flex space-x-2">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
                       </div>
                     </div>
                   </div>
@@ -377,8 +383,9 @@ export default function ChatPage() {
                 ref={fileInputRef}
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
+                aria-label="Attach file"
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-4 border border-[#C0C0C0]">
+              <div className="relative w-full rounded-2xl px-4 py-4 border border-[#C0C0C0] bg-black/30">
               <textarea
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
@@ -389,20 +396,9 @@ export default function ChatPage() {
                   }
                 }}
                 placeholder="Send a message..."
-                className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[80px] max-h-40"
+                aria-label="Message input"
+                className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[80px] max-h-40 h-auto"
                 rows={3}
-                style={{ 
-                  height: 'auto',
-                  minHeight: '80px',
-                  outline: 'none',
-                  border: 'none',
-                  boxShadow: 'none'
-                }}
-                onInput={(e) => {
-                  const target = e.target as HTMLTextAreaElement;
-                  target.style.height = 'auto';
-                  target.style.height = Math.min(target.scrollHeight, 160) + 'px';
-                }}
               />
                 
                 {/* Buttons inside input */}
