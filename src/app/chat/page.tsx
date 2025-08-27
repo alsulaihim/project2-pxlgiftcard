@@ -288,7 +288,7 @@ export default function ChatPage() {
 
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ height: 'calc(100vh - 140px)' }}>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
           <div className="max-w-3xl mx-auto">
             {/* Initial Screen Content */}
             {showInitialScreen && !session ? (
@@ -357,8 +357,8 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Input Area - Fixed at Bottom */}
-        <div className="px-6 py-6 flex-shrink-0">
+                  {/* Input Area - Fixed at Bottom */}
+          <div className="px-6 py-3 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="relative">
               <input
@@ -367,7 +367,7 @@ export default function ChatPage() {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <div className="relative bg-gray-900 rounded-2xl px-4 py-6">
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-4">
                                      <textarea
                        value={inputMessage}
                        onChange={(e) => setInputMessage(e.target.value)}
@@ -419,7 +419,7 @@ export default function ChatPage() {
               </div>
             </div>
             
-            <div className="flex items-center justify-between mt-3">
+            <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-gray-500">
                 {user ? `Logged in as ${platformUser?.username || user.email}` : "Chatting as guest"}
               </p>
