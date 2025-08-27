@@ -286,10 +286,11 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Chat Header */}
-        <div className="bg-gray-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-4">
-            <h1 className="text-xl font-semibold text-white">PXL Support Chat</h1>
-            <span className="text-sm text-gray-400">Always here to help</span>
+            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+              <MessageSquare className="h-5 w-5 text-white" />
+            </div>
           </div>
           <button className="text-gray-400 hover:text-white">
             <MoreVertical className="h-5 w-5" />
@@ -377,28 +378,31 @@ export default function ChatPage() {
                 accept="image/*,.pdf,.doc,.docx"
               />
               <div className="relative bg-gray-900 rounded-2xl px-4 py-6">
-                <textarea
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                  placeholder="Send a message..."
-                  className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none pr-20 min-h-[48px] max-h-32"
-                  rows={2}
-                  style={{ 
-                    height: 'auto',
-                    minHeight: '48px'
-                  }}
-                  onInput={(e) => {
-                    const target = e.target as HTMLTextAreaElement;
-                    target.style.height = 'auto';
-                    target.style.height = Math.min(target.scrollHeight, 128) + 'px';
-                  }}
-                />
+                                     <textarea
+                       value={inputMessage}
+                       onChange={(e) => setInputMessage(e.target.value)}
+                       onKeyPress={(e) => {
+                         if (e.key === "Enter" && !e.shiftKey) {
+                           e.preventDefault();
+                           handleSendMessage();
+                         }
+                       }}
+                       placeholder="Send a message..."
+                       className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none focus:ring-0 focus:border-none pr-20 min-h-[48px] max-h-32"
+                       rows={2}
+                       style={{ 
+                         height: 'auto',
+                         minHeight: '48px',
+                         outline: 'none',
+                         border: 'none',
+                         boxShadow: 'none'
+                       }}
+                       onInput={(e) => {
+                         const target = e.target as HTMLTextAreaElement;
+                         target.style.height = 'auto';
+                         target.style.height = Math.min(target.scrollHeight, 128) + 'px';
+                       }}
+                     />
                 
                 {/* Buttons inside input */}
                 <div className="absolute right-3 bottom-3 flex items-center space-x-2">
