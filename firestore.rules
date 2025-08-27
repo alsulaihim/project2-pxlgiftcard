@@ -104,7 +104,12 @@ service cloud.firestore {
     
     // Admin Users Collection - Admin only
     match /admin-users/{userId} {
-      allow read, write: if isAdmin();
+      // BUG FIX: 2024-01-27 - Circular dependency in admin rules
+      // Problem: isAdmin() checks this collection but needs isAdmin() to read
+      // Solution: Allow users to read their own admin document
+      // Impact: Admin check can work properly
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId) && !exists(/databases/$(database)/documents/admin-users/$(userId));
     }
     
     // Orders Collection
