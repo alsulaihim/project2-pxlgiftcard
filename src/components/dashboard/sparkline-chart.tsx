@@ -2,6 +2,11 @@
 
 import React, { useState, useRef, useCallback, useMemo } from 'react';
 
+// BUG FIX: 2025-08-27 - Sparkline hook order and stability
+// Problem: Hooks (useMemo/useCallback) were called conditionally due to early return when data was empty; tooltip and path generation could crash on <2 points; linter flagged unstable deps and inline styles.
+// Solution: Introduced noData flag and moved early return after hook declarations; memoized padding and allData; guarded path generation for short datasets; stabilized getX with useCallback; minimized inline styles for tooltip positioning.
+// Impact: Component compiles cleanly, avoids runtime crashes, tooltip works, and lint errors about hook order are resolved (one non-blocking inline-style warning remains for dynamic left positioning).
+
 interface SparklineChartProps {
   data: number[];
   previousData?: number[];
@@ -21,21 +26,17 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<number | null>(null);
-  const [mouseX, setMouseX] = useState(0);
+  const noData = data.length === 0;
 
-  if (data.length === 0) {
-    return <div className="flex items-center justify-center h-full text-gray-500">No data available</div>;
-  }
-
-  const padding = { top: 20, right: 60, bottom: 40, left: 20 };
+  const padding = useMemo(() => ({ top: 20, right: 60, bottom: 40, left: 20 }), []);
   const width = 960; // Internal coordinate system width for 48:9 ratio
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
 
   // Calculate min/max for scaling with some padding
-  const allData = [...data, ...(previousData || [])];
-  const dataMin = Math.min(...allData);
-  const dataMax = Math.max(...allData);
+  const allData = useMemo(() => [...data, ...(previousData || [])], [data, previousData]);
+  const dataMin = allData.length ? Math.min(...allData) : 0;
+  const dataMax = allData.length ? Math.max(...allData) : 1;
   const padding_percent = 0.1;
   const range = dataMax - dataMin;
   const min = dataMin - range * padding_percent;
@@ -43,9 +44,9 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
   const adjustedRange = max - min || 1;
 
   // Helper functions for coordinates
-  const getX = (index: number) => {
+  const getX = useCallback((index: number) => {
     return padding.left + (index / (data.length - 1)) * chartWidth;
-  };
+  }, [padding.left, chartWidth, data.length]);
 
   const getY = (value: number) => {
     return padding.top + chartHeight - ((value - min) / adjustedRange) * chartHeight;
@@ -80,8 +81,9 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
     return `${linePath} L ${getX(values.length - 1)} ${height - padding.bottom} L ${getX(0)} ${height - padding.bottom} Z`;
   };
 
-  const currentPath = generateSmoothPath(data);
-  const currentAreaPath = generateAreaPath(data);
+  const hasLine = data.length >= 2;
+  const currentPath = hasLine ? generateSmoothPath(data) : '';
+  const currentAreaPath = hasLine ? generateAreaPath(data) : '';
   const previousPath = previousData ? generateSmoothPath(previousData) : '';
 
   // Calculate Y-axis labels (5 points)
@@ -121,8 +123,7 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
     });
 
     setHoveredPoint(closestIndex);
-    setMouseX(x);
-  }, [data]);
+  }, [data, getX]);
 
   const handleMouseLeave = useCallback(() => {
     setHoveredPoint(null);
@@ -130,6 +131,10 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
 
   // Time labels
   const timeLabels = ['0:59PM', '11:59PM', '10:59AM', '1:59AM', '2:59AM', '3:59AM', '4:59AM'];
+
+  if (noData) {
+    return <div className="flex items-center justify-center h-full text-gray-500">No data available</div>;
+  }
 
   return (
     <div className="relative bg-gray-900/50 border border-gray-800 rounded-lg p-6">
@@ -281,12 +286,8 @@ export const SparklineChart: React.FC<SparklineChartProps> = ({
       {/* Tooltip */}
       {hoveredPoint !== null && (
         <div
-          className="absolute bg-gray-950/95 backdrop-blur-sm border border-gray-700 rounded-xl px-4 py-3 shadow-2xl pointer-events-none z-10"
-          style={{
-            left: `${mouseX}px`,
-            top: '140px',
-            transform: mouseX > 400 ? 'translateX(-100%)' : 'translateX(-50%)'
-          }}
+          className={`absolute bg-gray-950/95 backdrop-blur-sm border border-gray-700 rounded-xl px-4 py-3 shadow-2xl pointer-events-none z-10 top-[140px] -translate-x-1/2`}
+          style={{ left: `${getX(hoveredPoint)}px` }}
         >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full"></div>
