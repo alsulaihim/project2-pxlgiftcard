@@ -241,6 +241,7 @@ export default function UserManagementPage() {
             value={filterTier}
             onChange={(e) => setFilterTier(e.target.value)}
             className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-600"
+            aria-label="Filter by tier"
           >
             <option value="all">All Tiers</option>
             <option value="starter">Starter</option>
@@ -255,6 +256,7 @@ export default function UserManagementPage() {
             value={filterKYC}
             onChange={(e) => setFilterKYC(e.target.value)}
             className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-600"
+            aria-label="Filter by KYC status"
           >
             <option value="all">All KYC Status</option>
             <option value="verified">Verified</option>
@@ -336,6 +338,7 @@ export default function UserManagementPage() {
                     <button
                       onClick={() => setShowActionMenu(showActionMenu === user.id ? null : user.id)}
                       className="text-gray-400 hover:text-white"
+                      aria-label="User actions menu"
                     >
                       <MoreVertical className="h-5 w-5" />
                     </button>
@@ -407,6 +410,7 @@ export default function UserManagementPage() {
               <button
                 onClick={() => setSelectedUser(null)}
                 className="text-gray-400 hover:text-white"
+                aria-label="Close user details"
               >
                 <XCircle className="h-6 w-6" />
               </button>

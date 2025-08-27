@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import { 
   TrendingUp, 
-  Settings, 
   Save, 
   RefreshCw,
   AlertTriangle,
@@ -12,9 +11,9 @@ import {
   Percent,
   Users
 } from "lucide-react";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 import { db } from "@/lib/firebase-config";
-import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { formatPXL } from "@/lib/pxl-currency";
 
 interface TierConfig {
@@ -32,7 +31,7 @@ interface TierConfigs {
 }
 
 export default function PXLConfigPage() {
-  const { currencyData, loading: rateLoading, refreshCurrencyData } = usePXLCurrency();
+  const { currencyData, loading: rateLoading } = usePXLCurrency();
   const [exchangeRate, setExchangeRate] = useState(100);
   const [tierConfigs, setTierConfigs] = useState<TierConfigs>({
     starter: { threshold: 0, discountPercentage: 0, cashbackPercentage: 0 },
@@ -100,8 +99,7 @@ export default function PXLConfigPage() {
         lastUpdated: Timestamp.now(),
       });
       
-      await refreshCurrencyData();
-      alert('Exchange rate updated successfully!');
+      alert('Exchange rate updated successfully! Changes will reflect shortly.');
     } catch (error) {
       console.error('Error updating exchange rate:', error);
       alert('Failed to update exchange rate');
@@ -145,8 +143,7 @@ export default function PXLConfigPage() {
         lastUpdated: Timestamp.now(),
       });
       
-      await refreshCurrencyData();
-      alert('Tier configurations updated successfully!');
+      alert('Tier configurations updated successfully! Changes will reflect shortly.');
     } catch (error) {
       console.error('Error updating tier configs:', error);
       alert('Failed to update tier configurations');
@@ -216,6 +213,7 @@ export default function PXLConfigPage() {
                     className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-600"
                     min="1"
                     step="0.1"
+                    aria-label="Exchange rate value"
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-1">1 USD = {exchangeRate} PXL</p>
@@ -269,6 +267,7 @@ export default function PXLConfigPage() {
                 value={simulatedRate}
                 onChange={(e) => setSimulatedRate(Number(e.target.value))}
                 className="w-full"
+                aria-label="Simulated exchange rate"
               />
               <div className="flex justify-between text-sm">
                 <span className="text-gray-400">Simulated Rate: 1 USD = {simulatedRate} PXL</span>
@@ -326,6 +325,7 @@ export default function PXLConfigPage() {
                       className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-gray-600"
                       min="0"
                       disabled={tier === 'starter'}
+                      aria-label={`${tier} tier balance threshold`}
                     />
                     <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-500">PXL</span>
                   </div>
@@ -348,6 +348,7 @@ export default function PXLConfigPage() {
                       min="0"
                       max="100"
                       step="0.1"
+                      aria-label={`${tier} tier discount percentage`}
                     />
                     <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
                   </div>
@@ -370,6 +371,7 @@ export default function PXLConfigPage() {
                       min="0"
                       max="100"
                       step="0.1"
+                      aria-label={`${tier} tier cashback percentage`}
                     />
                     <Percent className="absolute right-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-gray-500" />
                   </div>
