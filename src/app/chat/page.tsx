@@ -227,9 +227,9 @@ export default function ChatPage() {
   return (
     <div className="flex h-screen bg-black overflow-hidden">
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col min-h-0">
+      <div className="flex-1 flex flex-col">
         {/* Chat Header */}
-        <div className="bg-gray-900 border-b border-gray-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
+        <div className="bg-gray-900 px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center space-x-4">
             <h1 className="text-xl font-semibold text-white">PXL Support Chat</h1>
             <span className="text-sm text-gray-400">Always here to help</span>
@@ -239,68 +239,78 @@ export default function ChatPage() {
           </button>
         </div>
 
-        {/* Messages Area or Initial Screen */}
-        {showInitialScreen && !session ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 min-h-0">
-            <h2 className="text-3xl font-bold text-white mb-2">Hello there!</h2>
-            <p className="text-gray-400 mb-8">How can I help you today?</p>
-            
-            <div className="grid grid-cols-2 gap-4 max-w-2xl w-full mb-8">
-              {suggestedQuestions.map((question, index) => (
-                <button
-                  key={index}
-                  onClick={() => handleSendMessage(question)}
-                  className="bg-gray-900 hover:bg-gray-800 border border-gray-700 rounded-lg p-4 text-left transition-colors"
-                >
-                  <p className="text-sm text-gray-300">{question}</p>
-                </button>
-              ))}
-            </div>
+        {/* Messages Area */}
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ height: 'calc(100vh - 64px - 140px)' }}>
+          <div className="max-w-3xl mx-auto">
+            {/* Initial Screen Content */}
+            {showInitialScreen && !session ? (
+              <div className="flex flex-col items-center justify-center h-full">
+                <h2 className="text-3xl font-bold text-white mb-2">Hello there!</h2>
+                <p className="text-gray-400 mb-8">How can I help you today?</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className={`max-w-[70%] ${message.sender === "user" ? "order-2" : ""}`}>
+                      <div
+                        className={`rounded-2xl px-4 py-3 ${
+                          message.sender === "user"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-900 text-gray-100"
+                        }`}
+                      >
+                        <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      </div>
+                      <p className={`text-xs text-gray-500 mt-1 px-2 ${
+                        message.sender === "user" ? "text-right" : "text-left"
+                      }`}>
+                        {formatTime(message.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-900 rounded-2xl px-4 py-3">
+                      <div className="flex space-x-2">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-            <div className="max-w-3xl mx-auto space-y-4">
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <div className={`max-w-[70%] ${message.sender === "user" ? "order-2" : ""}`}>
-                    <div
-                      className={`rounded-2xl px-4 py-3 ${
-                        message.sender === "user"
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-900 text-gray-100 border border-gray-800"
-                      }`}
-                    >
-                      <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                    </div>
-                    <p className={`text-xs text-gray-500 mt-1 px-2 ${
-                      message.sender === "user" ? "text-right" : "text-left"
-                    }`}>
-                      {formatTime(message.timestamp)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-900 border border-gray-800 rounded-2xl px-4 py-3">
-                    <div className="flex space-x-2">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
-                    </div>
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
+        </div>
+
+        {/* Suggested Questions - Above Input */}
+        {showInitialScreen && !session && (
+          <div className="px-6 pb-4 flex-shrink-0">
+            <div className="max-w-3xl mx-auto">
+              <div className="grid grid-cols-2 gap-4">
+                {suggestedQuestions.map((question, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSendMessage(question)}
+                    className="bg-gray-900 hover:bg-gray-800 rounded-lg p-4 text-left transition-colors"
+                  >
+                    <p className="text-sm text-gray-300">{question}</p>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Input Area */}
-        <div className="border-t border-gray-800 px-6 py-6 flex-shrink-0">
+        {/* Input Area - Fixed at Bottom */}
+        <div className="px-6 py-6 flex-shrink-0">
           <div className="max-w-3xl mx-auto">
             <div className="relative">
               <input
@@ -309,7 +319,7 @@ export default function ChatPage() {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx"
               />
-              <div className="relative bg-gray-900 border border-gray-700 rounded-2xl px-4 py-4 focus-within:border-gray-600 transition-colors">
+              <div className="relative bg-gray-900 rounded-2xl px-4 py-6">
                 <textarea
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
@@ -320,11 +330,11 @@ export default function ChatPage() {
                     }
                   }}
                   placeholder="Send a message..."
-                  className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none pr-20 min-h-[24px] max-h-32"
-                  rows={1}
+                  className="w-full bg-transparent text-white placeholder-gray-400 resize-none focus:outline-none pr-20 min-h-[48px] max-h-32"
+                  rows={2}
                   style={{ 
                     height: 'auto',
-                    minHeight: '24px'
+                    minHeight: '48px'
                   }}
                   onInput={(e) => {
                     const target = e.target as HTMLTextAreaElement;
@@ -334,7 +344,7 @@ export default function ChatPage() {
                 />
                 
                 {/* Buttons inside input */}
-                <div className="absolute right-2 bottom-2 flex items-center space-x-2">
+                <div className="absolute right-3 bottom-3 flex items-center space-x-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     className="p-2 text-gray-400 hover:text-white transition-colors rounded-lg hover:bg-gray-800"
@@ -371,7 +381,7 @@ export default function ChatPage() {
       </div>
 
       {/* Right Sidebar - Chat Info */}
-      <div className="w-80 bg-gray-900 border-l border-gray-800 p-6 hidden lg:block overflow-y-auto">
+      <div className="w-80 bg-gray-900 p-6 hidden lg:block overflow-y-auto">
         <div className="space-y-6">
           {/* User Info */}
           {user && platformUser && (
