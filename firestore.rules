@@ -126,5 +126,11 @@ service cloud.firestore {
       allow update: if false; // Orders should not be updated by users
       allow delete: if false; // Orders should not be deleted by users
     }
+    
+    // Suppliers Collection - Admin only
+    match /suppliers/{supplierId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }

@@ -2,8 +2,17 @@
 "use client";
 
 import { useAuth } from "@/contexts/auth-context";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
+import Link from "next/link";
+import { LayoutDashboard, Users, TrendingUp, Package, Shield, Settings } from "lucide-react";
+
+const navigation = [
+  { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+  { name: 'Users', href: '/admin/users', icon: Users },
+  { name: 'PXL Config', href: '/admin/pxl-config', icon: TrendingUp },
+  { name: 'Suppliers', href: '/admin/suppliers', icon: Package },
+];
 
 export default function AdminLayout({
   children,
@@ -12,6 +21,7 @@ export default function AdminLayout({
 }) {
   const { user, platformUser, isAdmin, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Redirect non-admin users
@@ -48,10 +58,36 @@ export default function AdminLayout({
           </div>
         </div>
       </div>
-      
-      {/* Admin Content */}
-      <div className="mx-auto max-w-7xl px-6 py-8">
-        {children}
+
+      <div className="flex">
+        {/* Sidebar Navigation */}
+        <nav className="w-64 bg-gray-950 border-r border-gray-900 min-h-[calc(100vh-65px)]">
+          <div className="p-4 space-y-2">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-gray-800 text-white'
+                      : 'text-gray-400 hover:bg-gray-900 hover:text-white'
+                  }`}
+                >
+                  <item.icon className="h-5 w-5 mr-3" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+        {/* Admin Content */}
+        <div className="flex-1">
+          <div className="mx-auto max-w-7xl px-6 py-8">
+            {children}
+          </div>
+        </div>
       </div>
     </div>
   );
