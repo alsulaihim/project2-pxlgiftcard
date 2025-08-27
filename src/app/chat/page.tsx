@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, MoreVertical, Search, Plus } from "lucide-react";
+import { Send, Paperclip, MoreVertical, Search, Plus, MessageSquare } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase-config";
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
