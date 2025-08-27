@@ -20,6 +20,7 @@ import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 import { formatPXL } from "@/lib/pxl-currency";
 import { db } from "@/lib/firebase-config";
 import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
+import { FullPageLoader } from '@/components/ui/loader';
 
 interface DashboardMetrics {
   totalUsers: number;
@@ -179,13 +180,7 @@ export default function AdminDashboardPage() {
     }
   ];
 
-  if (loading || rateLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
-      </div>
-    );
-  }
+  if (loading || rateLoading) return <FullPageLoader label="Loading admin dashboard" />;
 
   const currentRate = currencyData?.currentRate || 100;
 

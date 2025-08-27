@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ValidatedInput } from '@/components/ui/validated-input';
 import { ProfilePictureUpload } from '@/components/ui/profile-picture-upload';
+import { FullPageLoader } from '@/components/ui/loader';
 import { User, Mail, Phone, MapPin, Calendar, Shield, Save, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { COUNTRIES, getCountriesSorted } from '@/data/countries-regions';
@@ -38,16 +39,7 @@ export default function ProfilePage() {
 
   // Show loading if not authenticated
   // Show loading while auth is initializing
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <FullPageLoader label="Loading profile" />;
 
   // Redirect to sign in if not authenticated
   if (!user) {
@@ -70,16 +62,7 @@ export default function ProfilePage() {
   }
 
   // Show loading if user is authenticated but platform user data is still loading
-  if (!platformUser) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-white text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-gray-400">Loading user data...</p>
-        </div>
-      </div>
-    );
-  }
+  if (!platformUser) return <FullPageLoader label="Loading user data" />;
 
   const handleSave = async () => {
     if (!user || !platformUser) return;

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
+import { LoadingDots } from "@/components/ui/loader";
 import { logAdminAction, AdminActionTypes } from "@/lib/admin-logging";
 import { db } from "@/lib/firebase-config";
 import { formatPXL } from "@/lib/pxl-currency";
@@ -191,7 +192,7 @@ export default function PXLConfigPage() {
   if (rateLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
+        <LoadingDots label="Loading PXL configuration" />
       </div>
     );
   }

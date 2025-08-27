@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Button } from "@/components/ui/button";
+import { LoadingDots } from "@/components/ui/loader";
 import { 
   ArrowUpRight, 
   ArrowDownLeft, 
@@ -231,12 +232,7 @@ export function TransactionHistory() {
       <section className="rounded-xl border border-gray-800 bg-gray-950 p-4">
         <div className="mb-4">
           <h2 className="text-lg font-bold text-white">Transaction History</h2>
-          <p className="text-gray-400">Loading transactions...</p>
-        </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-16 bg-gray-800 rounded-lg animate-pulse" />
-          ))}
+          <LoadingDots label="Loading transactions" />
         </div>
       </section>
     );

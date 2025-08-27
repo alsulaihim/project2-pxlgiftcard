@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { LoadingDots } from '@/components/ui/loader';
 import { formatBalance } from '@/lib/validation';
 import { formatPXL, formatUSD } from '@/lib/pxl-currency';
 import { 
@@ -169,8 +170,7 @@ export function OrderHistory() {
       <div className="space-y-4">
         {loading ? (
           <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto"></div>
-            <p className="text-gray-400 mt-4">Loading your orders...</p>
+            <LoadingDots label="Loading your orders" />
           </div>
         ) : filteredOrders.length === 0 ? (
           <div className="text-center py-12">

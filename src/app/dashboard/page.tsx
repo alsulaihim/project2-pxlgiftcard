@@ -21,6 +21,7 @@ import {
 import { useEffect, useState, useMemo } from 'react';
 import { PXLRateChart } from '@/components/dashboard/pxl-rate-chart';
 import { TierProgressCard } from '@/components/dashboard/tier-progress-card';
+import { FullPageLoader } from '@/components/ui/loader';
 
 // Mock data for user's previously ordered giftcards
 const previousOrders = [
@@ -108,13 +109,7 @@ export default function DashboardPage() {
     }
   }, [loading, user]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="animate-pulse text-gray-400">Loading...</div>
-      </div>
-    );
-  }
+  if (loading) return <FullPageLoader label="Loading dashboard" />;
 
   if (!user || !platformUser) {
     return null;
