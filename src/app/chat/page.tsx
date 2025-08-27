@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Send, Paperclip, MoreVertical, Search, Plus, MessageSquare } from "lucide-react";
+import { Send, Paperclip, Search, Plus } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase-config";
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
@@ -285,20 +285,10 @@ export default function ChatPage() {
     <div className="flex h-screen bg-black overflow-hidden">
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Chat Header */}
-        <div className="px-6 py-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center space-x-4">
-            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-white" />
-            </div>
-          </div>
-          <button className="text-gray-400 hover:text-white">
-            <MoreVertical className="h-5 w-5" />
-          </button>
-        </div>
+
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ height: 'calc(100vh - 64px - 140px)' }}>
+        <div className="flex-1 overflow-y-auto px-6 py-4" style={{ height: 'calc(100vh - 140px)' }}>
           <div className="max-w-3xl mx-auto">
             {/* Initial Screen Content */}
             {showInitialScreen && !session ? (
