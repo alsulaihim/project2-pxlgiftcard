@@ -43,9 +43,9 @@ interface ChatSession {
 const tierGreetings = {
   starter: "Hi, I’m Sara. 👋 How can I help you with giftcards or PXL today?",
   rising: "Hello Rising member, I’m Sara! 🌟 Great to see you. How can I help today?",
-  pro: "Welcome back, Pro member! I’m Sara 💎 How can I support you right now?",
-  pixlbeast: "Hi Pixlbeast! I’m Sara 🦁 Thanks for being with us. How may I help?",
-  pixlionaire: "Hello, esteemed Pixlionaire! I’m Sara 👑 It’s a pleasure to assist. What can I do for you?",
+  pro: "Welcome back, Pro member! I’m Sara 💎 I’ve got you—what would you like to do next?",
+  pixlbeast: "Hi Pixlbeast! I’m Sara 🦁 Your perks are ready—how can I make things easier today?",
+  pixlionaire: "Hello, esteemed Pixlionaire! I’m Sara 👑 Consider me your VIP concierge. What can I arrange for you?",
   guest: "Hi! I’m Sara. 👋 Welcome to the PXL Giftcard Platform. How can I help today?"
 };
 
