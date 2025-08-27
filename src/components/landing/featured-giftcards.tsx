@@ -126,25 +126,21 @@ export function FeaturedGiftcards() {
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         {/* Section Header */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-2xl font-bold text-white">
-            Featured Products
-          </h2>
-          <button className="text-sm text-gray-400 hover:text-white flex items-center">
-            View all →
-          </button>
+          <h2 className="text-2xl font-semibold text-white">Featured Products</h2>
+          <button className="text-sm text-gray-400 hover:text-white transition-colors">View all →</button>
         </div>
 
-        {/* Gift Cards Grid - 2 rows of 4 */}
+        {/* Gift Cards Grid - 2 rows of 4 (maintain size) */}
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:gap-6">
           {featuredCards.map((card) => (
             <div
               key={card.id}
-              className="group relative overflow-hidden rounded-lg bg-gray-900 border border-gray-800 transition-all hover:border-gray-700"
+              className="group relative overflow-hidden rounded-xl bg-[#111111] border border-[#262626] transition-colors hover:bg-[#1a1a1a] hover:border-[#333333]"
             >
-              {/* Brand Logo Header */}
-              <div className="bg-gray-800 px-4 py-3 border-b border-gray-700">
-                <div className="flex items-center space-x-2">
-                  <div className={`flex h-6 w-6 items-center justify-center rounded ${card.bgColor} text-white font-bold text-sm`}>
+              {/* Brand Bar */}
+              <div className="px-4 py-3 border-b border-[#262626] bg-[#0a0a0a]">
+                <div className="flex items-center gap-2">
+                  <div className={`flex h-6 w-6 items-center justify-center rounded ${card.bgColor} text-white font-semibold text-sm`} aria-label={`${card.brand} badge`}>
                     {card.logo}
                   </div>
                   <span className="text-xs text-gray-400">{card.brand}</span>
@@ -159,41 +155,42 @@ export function FeaturedGiftcards() {
                 </h3>
 
                 {/* Pricing */}
-                <div className="space-y-1 mb-3">
-                  <div className="text-lg font-bold text-white">
-                    ${card.usdPrice.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-gray-400">
-                    PXL {card.pxlPrice.toFixed(2)}
+                <div className="space-y-2 mb-4">
+                  <div className="inline-flex items-center gap-2">
+                    <span className="text-lg font-semibold text-white tracking-[-0.01em]">${card.usdPrice.toFixed(2)}</span>
+                    <span className="inline-flex items-center rounded-md border border-[#333333] px-2 py-0.5 text-[11px] text-gray-300 bg-transparent">PXL {card.pxlPrice.toFixed(0)}</span>
                   </div>
                 </div>
 
                 {/* Stock Status */}
                 <div className="flex items-center">
                   {card.inStock ? (
-                    <div className="flex items-center text-xs text-success">
-                      <div className="mr-1 h-2 w-2 rounded-full bg-success"></div>
+                    <div className="flex items-center text-xs text-green-400">
+                      <div className="mr-2 h-2 w-2 rounded-full bg-green-500"></div>
                       In Stock
                     </div>
                   ) : (
                     <div className="flex items-center text-xs text-gray-500">
-                      <div className="mr-1 h-2 w-2 rounded-full bg-gray-500"></div>
+                      <div className="mr-2 h-2 w-2 rounded-full bg-gray-500"></div>
                       Out of Stock
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Hover overlay */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 transition-opacity group-hover:opacity-100">
-                <Button 
-                  size="sm" 
-                  className="bg-white text-black hover:bg-gray-200"
-                  disabled={!card.inStock}
-                  onClick={() => handleAddToCart(card)}
-                >
-                  {card.inStock ? "Add to Cart" : "Notify Me"}
-                </Button>
+              {/* Bottom Action Bar (visible on hover / always on mobile) */}
+              <div className="absolute inset-x-0 bottom-0 p-3 translate-y-6 opacity-0 transition-all group-hover:translate-y-0 group-hover:opacity-100 sm:opacity-100 sm:translate-y-0">
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    className="bg-[#0070f3] text-white hover:bg-[#0059c9]"
+                    disabled={!card.inStock}
+                    onClick={() => handleAddToCart(card)}
+                    aria-label={card.inStock ? `Add ${card.productName} to cart` : `Notify me ${card.productName}`}
+                  >
+                    {card.inStock ? "Add to Cart" : "Notify Me"}
+                  </Button>
+                </div>
               </div>
             </div>
           ))}
