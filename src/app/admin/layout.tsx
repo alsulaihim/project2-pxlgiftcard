@@ -13,6 +13,7 @@ const navigation = [
   { name: 'PXL Config', href: '/admin/pxl-config', icon: TrendingUp },
   { name: 'Suppliers', href: '/admin/suppliers', icon: Package },
   { name: 'Security', href: '/admin/security', icon: Shield },
+  { name: 'Settings', href: '/admin/settings', icon: Settings },
 ];
 
 export default function AdminLayout({
