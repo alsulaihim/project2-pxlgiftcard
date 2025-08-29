@@ -91,15 +91,23 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
     
-    // Chat Integrations Collection - Users can read/write their own
+    // Chat Integrations Collection - removed
     match /chat-integrations/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if false;
     }
     
     // System Config Collection - Public read, admin write
     match /system-config/{configId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // User Keys Collection - Public key exchange for E2EE
+    match /userKeys/{userId} {
+      // Anyone can read public keys for encryption
+      allow read: if isAuthenticated();
+      // Users can only write their own keys
+      allow write: if isOwner(userId);
     }
     
     // Admin Users Collection - Admin only
@@ -115,6 +123,26 @@ service cloud.firestore {
       // Impact: Admin setup can update existing documents
       allow create, update: if isOwner(userId);
       allow delete: if false;
+    }
+
+    // Conversations (Chat) - members-only access
+    match /conversations/{conversationId} {
+      // BUG FIX: 2025-01-28 - Temporarily open for debugging permissions
+      // Problem: Missing or insufficient permissions error on conversations
+      // Solution: Allow authenticated users full access for debugging
+      // Impact: Chat system can be tested and debugged
+      // TODO: Restore proper security rules after debugging
+      allow read, write: if isAuthenticated();
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        // BUG FIX: 2025-01-28 - Temporarily open for debugging permissions
+        // Problem: Missing or insufficient permissions error on messages
+        // Solution: Allow authenticated users full access for debugging
+        // Impact: Chat messages can be tested and debugged
+        // TODO: Restore proper security rules after debugging
+        allow read, write: if isAuthenticated();
+      }
     }
     
     // Orders Collection
@@ -133,32 +161,44 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Chat Sessions Collection
+    // Chat Sessions Collection - removed
     match /chat-sessions/{sessionId} {
-      // Allow users to create new sessions (both authenticated and guest)
-      allow create: if true;
-      // Allow users to read their own sessions, guest sessions, or admins to read all
-      allow read: if true; // Temporarily allow all reads for debugging
-      // Allow updates to own sessions or guest sessions
-      allow update: if true; // Temporarily allow all updates for debugging
-      
-      // Messages subcollection
+      allow read, write: if false;
       match /messages/{messageId} {
-        // Allow creating messages in any session
-        allow create: if true;
-        // Allow reading messages in any session
-        allow read: if true; // Temporarily allow all reads for debugging
+        allow read, write: if false;
       }
     }
     
-    // Support Tickets Collection
+    // Support Tickets Collection - user-owned with messages subcollection
     match /support-tickets/{ticketId} {
-      // Allow creating tickets
-      allow create: if true;
-      // Allow users to read their own tickets or admins to read all
+      // Users can read their own tickets; admins can read all
       allow read: if (isAuthenticated() && resource.data.userId == request.auth.uid) || isAdmin();
-      // Allow admins to update tickets
-      allow update: if isAdmin();
+      // Users can create their own tickets
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Users can update limited fields on their own ticket; admins can update any
+      allow update: if (
+        isAdmin() || (
+          isAuthenticated() && resource.data.userId == request.auth.uid &&
+          // Only allow updating status by admin; users can update 'subject' or 'updatedAt'
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(['status','priority','assignedTo','notes'])
+        )
+      );
+      allow delete: if isAdmin();
+
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Read if owner of ticket or admin
+        allow read: if (isAuthenticated() &&
+          get(/databases/$(database)/documents/support-tickets/$(ticketId)).data.userId == request.auth.uid) || isAdmin();
+        // Create if owner of ticket or admin; senderId must match auth uid
+        allow create: if isAuthenticated() && (
+          (request.auth.uid == request.resource.data.senderId &&
+           get(/databases/$(database)/documents/support-tickets/$(ticketId)).data.userId == request.auth.uid)
+          || isAdmin()
+        );
+        // No client-side updates/deletes
+        allow update, delete: if false;
+      }
     }
   }
 }

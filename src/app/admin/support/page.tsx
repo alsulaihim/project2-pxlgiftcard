@@ -155,9 +155,7 @@ export default function SupportTicketsPage() {
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-white mb-2">Support Tickets</h2>
-        <p className="text-gray-400">
-          Manage customer support tickets and chat sessions
-        </p>
+        <p className="text-gray-400">Support tickets</p>
       </div>
 
       {/* Filters and Search */}
@@ -259,7 +257,7 @@ export default function SupportTicketsPage() {
                         <div className="text-xs text-gray-400">
                           {ticket.userEmail}
                         </div>
-                        <div className={`text-xs font-medium ${tierColors[ticket.userTier]}`}>
+                        <div className={`text-xs font-medium ${tierColors[ticket.userTier as keyof typeof tierColors]}`}>
                           {ticket.userTier.charAt(0).toUpperCase() + ticket.userTier.slice(1)}
                         </div>
                       </div>
@@ -363,7 +361,7 @@ export default function SupportTicketsPage() {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Tier:</span>
-                      <span className={tierColors[selectedTicket.userTier]}>
+                      <span className={tierColors[selectedTicket.userTier as keyof typeof tierColors]}>
                         {selectedTicket.userTier.charAt(0).toUpperCase() + selectedTicket.userTier.slice(1)}
                       </span>
                     </div>
@@ -378,33 +376,7 @@ export default function SupportTicketsPage() {
                   </div>
                 </div>
 
-                {/* Chat History */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-400 mb-2">Chat History</h4>
-                  <div className="bg-gray-800 rounded-lg p-4 space-y-3 max-h-64 overflow-y-auto">
-                    {selectedTicket.messages.map((message, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${
-                          message.sender === "user" ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <div
-                          className={`max-w-[80%] p-3 rounded-lg ${
-                            message.sender === "user"
-                              ? "bg-blue-600 text-white"
-                              : "bg-gray-700 text-gray-200"
-                          }`}
-                        >
-                          <p className="text-sm">{message.content}</p>
-                          <p className="text-xs opacity-70 mt-1">
-                            {formatDistanceToNow(message.timestamp.toDate(), { addSuffix: true })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {/* Chat History removed */}
               </div>
             </div>
 
@@ -417,15 +389,7 @@ export default function SupportTicketsPage() {
                 >
                   Close
                 </button>
-                <button
-                  onClick={() => {
-                    // In a real app, this would open a chat interface
-                    alert("Opening chat interface...");
-                  }}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                >
-                  Reply to User
-                </button>
+                {/* Reply removed with chat system */}
               </div>
             </div>
           </div>

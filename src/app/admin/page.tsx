@@ -270,14 +270,27 @@ export default function AdminDashboardPage() {
                 <div className="flex items-center space-x-4">
                   <div className="w-32 bg-gray-800 rounded-full h-2">
                     <div 
-                      className={`h-2 rounded-full ${
+                      className={`h-2 rounded-full transition-all duration-300 ${
                         tier === 'starter' ? 'bg-gray-400' :
                         tier === 'rising' ? 'bg-blue-400' :
                         tier === 'pro' ? 'bg-green-400' :
                         tier === 'pixlbeast' ? 'bg-amber-400' :
                         'bg-purple-400'
+                      } ${
+                        percentage === 0 ? 'w-0' :
+                        percentage <= 10 ? 'w-1/12' :
+                        percentage <= 20 ? 'w-1/6' :
+                        percentage <= 25 ? 'w-1/4' :
+                        percentage <= 33 ? 'w-1/3' :
+                        percentage <= 40 ? 'w-2/5' :
+                        percentage <= 50 ? 'w-1/2' :
+                        percentage <= 60 ? 'w-3/5' :
+                        percentage <= 66 ? 'w-2/3' :
+                        percentage <= 75 ? 'w-3/4' :
+                        percentage <= 80 ? 'w-4/5' :
+                        percentage <= 90 ? 'w-11/12' :
+                        'w-full'
                       }`}
-                      style={{ width: `${percentage}%` }}
                     />
                   </div>
                   <span className="text-sm text-gray-400 w-16 text-right">{count} users</span>

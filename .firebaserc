@@ -1,5 +1,7 @@
 {
-  "projects": {},
+  "projects": {
+    "default": "pxl-perfect-1"
+  },
   "targets": {},
   "etags": {}
 }

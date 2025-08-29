@@ -16,7 +16,7 @@ export function Footer() {
         { href: "/marketplace", label: "Marketplace" },
         { href: "/pxl", label: "PXL Currency" },
         { href: "/tiers", label: "Tier System" },
-        { href: "/chat", label: "Community" },
+        // Chat temporarily removed
       ],
     },
     {

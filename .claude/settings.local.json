@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl:*)",
+      "WebSearch",
+      "mcp__ide__getDiagnostics",
+      "Bash(pkill:*)",
+      "Bash(chmod:*)",
+      "Bash(./start-chat-server.sh:*)",
+      "Bash(node:*)",
+      "Bash(npm run dev:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

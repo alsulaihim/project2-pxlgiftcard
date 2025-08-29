@@ -1,0 +1,1298 @@
+---
+alwaysApply: true
+---
+
+# Gift Card + PXL Platform Chat System Architecture
+
+## Introduction
+
+This document outlines the complete chat system architecture for the Gift Card + PXL Platform, designed to integrate seamlessly with the existing Next.js frontend and Firebase backend infrastructure. This chat module adds WhatsApp-class peer-to-peer messaging with end-to-end encryption, real-time delivery, and deep integration with the platform's tier system and PXL currency.
+
+The chat system is architected as a modular addition to the existing platform, requiring no changes to current authentication, user management, or tier systems. It leverages Firebase's real-time capabilities while adding Socket.io for enhanced WebSocket performance and implements simplified but secure E2EE using TweetNaCl.
+
+### Existing Infrastructure Context
+
+Based on the current implementation:
+- **Frontend:** Next.js 14 with App Router
+- **Authentication:** Firebase Auth with social logins
+- **Database:** Firestore for all application data
+- **Storage:** Firebase Storage for media files
+- **Functions:** Firebase Cloud Functions for business logic
+- **Users:** Complete tier system (Starter → Pixlionaire)
+- **PXL:** Currency system fully operational
+
+### Change Log
+
+| Date | Version | Description | Author |
+|------|---------|-------------|---------|
+| 2025-01-28 | 1.0 | Initial chat system architecture | Winston (Architect) |
+
+## High Level Architecture
+
+### Technical Summary
+
+The chat system employs a **hybrid Firebase + Socket.io architecture** leveraging Firebase Firestore for message persistence and user presence, Socket.io on Cloud Run for real-time WebSocket connections with automatic fallback, TweetNaCl.js for simplified but secure end-to-end encryption, and Firebase Storage for encrypted media sharing. The system integrates natively with existing Firebase Authentication using custom tokens for Socket.io authentication, maintains tier visibility through profile badges in chat UI, and achieves sub-200ms message delivery through optimized WebSocket transport while maintaining full E2EE security.
+
+### Platform and Infrastructure Choice
+
+**Platform:** Firebase + Google Cloud Run
+**Key Services:** Firestore, Firebase Auth, Cloud Run (Socket.io), Firebase Storage, Firebase Realtime Database (presence)
+**Deployment Regions:** us-central1 (primary), with CDN edge caching globally
+
+### Architecture Diagram
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        UI[Next.js Chat UI]
+        Crypto[TweetNaCl Encryption]
+        Socket[Socket.io Client]
+        IDB[IndexedDB Keys]
+    end
+    
+    subgraph "Transport Layer"
+        WS[Socket.io Server<br/>Cloud Run]
+        FB_RT[Firebase Realtime DB<br/>Presence/Typing]
+    end
+    
+    subgraph "Data Layer"
+        FS[Firestore<br/>Messages]
+        Storage[Firebase Storage<br/>Encrypted Media]
+        Auth[Firebase Auth<br/>Existing Users]
+    end
+    
+    UI --> Crypto
+    Crypto --> Socket
+    Socket --> WS
+    WS --> FB_RT
+    WS --> FS
+    Crypto --> Storage
+    Socket --> Auth
+    IDB --> Crypto
+```
+
+### Architectural Patterns
+
+- **Hybrid Real-time Pattern:** Socket.io for transport, Firestore for persistence - *Rationale:* Combines WebSocket performance with Firebase reliability
+- **Client-side Encryption Pattern:** All encryption/decryption in browser - *Rationale:* True E2EE where server never sees plaintext
+- **Key Management Pattern:** Device-specific keys in IndexedDB - *Rationale:* Secure local storage with cross-device support
+- **Presence Pattern:** Firebase Realtime Database for presence - *Rationale:* Built-in offline detection and automatic cleanup
+- **Tier Integration Pattern:** Chat inherits existing tier data - *Rationale:* No duplication, single source of truth for user tiers
+
+## Tech Stack
+
+### Chat System Technology Stack
+
+| Category | Technology | Version | Purpose | Rationale |
+|----------|------------|---------|---------|-----------|
+| Real-time Transport | Socket.io | 4.6.x | WebSocket connections | Automatic fallback, reconnection, binary support |
+| Encryption Library | TweetNaCl.js | 1.0.3 | E2EE implementation | Audited, simple, 100x easier than Signal |
+| Message Storage | Firestore | Existing | Message persistence | Already in use, real-time listeners |
+| Media Storage | Firebase Storage | Existing | Encrypted file storage | Existing infrastructure, cost-effective |
+| Presence System | Firebase Realtime DB | Existing | Online/typing status | Better than Firestore for ephemeral data |
+| Key Storage | IndexedDB | Native | Private key storage | Secure browser storage, better than localStorage |
+| Backend Runtime | Cloud Run | Latest | Socket.io server | Auto-scaling, WebSocket support |
+| Chat UI Framework | React (Next.js) | 14.x | Chat components | Consistent with existing app |
+| State Management | Zustand | 4.x | Chat state | Lightweight, TypeScript-friendly |
+| Virtual Scrolling | react-window | 1.8.x | Message list performance | Handles thousands of messages |
+| Rich Text | Lexical | 0.12.x | Message formatting | Facebook's editor, extensible |
+| Media Processing | Sharp.js | 0.33.x | Image optimization | Fast, efficient compression |
+| Testing | Jest + RTL | Existing | Unit/integration tests | Consistent with current setup |
+
+## Data Models
+
+### Message Model
+**Purpose:** Core message entity for all chat communications
+
+**Key Attributes:**
+- id: string - Unique message identifier
+- conversationId: string - Parent conversation reference
+- senderId: string - Firebase Auth UID
+- type: 'text' | 'image' | 'file' | 'voice' - Message content type
+- content: string - Encrypted message content
+- nonce: string - Encryption nonce for decryption
+- timestamp: Timestamp - Server timestamp
+- delivered: string[] - Array of UIDs who received
+- read: string[] - Array of UIDs who read
+- replyTo?: string - Optional parent message ID
+
+**TypeScript Interface:**
+```typescript
+interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  type: 'text' | 'image' | 'file' | 'voice';
+  content: string; // Always encrypted
+  nonce: string;
+  timestamp: firebase.firestore.Timestamp;
+  delivered: string[];
+  read: string[];
+  replyTo?: string;
+  metadata?: {
+    fileName?: string;
+    fileSize?: number;
+    mimeType?: string;
+    duration?: number; // For voice notes
+  };
+}
+```
+
+**Relationships:**
+- Belongs to one Conversation
+- References sender User
+- May reference parent Message (replies)
+
+### Conversation Model
+**Purpose:** Container for messages between users
+
+**Key Attributes:**
+- id: string - Unique conversation identifier
+- type: 'direct' | 'group' - Conversation type
+- members: string[] - Array of participant UIDs
+- memberDetails: Map - Cached user data with tier info
+- lastMessage: object - Denormalized last message
+- createdAt: Timestamp - Creation time
+- updatedAt: Timestamp - Last activity
+
+**TypeScript Interface:**
+```typescript
+interface Conversation {
+  id: string;
+  type: 'direct' | 'group';
+  members: string[];
+  memberDetails: Map<string, {
+    uid: string;
+    displayName: string;
+    photoURL: string;
+    tier: 'Starter' | 'Rising' | 'Pro' | 'Pixlbeast' | 'Pixlionaire';
+    publicKey: string;
+    lastSeen?: Timestamp;
+  }>;
+  lastMessage?: {
+    text: string; // Encrypted preview
+    senderId: string;
+    timestamp: Timestamp;
+  };
+  groupInfo?: {
+    name: string;
+    description: string;
+    photoURL: string;
+    admins: string[];
+  };
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Relationships:**
+- Has many Messages
+- References multiple Users
+- Tier data synced from main user profiles
+
+### UserKeys Model
+**Purpose:** Cryptographic key management for E2EE
+
+**Key Attributes:**
+- userId: string - Firebase Auth UID
+- publicKey: string - User's public encryption key
+- preKeys: string[] - One-time prekeys for offline exchange
+- devices: Map - Multi-device key support
+
+**TypeScript Interface:**
+```typescript
+interface UserKeys {
+  userId: string;
+  publicKey: string;
+  preKeys: string[]; // Array of one-time prekeys
+  devices: Map<string, {
+    deviceId: string;
+    publicKey: string;
+    lastUpdated: Timestamp;
+  }>;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+**Relationships:**
+- One-to-one with User
+- Referenced by Conversations for encryption
+
+## API Specification
+
+### Socket.io Events (Real-time API)
+
+```typescript
+// Client -> Server Events
+interface ClientEvents {
+  'auth': (token: string) => void;
+  'conversation:join': (conversationId: string) => void;
+  'message:send': (data: {
+    conversationId: string;
+    type: string;
+    content: string; // Already encrypted
+    nonce: string;
+    replyTo?: string;
+  }) => void;
+  'message:delivered': (messageId: string) => void;
+  'message:read': (data: {
+    conversationId: string;
+    messageIds: string[];
+  }) => void;
+  'typing:start': (conversationId: string) => void;
+  'typing:stop': (conversationId: string) => void;
+  'presence:online': () => void;
+  'presence:offline': () => void;
+}
+
+// Server -> Client Events
+interface ServerEvents {
+  'auth:success': (user: { uid: string; tier: string }) => void;
+  'auth:error': (error: string) => void;
+  'message:new': (message: Message) => void;
+  'message:delivered': (data: {
+    messageId: string;
+    userId: string;
+  }) => void;
+  'message:read': (data: {
+    conversationId: string;
+    messageIds: string[];
+    userId: string;
+  }) => void;
+  'typing:update': (data: {
+    conversationId: string;
+    userId: string;
+    typing: boolean;
+  }) => void;
+  'presence:update': (data: {
+    userId: string;
+    online: boolean;
+    lastSeen?: string;
+  }) => void;
+}
+```
+
+### REST API Endpoints (Firebase Functions)
+
+```yaml
+# Conversation Management
+POST /api/conversations/create
+  body: {
+    type: 'direct' | 'group',
+    memberIds: string[],
+    groupInfo?: { name, description }
+  }
+  response: { conversationId: string }
+
+GET /api/conversations
+  query: { limit: number, offset: number }
+  response: { conversations: Conversation[] }
+
+# Key Exchange
+POST /api/keys/register
+  body: {
+    publicKey: string,
+    deviceId: string
+  }
+  response: { success: boolean }
+
+GET /api/keys/:userId
+  response: { publicKey: string, preKeys: string[] }
+
+# Media Upload
+POST /api/media/upload
+  body: FormData (encrypted file)
+  response: { url: string, key: string }
+```
+
+## Components
+
+### Chat UI Component
+**Responsibility:** Main chat interface container managing conversation list and active chat
+
+**Key Interfaces:**
+- Socket.io connection management
+- Conversation state management
+- Encryption service integration
+- Firebase Auth context
+
+**Dependencies:** Socket.io client, TweetNaCl, Firebase Auth, Zustand store
+
+**Technology Stack:** Next.js components, Tailwind CSS, react-window for virtualization
+
+### Encryption Service
+**Responsibility:** Handle all E2EE operations including key generation, message encryption/decryption
+
+**Key Interfaces:**
+- generateKeyPair(): KeyPair
+- encryptMessage(content, recipientKey): EncryptedData
+- decryptMessage(encrypted, senderKey): string
+- rotateKeys(): Promise<void>
+
+**Dependencies:** TweetNaCl.js, IndexedDB wrapper
+
+**Technology Stack:** TypeScript service class, Web Crypto API fallback
+
+### Socket.io Server
+**Responsibility:** Real-time message routing and presence management
+
+**Key Interfaces:**
+- WebSocket connection handling
+- Firebase token verification
+- Message broadcasting
+- Presence tracking
+
+**Dependencies:** Firebase Admin SDK, Socket.io, Redis adapter
+
+**Technology Stack:** Node.js on Cloud Run, TypeScript, Redis for horizontal scaling
+
+### Message Persistence Layer
+**Responsibility:** Store and retrieve encrypted messages from Firestore
+
+**Key Interfaces:**
+- saveMessage(message): Promise<string>
+- getMessages(conversationId, pagination): Promise<Message[]>
+- markAsRead(messageIds): Promise<void>
+
+**Dependencies:** Firestore, Firebase Functions
+
+**Technology Stack:** Firestore triggers, batched writes, compound indexes
+
+### Media Handler
+**Responsibility:** Process and store encrypted media files
+
+**Key Interfaces:**
+- encryptFile(file): Promise<EncryptedFile>
+- uploadToStorage(encrypted): Promise<string>
+- optimizeImage(file): Promise<Blob>
+
+**Dependencies:** Firebase Storage, Sharp.js, crypto
+
+**Technology Stack:** Cloud Functions, Sharp for optimization, AES-256-GCM encryption
+
+## Core Workflows
+
+### Message Send Flow
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant Encryption
+    participant Socket
+    participant Server
+    participant Firestore
+    participant Recipient
+
+    User->>UI: Type message
+    UI->>Encryption: Encrypt with recipient's public key
+    Encryption->>UI: Return encrypted + nonce
+    UI->>Socket: Emit message:send
+    Socket->>Server: WebSocket frame
+    Server->>Server: Validate auth token
+    Server->>Firestore: Save encrypted message
+    Server->>Recipient: Broadcast to recipient's socket
+    Recipient->>Encryption: Decrypt with private key
+    Encryption->>UI: Display plaintext
+    Recipient->>Server: Send delivered status
+    Server->>User: Update delivery status
+```
+
+### E2EE Key Exchange Flow
+```mermaid
+sequenceDiagram
+    participant Alice
+    participant Server
+    participant Bob
+
+    Alice->>Alice: Generate key pair
+    Alice->>Server: Register public key
+    Server->>Server: Store in Firestore
+    Bob->>Server: Request Alice's public key
+    Server->>Bob: Return public key
+    Bob->>Bob: Encrypt message with Alice's public key
+    Bob->>Server: Send encrypted message
+    Server->>Alice: Deliver encrypted message
+    Alice->>Alice: Decrypt with private key
+```
+
+## Database Schema
+
+### Firestore Collections Structure
+
+```javascript
+// conversations collection
+conversations/{conversationId} {
+  type: 'direct' | 'group',
+  members: ['userId1', 'userId2'],
+  memberDetails: {
+    userId1: {
+      displayName: string,
+      photoURL: string,
+      tier: string,
+      publicKey: string
+    }
+  },
+  lastMessage: {
+    text: string, // encrypted
+    senderId: string,
+    timestamp: Timestamp
+  },
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+
+// messages subcollection
+conversations/{conversationId}/messages/{messageId} {
+  senderId: string,
+  type: 'text' | 'image' | 'file' | 'voice',
+  content: string, // encrypted
+  nonce: string,
+  delivered: [userId],
+  read: [userId],
+  timestamp: Timestamp,
+  replyTo?: string,
+  metadata?: {
+    fileName?: string,
+    fileSize?: number
+  }
+}
+
+// userKeys collection (secured)
+userKeys/{userId} {
+  publicKey: string,
+  preKeys: [string],
+  devices: {
+    deviceId: {
+      publicKey: string,
+      lastUpdated: Timestamp
+    }
+  }
+}
+
+// Firebase Realtime Database (for presence)
+presence/{userId} {
+  online: boolean,
+  lastSeen: timestamp,
+  typing: {
+    conversationId: boolean
+  }
+}
+```
+
+### Firestore Indexes
+
+```javascript
+// Composite indexes for efficient queries
+conversations:
+  - members (ARRAY_CONTAINS) + updatedAt (DESC)
+  - members (ARRAY_CONTAINS) + createdAt (DESC)
+
+messages:
+  - conversationId + timestamp (DESC)
+  - senderId + timestamp (DESC)
+  - delivered (ARRAY_CONTAINS) + timestamp
+```
+
+## Frontend Architecture
+
+### Component Architecture
+
+**Component Organization:**
+```
+src/
+├── components/
+│   └── chat/
+│       ├── ChatInterface.tsx       // Main container
+│       ├── ConversationList.tsx    // Left sidebar
+│       ├── ChatWindow.tsx          // Active chat
+│       ├── MessageBubble.tsx       // Individual message
+│       ├── MessageInput.tsx        // Input with encryption
+│       ├── TypingIndicator.tsx     // Typing status
+│       ├── TierBadge.tsx          // Tier indicator
+│       └── MediaUpload.tsx        // File handling
+├── hooks/
+│   └── chat/
+│       ├── useSocket.ts           // Socket.io connection
+│       ├── useEncryption.ts       // Encryption operations
+│       ├── useMessages.ts         // Message management
+│       └── usePresence.ts         // Online status
+└── services/
+    └── chat/
+        ├── encryption.service.ts  // E2EE implementation
+        ├── socket.service.ts      // Socket management
+        └── storage.service.ts     // IndexedDB wrapper
+```
+
+**Component Template:**
+```typescript
+// components/chat/MessageBubble.tsx
+import { FC, memo } from 'react';
+import { Message } from '@/types/chat';
+import { TierBadge } from './TierBadge';
+import { formatTime } from '@/utils/date';
+
+interface MessageBubbleProps {
+  message: Message;
+  isOwn: boolean;
+  user: {
+    displayName: string;
+    photoURL: string;
+    tier: string;
+  };
+}
+
+export const MessageBubble: FC<MessageBubbleProps> = memo(({ 
+  message, 
+  isOwn, 
+  user 
+}) => {
+  return (
+    <div className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-4`}>
+      <div className={`flex ${isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-[70%]`}>
+        <div className="relative mx-2">
+          <img 
+            src={user.photoURL} 
+            alt={user.displayName}
+            className="w-8 h-8 rounded-full"
+          />
+          <TierBadge tier={user.tier} className="absolute -bottom-1 -right-1" />
+        </div>
+        <div className={`
+          px-4 py-2 rounded-2xl
+          ${isOwn 
+            ? 'bg-blue-600 text-white rounded-br-sm' 
+            : 'bg-gray-800 text-gray-100 rounded-bl-sm'}
+        `}>
+          <p className="text-sm">{message.decryptedContent}</p>
+          <span className="text-xs opacity-70 mt-1 block">
+            {formatTime(message.timestamp)}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+});
+```
+
+### State Management Architecture
+
+**State Structure:**
+```typescript
+// stores/chatStore.ts
+interface ChatState {
+  conversations: Map<string, Conversation>;
+  messages: Map<string, Message[]>;
+  activeConversationId: string | null;
+  typing: Map<string, string[]>;
+  presence: Map<string, boolean>;
+  socket: Socket | null;
+  encryption: EncryptionService | null;
+  
+  // Actions
+  setActiveConversation: (id: string) => void;
+  sendMessage: (content: string, type: MessageType) => Promise<void>;
+  loadMessages: (conversationId: string, pagination?: any) => Promise<void>;
+  markAsRead: (messageIds: string[]) => void;
+  updateTyping: (conversationId: string, isTyping: boolean) => void;
+}
+```
+
+**State Management Patterns:**
+- Optimistic updates for sent messages
+- Pagination for message history
+- Real-time sync via Socket.io
+- Offline queue for failed messages
+- Encryption state cached per conversation
+
+### Routing Architecture
+
+**Route Organization:**
+```
+app/
+└── chat/
+    ├── layout.tsx              // Chat layout with auth check
+    ├── page.tsx               // Conversation list
+    └── [conversationId]/
+        └── page.tsx           // Active conversation
+```
+
+**Protected Route Pattern:**
+```typescript
+// app/chat/layout.tsx
+import { redirect } from 'next/navigation';
+import { auth } from '@/lib/firebase';
+
+export default async function ChatLayout({ children }) {
+  const user = await auth.currentUser;
+  
+  if (!user) {
+    redirect('/login');
+  }
+  
+  if (!user.emailVerified) {
+    redirect('/verify-email');
+  }
+  
+  return (
+    <ChatProvider user={user}>
+      {children}
+    </ChatProvider>
+  );
+}
+```
+
+## Backend Architecture
+
+### Socket.io Server Architecture
+
+**Server Organization:**
+```
+cloud-run-chat/
+├── src/
+│   ├── server.ts              // Main Socket.io server
+│   ├── handlers/
+│   │   ├── auth.handler.ts    // Firebase auth verification
+│   │   ├── message.handler.ts // Message routing
+│   │   └── presence.handler.ts // Online status
+│   ├── services/
+│   │   ├── firebase.service.ts // Firestore operations
+│   │   └── redis.service.ts   // Session management
+│   └── middleware/
+│       └── auth.middleware.ts  // Token validation
+├── Dockerfile
+└── package.json
+```
+
+**Socket.io Server Template:**
+```typescript
+// server.ts
+import { Server } from 'socket.io';
+import { createServer } from 'http';
+import admin from 'firebase-admin';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { Redis } from 'ioredis';
+
+const httpServer = createServer();
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.CLIENT_URL,
+    credentials: true
+  },
+  transports: ['websocket', 'polling']
+});
+
+// Redis adapter for horizontal scaling
+const pubClient = new Redis(process.env.REDIS_URL);
+const subClient = pubClient.duplicate();
+io.adapter(createAdapter(pubClient, subClient));
+
+// Authentication middleware
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth.token;
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    socket.data.userId = decodedToken.uid;
+    socket.data.tier = decodedToken.tier || 'Starter';
+    next();
+  } catch (error) {
+    next(new Error('Authentication failed'));
+  }
+});
+
+// Connection handler
+io.on('connection', (socket) => {
+  const userId = socket.data.userId;
+  
+  // Join user's personal room
+  socket.join(`user:${userId}`);
+  
+  // Join tier room
+  socket.join(`tier:${socket.data.tier}`);
+  
+  // Handle events
+  socket.on('message:send', async (data) => {
+    // Save to Firestore
+    const messageId = await saveMessage(data);
+    
+    // Broadcast to conversation members
+    const conversation = await getConversation(data.conversationId);
+    conversation.members.forEach(memberId => {
+      io.to(`user:${memberId}`).emit('message:new', {
+        id: messageId,
+        ...data
+      });
+    });
+  });
+  
+  // Presence handling
+  socket.on('disconnect', () => {
+    io.emit('presence:update', {
+      userId,
+      online: false,
+      lastSeen: new Date().toISOString()
+    });
+  });
+});
+
+const PORT = process.env.PORT || 8080;
+httpServer.listen(PORT);
+```
+
+### Database Access Layer
+
+```typescript
+// services/message.service.ts
+import { firestore } from './firebase.service';
+import { Message, Conversation } from '@/types/chat';
+
+export class MessageService {
+  async saveMessage(
+    conversationId: string, 
+    message: Omit<Message, 'id' | 'timestamp'>
+  ): Promise<string> {
+    const docRef = await firestore
+      .collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .add({
+        ...message,
+        timestamp: firestore.FieldValue.serverTimestamp(),
+        delivered: [message.senderId],
+        read: []
+      });
+    
+    // Update conversation's last message
+    await firestore
+      .collection('conversations')
+      .doc(conversationId)
+      .update({
+        lastMessage: {
+          text: message.content,
+          senderId: message.senderId,
+          timestamp: firestore.FieldValue.serverTimestamp()
+        },
+        updatedAt: firestore.FieldValue.serverTimestamp()
+      });
+    
+    return docRef.id;
+  }
+  
+  async getMessages(
+    conversationId: string,
+    limit = 50,
+    startAfter?: any
+  ): Promise<Message[]> {
+    let query = firestore
+      .collection('conversations')
+      .doc(conversationId)
+      .collection('messages')
+      .orderBy('timestamp', 'desc')
+      .limit(limit);
+    
+    if (startAfter) {
+      query = query.startAfter(startAfter);
+    }
+    
+    const snapshot = await query.get();
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Message));
+  }
+}
+```
+
+### Authentication and Authorization
+
+**Auth Flow:**
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Socket.io
+    participant Firebase Auth
+    participant Firestore
+
+    Client->>Firebase Auth: Get ID token
+    Firebase Auth->>Client: Return token
+    Client->>Socket.io: Connect with token
+    Socket.io->>Firebase Auth: Verify token
+    Firebase Auth->>Socket.io: Return user claims
+    Socket.io->>Socket.io: Extract tier from claims
+    Socket.io->>Client: Connection established
+    Client->>Socket.io: Join conversations
+    Socket.io->>Firestore: Verify membership
+    Firestore->>Socket.io: Confirm access
+    Socket.io->>Client: Joined successfully
+```
+
+**Auth Middleware:**
+```typescript
+// middleware/auth.middleware.ts
+export const authenticateSocket = async (socket, next) => {
+  const token = socket.handshake.auth.token;
+  
+  if (!token) {
+    return next(new Error('No token provided'));
+  }
+  
+  try {
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    
+    // Get user's tier from Firestore
+    const userDoc = await admin.firestore()
+      .collection('users')
+      .doc(decodedToken.uid)
+      .get();
+    
+    socket.data = {
+      userId: decodedToken.uid,
+      email: decodedToken.email,
+      tier: userDoc.data()?.tier || 'Starter'
+    };
+    
+    next();
+  } catch (error) {
+    next(new Error('Authentication failed'));
+  }
+};
+```
+
+## Security and Performance
+
+### Security Requirements
+
+**Frontend Security:**
+- CSP Headers: `default-src 'self'; connect-src wss://* https://firebaseapp.com`
+- XSS Prevention: All user content sanitized before display
+- Secure Storage: Private keys in encrypted IndexedDB only
+
+**Backend Security:**
+- Input Validation: Message size limits (10KB text, 25MB files)
+- Rate Limiting: 60 messages per minute per user
+- CORS Policy: Restricted to application domain only
+
+**Authentication Security:**
+- Token Storage: HttpOnly cookies for Socket.io auth
+- Session Management: 24-hour token expiry with refresh
+- Password Policy: Inherited from Firebase Auth settings
+
+**E2EE Security:**
+- Key Generation: 256-bit keys using crypto.getRandomValues()
+- Key Rotation: Optional monthly key rotation
+- Forward Secrecy: New keys for each conversation
+
+### Performance Optimization
+
+**Frontend Performance:**
+- Bundle Size Target: < 50KB for chat module
+- Loading Strategy: Lazy load chat components
+- Caching Strategy: IndexedDB for recent messages
+- Virtual Scrolling: react-window for message lists
+
+**Backend Performance:**
+- Response Time Target: < 200ms message delivery
+- Database Optimization: Firestore composite indexes
+- Caching Strategy: Redis for active conversations
+- Connection Pooling: Socket.io Redis adapter
+
+**Real-time Optimization:**
+- Binary Protocol: MessagePack for Socket.io
+- Compression: Enable WebSocket compression
+- Reconnection: Exponential backoff strategy
+- Offline Queue: Store and forward when offline
+
+## Deployment Architecture
+
+### Deployment Strategy
+
+**Frontend Deployment:**
+- **Platform:** Vercel (existing Next.js app)
+- **Build Command:** `npm run build`
+- **Environment Variables:** Socket.io server URL
+- **CDN/Edge:** Vercel Edge Network
+
+**Backend Deployment (Socket.io):**
+- **Platform:** Google Cloud Run
+- **Build Command:** `docker build -t chat-server .`
+- **Deployment Method:** Container with WebSocket support
+- **Auto-scaling:** 0-100 instances based on connections
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/deploy-chat.yml
+name: Deploy Chat System
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/chat-server/**'
+      - 'apps/web/src/components/chat/**'
+
+jobs:
+  deploy-socket-server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          
+      - name: Build and push Docker image
+        run: |
+          cd apps/chat-server
+          gcloud builds submit --tag gcr.io/$PROJECT_ID/chat-server
+          
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy chat-server \
+            --image gcr.io/$PROJECT_ID/chat-server \
+            --platform managed \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --set-env-vars="FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}"
+```
+
+### Environments
+
+| Environment | Frontend URL | Socket.io URL | Purpose |
+|------------|--------------|---------------|---------|
+| Development | http://localhost:3000 | http://localhost:8080 | Local development |
+| Staging | https://staging.giftcard-pxl.vercel.app | https://chat-staging.run.app | Pre-production testing |
+| Production | https://giftcard-pxl.vercel.app | https://chat.run.app | Live environment |
+
+## Testing Strategy
+
+### Testing Pyramid
+
+```
+        E2E Tests (10%)
+       /              \
+    Integration Tests (30%)
+    /                    \
+Frontend Unit Tests  Backend Unit Tests
+      (30%)               (30%)
+```
+
+### Test Organization
+
+**Frontend Tests:**
+```
+src/components/chat/__tests__/
+├── ChatInterface.test.tsx
+├── MessageBubble.test.tsx
+└── encryption.test.ts
+
+src/hooks/chat/__tests__/
+├── useSocket.test.ts
+└── useEncryption.test.ts
+```
+
+**Backend Tests:**
+```
+apps/chat-server/tests/
+├── unit/
+│   ├── handlers/
+│   └── services/
+├── integration/
+│   └── socket.test.ts
+└── e2e/
+    └── chat-flow.test.ts
+```
+
+### Test Examples
+
+**Frontend Component Test:**
+```typescript
+// MessageBubble.test.tsx
+import { render, screen } from '@testing-library/react';
+import { MessageBubble } from '../MessageBubble';
+
+describe('MessageBubble', () => {
+  it('displays tier badge for user', () => {
+    const message = {
+      content: 'Hello world',
+      senderId: 'user1',
+      timestamp: new Date()
+    };
+    
+    const user = {
+      displayName: 'John',
+      tier: 'Pixlbeast',
+      photoURL: '/avatar.jpg'
+    };
+    
+    render(<MessageBubble message={message} user={user} isOwn={false} />);
+    
+    expect(screen.getByText('Pixlbeast')).toBeInTheDocument();
+    expect(screen.getByText('Hello world')).toBeInTheDocument();
+  });
+});
+```
+
+**Backend Socket Test:**
+```typescript
+// socket.test.ts
+import { io as Client } from 'socket.io-client';
+import { server } from '../server';
+
+describe('Socket.io Server', () => {
+  let clientSocket;
+  let serverSocket;
+  
+  beforeAll((done) => {
+    server.listen();
+    clientSocket = Client(`http://localhost:${PORT}`, {
+      auth: { token: validFirebaseToken }
+    });
+    server.on('connection', (socket) => {
+      serverSocket = socket;
+    });
+    clientSocket.on('connect', done);
+  });
+  
+  test('should receive message', (done) => {
+    clientSocket.on('message:new', (message) => {
+      expect(message.content).toBe('encrypted_content');
+      done();
+    });
+    
+    serverSocket.emit('message:new', {
+      content: 'encrypted_content',
+      senderId: 'user1'
+    });
+  });
+});
+```
+
+## Implementation Roadmap
+
+### Phase 1: Foundation (Week 1-2)
+- Set up Cloud Run Socket.io server
+- Implement Firebase Auth integration
+- Create basic message model in Firestore
+- Build simple chat UI components
+- Establish WebSocket connection
+
+### Phase 2: Core Messaging (Week 3-4)
+- Implement TweetNaCl encryption
+- Add message send/receive functionality
+- Create conversation management
+- Add delivery and read receipts
+- Implement typing indicators
+
+### Phase 3: Rich Features (Week 5-6)
+- Add file/image sharing with encryption
+- Implement voice notes
+- Add message reactions and replies
+- Create group chat functionality
+- Add message search (client-side)
+
+### Phase 4: Polish & Optimization (Week 7-8)
+- Optimize performance with virtual scrolling
+- Add offline message queue
+- Implement push notifications
+- Complete tier badge integration
+- Comprehensive testing
+
+## Monitoring and Observability
+
+### Monitoring Stack
+- **Frontend Monitoring:** Vercel Analytics (existing)
+- **Backend Monitoring:** Google Cloud Monitoring
+- **Error Tracking:** Sentry (existing integration)
+- **Performance Monitoring:** Firebase Performance Monitoring
+
+### Key Metrics
+
+**Chat-Specific Metrics:**
+- Message delivery latency (target: < 200ms)
+- Encryption/decryption time (target: < 50ms)
+- Socket connection success rate (target: > 99%)
+- Message delivery success rate (target: > 99.9%)
+- Active concurrent connections
+- Messages per second throughput
+- Media upload success rate
+- Key exchange success rate
+
+**User Engagement Metrics:**
+- Daily active chat users
+- Messages sent per user per day
+- Average conversation length
+- Media messages percentage
+- Group chat participation rate
+
+## Cost Analysis
+
+### Estimated Monthly Costs (10,000 users)
+
+| Service | Usage | Cost |
+|---------|-------|------|
+| Firestore | 5M reads, 2M writes | $30 |
+| Cloud Run | 2 instances average | $40 |
+| Firebase Storage | 100GB media | $25 |
+| Firebase Realtime DB | Presence tracking | $10 |
+| Redis (Upstash) | Session management | $10 |
+| **Total** | | **~$115/month** |
+
+### Cost Optimization Strategies
+- Implement message pagination to reduce reads
+- Use Firestore bundles for initial load
+- Compress images before encryption
+- Archive old conversations to cold storage
+- Use CDN caching for media files
+
+## Security Considerations
+
+### E2EE Implementation Details
+- Never store private keys on server
+- Keys never leave the user's device
+- Optional key backup with user password encryption
+- Security headers on all endpoints
+- Regular security audits of encryption implementation
+
+### Data Privacy
+- Messages deleted after 90 days (configurable)
+- User can export all their data
+- Right to deletion compliance
+- No message content logging on server
+- Encrypted backups only
+
+## Success Metrics
+
+### Technical Success Criteria
+- ✅ < 200ms message delivery latency
+- ✅ 99.9% uptime availability
+- ✅ Support 10,000 concurrent users
+- ✅ < 50KB bundle size increase
+- ✅ Zero plaintext on server
+
+### Business Success Criteria
+- 60% of users engage with chat monthly
+- Average 20 messages per user per day
+- 80% of premium tiers use chat features
+- < 0.1% security incidents
+- 4.5+ star user satisfaction rating
+
+## Mobile Readiness
+
+### Mobile App Compatibility
+
+The chat architecture is designed with mobile apps in mind. When implementing native mobile applications:
+
+**Backend (100% Ready)**
+- All Socket.io endpoints work with mobile clients
+- Firebase has native SDKs for iOS/Android/React Native
+- E2EE protocol is platform-agnostic
+- Push notification infrastructure (FCM) ready
+
+**Required Mobile Adaptations**
+```yaml
+Key_Storage:
+  Web: IndexedDB
+  iOS: Keychain Services
+  Android: Android Keystore
+  React_Native: react-native-keychain
+
+Encryption:
+  Web: tweetnacl (current)
+  Mobile: tweet-nacl-react-native or native crypto
+
+Socket_Management:
+  - Background socket handling
+  - Network state listeners
+  - Reconnection on app resume
+
+Push_Notifications:
+  - Silent notifications for E2EE
+  - Background message decryption
+  - Data-only payloads (no plaintext)
+```
+
+**Recommended Mobile Stack**
+- **React Native**: Reuse 70% of React components (3-4 weeks additional)
+- **Firebase SDK**: `react-native-firebase` for all Firebase services
+- **Socket.io**: `socket.io-client` works natively
+- **Secure Storage**: `react-native-keychain` for private keys
+
+**PWA Option**
+The current Next.js implementation can be deployed as a Progressive Web App for immediate mobile access through browsers, providing app-like experience without native development.
+
+## Appendix
+
+### Configuration Files
+
+**Docker Configuration (Cloud Run):**
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+EXPOSE 8080
+CMD ["node", "dist/server.js"]
+```
+
+**Socket.io Client Configuration:**
+```typescript
+// lib/chat/socket.ts
+import { io } from 'socket.io-client';
+import { auth } from '@/lib/firebase';
+
+export const initSocket = async () => {
+  const token = await auth.currentUser?.getIdToken();
+  
+  return io(process.env.NEXT_PUBLIC_SOCKET_URL, {
+    auth: { token },
+    transports: ['websocket', 'polling'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    reconnectionAttempts: 5
+  });
+};
+```
+
+**Firestore Security Rules:**
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Chat conversations
+    match /conversations/{conversationId} {
+      allow read: if request.auth.uid in resource.data.members;
+      allow create: if request.auth != null 
+        && request.auth.uid in request.resource.data.members;
+      allow update: if request.auth.uid in resource.data.members
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['members', 'type']);
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        allow read: if request.auth.uid in get(/databases/$(database)/documents/
+          conversations/$(conversationId)).data.members;
+        allow create: if request.auth.uid == request.resource.data.senderId
+          && request.auth.uid in get(/databases/$(database)/documents/
+            conversations/$(conversationId)).data.members;
+        allow update: if request.auth.uid in resource.data.delivered
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['delivered', 'read']);
+      }
+    }
+    
+    // User keys (restricted)
+    match /userKeys/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth.uid == userId;
+    }
+  }
+}
+```
+
+---
+
+This architecture provides a production-ready, secure, and scalable chat system that integrates seamlessly with your existing Firebase infrastructure while delivering WhatsApp-level performance and features.

@@ -124,6 +124,7 @@ export function Navigation() {
     { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
     { href: "/marketplace", label: "Marketplace", icon: Store },
     { href: "/pxl", label: "PXL Wallet", icon: Coins },
+    { href: "/messages", label: "Messages" },
     { href: "/orders", label: "Orders" },
   ];
 
@@ -187,15 +188,15 @@ export function Navigation() {
 
           {/* Right Section - Vercel style */}
           <div className="flex items-center space-x-2 lg:space-x-3">
-            {/* Live Chat Link */}
+            {/* Live Chat Support */}
             <Link
               href="/chat"
               className="flex items-center space-x-2 text-sm text-gray-400 hover:text-white transition-colors"
             >
               <Headphones className="h-4 w-4" />
-              <span className="hidden sm:inline">Live Chat</span>
+              <span className="hidden sm:inline">Live Chat Support</span>
             </Link>
-            
+
             {/* Cart Icon */}
             <CartIcon />
             

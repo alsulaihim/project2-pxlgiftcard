@@ -303,6 +303,7 @@ export default function ProfilePage() {
                       type="email"
                       value={user.email || ''}
                       disabled={true}
+                      onChange={() => {}}
                       className="bg-gray-800 border-gray-700 text-gray-400"
                     />
                     <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>

@@ -1,0 +1,24 @@
+# This file specifies files that are *not* uploaded to Google Cloud
+# when using gcloud. It follows the same syntax as .gitignore.
+
+.gcloudignore
+.git
+.gitignore
+
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# TypeScript source files (we only need compiled JS)
+src/
+tsconfig.json
+
+# Development files
+.env
+.env.local
+*.log
+
+# Documentation
+README.md
+
+
