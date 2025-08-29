@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { Send } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Send, Paperclip, Image, Mic, Smile, Plus, X, Reply } from "lucide-react";
 import { MediaUpload } from './MediaUpload';
 
 interface Props {
@@ -9,30 +9,40 @@ interface Props {
   conversationId?: string;
   recipientId?: string;
   onMediaSend?: (mediaMessage: any) => Promise<void> | void;
+  onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
   placeholder?: string;
+  replyingTo?: any;
+  onCancelReply?: () => void;
 }
 
-export function MessageInput({ onSend, conversationId, recipientId, onMediaSend, disabled = false, placeholder = "Type a message (Enter to send, Shift+Enter for new line)" }: Props) {
+export function MessageInput({ 
+  onSend, 
+  conversationId, 
+  recipientId, 
+  onMediaSend, 
+  onTyping, 
+  disabled = false, 
+  placeholder = "Write a message...",
+  replyingTo,
+  onCancelReply
+}: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showMediaUpload, setShowMediaUpload] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = async () => {
     const value = text.trim();
     if (!value || sending || disabled) return;
     
-    // BUG FIX: 2025-01-28 - Clear input immediately for better UX
-    // Problem: Message stays in input box for a second before disappearing
-    // Solution: Clear input immediately when user sends message
-    // Impact: Input clears instantly for better user experience
     setText("");
     
     try {
       setSending(true);
       await onSend(value);
     } catch (error) {
-      // If sending fails, restore the message text so user can retry
       setText(value);
       throw error;
     } finally {
@@ -47,61 +57,161 @@ export function MessageInput({ onSend, conversationId, recipientId, onMediaSend,
     }
   };
 
-  const handleMediaUploaded = async (mediaMessage: any) => {
-    if (onMediaSend) {
-      try {
-        await onMediaSend(mediaMessage);
-        setError(null);
-      } catch (error) {
-        console.error('Failed to send media:', error);
-        setError('Failed to send media');
-      }
-    }
-  };
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'file') => {
+    const file = e.target.files?.[0];
+    if (!file || !onMediaSend) return;
 
-  const handleMediaError = (errorMessage: string) => {
-    setError(errorMessage);
+    try {
+      // For now, simulate media upload - in production this would upload to storage
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        await onMediaSend({
+          downloadUrl: base64,
+          mediaType: type,
+          metadata: {
+            fileName: file.name,
+            fileSize: file.size,
+            mimeType: file.type
+          }
+        });
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Failed to upload file:', error);
+    }
+    
+    // Reset input
+    e.target.value = '';
   };
 
   return (
-    <div className="border-t border-gray-800 bg-black/40">
-      {error && (
-        <div className="p-3 bg-red-900/20 border-b border-red-500/30 text-red-400 text-sm">
-          {error}
+    <div className="relative px-4 pb-4">
+      {/* Reply indicator */}
+      {replyingTo && (
+        <div className="mb-2 bg-[#1a1a1a] rounded-t-lg px-4 py-2 border-l-4 border-blue-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Reply className="w-4 h-4 text-blue-400" />
+              <div>
+                <div className="text-xs text-blue-400">
+                  Replying to {replyingTo.senderName || 'a message'}
+                </div>
+                <div className="text-xs text-gray-400 truncate max-w-md">
+                  {replyingTo.text || replyingTo.content || 'Media message'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onCancelReply}
+              className="p-1 hover:bg-[#262626] rounded transition-colors"
+              title="Cancel reply"
+            >
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
         </div>
       )}
       
-      <div className="p-3 flex items-center space-x-2">
-        {/* Media upload controls */}
-        {conversationId && (
-          <MediaUpload
-            conversationId={conversationId}
-            recipientId={recipientId}
-            onMediaUploaded={handleMediaUploaded}
-            onError={handleMediaError}
+      {/* Floating input container */}
+      <div className="relative bg-[#1a1a1a] rounded-lg overflow-hidden">
+        <div className="flex items-end">
+          {/* Left side icons */}
+          <div className="flex items-center gap-1 p-2">
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              className="p-1.5 hover:bg-[#262626] rounded transition-colors"
+              title="Attach image"
+            >
+              <Image className="w-4 h-4 text-gray-400 hover:text-gray-300" />
+            </button>
+            
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 hover:bg-[#262626] rounded transition-colors"
+              title="Attach file"
+            >
+              <Paperclip className="w-4 h-4 text-gray-400 hover:text-gray-300" />
+            </button>
+
+            <button
+              type="button"
+              className="p-1.5 hover:bg-[#262626] rounded transition-colors"
+              title="Record voice"
+            >
+              <Mic className="w-4 h-4 text-gray-400 hover:text-gray-300" />
+            </button>
+
+            <button
+              type="button"
+              className="p-1.5 hover:bg-[#262626] rounded transition-colors"
+              title="Add emoji"
+            >
+              <Smile className="w-4 h-4 text-gray-400 hover:text-gray-300" />
+            </button>
+          </div>
+
+          {/* Text input */}
+          <textarea
+            className="flex-1 bg-transparent text-gray-300 placeholder-gray-500 resize-none py-3 pr-2 outline-none focus:outline-none focus:ring-0 border-none focus:border-none min-h-[44px] max-h-32"
+            placeholder={placeholder}
+            value={text}
+            onChange={(e) => {
+              if (!disabled) {
+                setText(e.target.value);
+                if (onTyping) {
+                  onTyping(e.target.value.length > 0);
+                }
+              }
+            }}
+            onKeyDown={!disabled ? handleKeyDown : undefined}
+            onBlur={() => onTyping && onTyping(false)}
+            rows={1}
+            disabled={disabled}
+            style={{ 
+              scrollbarWidth: 'thin',
+              border: 'none',
+              outline: 'none',
+              boxShadow: 'none'
+            }}
           />
-        )}
-        
-        <textarea
-          className={`flex-1 resize-none bg-gray-900 text-white rounded-lg border border-gray-800 px-3 py-2 focus:outline-none focus:border-gray-700 min-h-[44px] max-h-36 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-          placeholder={placeholder}
-          value={text}
-          onChange={(e) => !disabled && setText(e.target.value)}
-          onKeyDown={!disabled ? handleKeyDown : undefined}
-          rows={1}
-          disabled={disabled}
+
+          {/* Send button */}
+          <div className="p-2">
+            <button
+              onClick={handleSend}
+              disabled={sending || text.trim() === "" || disabled}
+              className={`p-2 rounded-lg transition-colors ${
+                text.trim() && !disabled 
+                  ? 'bg-white hover:bg-gray-200 text-black' 
+                  : 'bg-[#262626] text-gray-600 cursor-not-allowed'
+              }`}
+              aria-label="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden file inputs */}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          onChange={(e) => handleFileUpload(e, 'image')}
+          className="hidden"
         />
-        <button
-          onClick={handleSend}
-          disabled={sending || text.trim() === "" || disabled}
-          className="inline-flex items-center justify-center rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-3 py-2 text-white"
-          aria-label="Send message"
-        >
-          <Send className="h-4 w-4" />
-        </button>
+        
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.txt,.doc,.docx,.zip"
+          onChange={(e) => handleFileUpload(e, 'file')}
+          className="hidden"
+        />
       </div>
     </div>
   );
 }
-
-

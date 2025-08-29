@@ -1,11 +1,20 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { ChatMessage } from "@/services/chat/firestore-chat.service";
-import { TierBadge } from "./TierBadge";
+import { MessageStatus } from "./MessageStatus";
+import { MoreVertical, Edit2, Reply, Trash2, Copy, Pin, Smile, Heart, ThumbsUp, ThumbsDown, Laugh } from "lucide-react";
 
 interface MessageBubbleProps {
-  message: ChatMessage;
+  message: ChatMessage & {
+    status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+    delivered?: string[];
+    read?: string[];
+    reactions?: { [emoji: string]: string[] };
+    edited?: boolean;
+    editedAt?: any;
+    replyTo?: any;
+  };
   isOwn: boolean;
   user?: {
     displayName?: string;
@@ -13,18 +22,33 @@ interface MessageBubbleProps {
     tier?: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
   };
   showAvatar?: boolean;
+  onReply?: (message: ChatMessage) => void;
+  onEdit?: (messageId: string, newText: string) => void;
+  onDelete?: (messageId: string) => void;
+  onReact?: (messageId: string, emoji: string) => void;
+  currentUserId?: string;
 }
 
 /**
- * Enhanced message bubble component with tier indicators
- * As specified in chat-architecture.mdc and uiux.mdc
+ * Slack-style message bubble with Vercel dark theme
  */
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ 
   message, 
   isOwn, 
   user,
-  showAvatar = true 
+  showAvatar = true,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact,
+  currentUserId = ''
 }) => {
+  const [showActions, setShowActions] = useState(false);
+  const [showReactions, setShowReactions] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(message.text || '');
+  
+  const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
   const formatTime = (timestamp: any) => {
     if (!timestamp || typeof timestamp.toDate !== 'function') return '';
     const date = timestamp.toDate();
@@ -35,62 +59,396 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     });
   };
 
+  const messageType = (message as any).type || 'text';
+  const metadata = (message as any).metadata;
+
   return (
-    <div className={`flex ${isOwn ? "justify-end" : "justify-start"} mb-4 px-4`}>
-      <div className={`flex ${isOwn ? 'flex-row-reverse' : 'flex-row'} items-end max-w-[70%]`}>
-        {/* Avatar with tier ring */}
-        {showAvatar && user && (
-          <div className="relative mx-2 flex-shrink-0">
-            <img 
-              src={user.photoURL || '/default-avatar.png'} 
-              alt={user.displayName || 'User'}
-              className="w-8 h-8 rounded-full object-cover"
-            />
-            {user.tier && (
-              <div className="absolute -bottom-1 -right-1">
-                <TierBadge tier={user.tier} size="sm" />
-              </div>
-            )}
-          </div>
+    <div 
+      className={`group flex ${isOwn ? "justify-end" : "justify-start"} px-4 py-3 hover:bg-[#1a1a1a]/30 transition-colors`}
+      onMouseLeave={() => {
+        setShowActions(false);
+        setShowReactions(false);
+      }}
+    >
+      <div className={`flex ${isOwn ? 'flex-row-reverse' : 'flex-row'} items-start gap-2 max-w-[70%]`}>
+        {/* Avatar */}
+        {!isOwn && showAvatar && (
+          <img 
+            src={user?.photoURL || '/default-avatar.png'} 
+            alt={user?.displayName || 'User'}
+            className="w-8 h-8 rounded-full object-cover bg-[#262626] flex-shrink-0 mt-0.5"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/default-avatar.png';
+            }}
+          />
         )}
         
-        {/* Message content */}
-        <div className={`
-          px-4 py-2 rounded-2xl
-          ${isOwn 
-            ? 'bg-blue-600 text-white rounded-br-sm' 
-            : 'bg-gray-800 text-gray-100 rounded-bl-sm'}
-        `}>
-          {/* User name for non-own messages */}
-          {!isOwn && user?.displayName && (
-            <div className="text-xs opacity-70 mb-1 flex items-center gap-1">
-              <span>{user.displayName}</span>
-              {user.tier && <TierBadge tier={user.tier} size="sm" />}
+        {/* Message wrapper with inline actions */}
+        <div className="flex flex-col">
+          {/* User name - only for other users */}
+          {!isOwn && (
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-sm font-medium text-white">
+                {user?.displayName || 'User'}
+              </span>
+              {user?.tier && user.tier !== 'starter' && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                  user.tier === 'pixlionaire' ? 'bg-purple-900/30 text-purple-400' :
+                  user.tier === 'pixlbeast' ? 'bg-amber-900/30 text-amber-400' :
+                  user.tier === 'pro' ? 'bg-green-900/30 text-green-400' :
+                  user.tier === 'rising' ? 'bg-blue-900/30 text-blue-400' :
+                  'bg-gray-900/30 text-gray-400'
+                }`}>
+                  {user.tier.toUpperCase()}
+                </span>
+              )}
             </div>
           )}
           
-          <p className="text-sm whitespace-pre-wrap">{message.text}</p>
+          {/* Reply indicator */}
+          {message.replyTo && (
+            <div className={`mb-2 pl-3 border-l-2 border-gray-600 ${isOwn ? 'text-right' : ''}`}>
+              <div className="text-xs text-gray-500">
+                <Reply className="inline w-3 h-3 mr-1" />
+                Replying to {message.replyTo.senderName || 'a message'}
+              </div>
+              <div className="text-xs text-gray-400 truncate max-w-xs">
+                {message.replyTo.text || message.replyTo.content || 'Media message'}
+              </div>
+            </div>
+          )}
           
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-xs opacity-70">
-              {formatTime(message.timestamp)}
-            </span>
+          {/* Message content based on type - with chat bubble styling */}
+          <div className={`${isOwn ? 'text-right' : ''}`}>
+            {(() => {
+              if (messageType === 'image' || (metadata?.mediaType === 'image')) {
+                // Display image
+                const imageUrl = metadata?.downloadUrl ||
+                                message.text || 
+                                (message as any).downloadUrl || 
+                                (message as any).content || 
+                                (message as any).decryptedContent;
+                
+                // Check if the image URL is encrypted/invalid
+                const isInvalidUrl = !imageUrl || 
+                                   imageUrl === '[Decrypting...]' || 
+                                   imageUrl.includes('[') || 
+                                   imageUrl === 'undefined' ||
+                                   (!imageUrl.startsWith('http') && !imageUrl.startsWith('data:') && imageUrl.length < 200);
+                
+                if (isInvalidUrl) {
+                  return (
+                    <div className={`inline-flex items-center gap-2 p-3 rounded-2xl ${
+                      isOwn 
+                        ? 'bg-white text-black' 
+                        : 'bg-[#262626] text-gray-300'
+                    }`}>
+                      <div className="text-2xl">🖼️</div>
+                      <div>
+                        <p className="text-sm">Image</p>
+                        <p className="text-xs opacity-70">Unable to load</p>
+                      </div>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className={`inline-block p-1 rounded-2xl ${
+                    isOwn 
+                      ? 'bg-white' 
+                      : 'bg-[#262626]'
+                  }`}>
+                    <img 
+                      src={imageUrl}
+                      alt="Shared image"
+                      className="rounded-xl max-w-sm h-auto"
+                      onError={(e) => {
+                        // Silently handle error without console logging
+                        (e.target as HTMLImageElement).src = '/default-avatar.png';
+                      }}
+                    />
+                    {metadata?.fileName && (
+                      <p className={`text-xs mt-1 px-2 pb-1 ${
+                        isOwn ? 'text-gray-600' : 'text-gray-400'
+                      }`}>{metadata.fileName}</p>
+                    )}
+                  </div>
+                );
+              } else if (messageType === 'file' || (metadata?.mediaType === 'file')) {
+                // Display file attachment
+                const fileUrl = metadata?.downloadUrl || message.text;
+                return (
+                  <a 
+                    href={fileUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-2 p-3 rounded-2xl transition-colors ${
+                      isOwn 
+                        ? 'bg-white text-black hover:bg-gray-100' 
+                        : 'bg-[#262626] text-gray-300 hover:bg-[#333333]'
+                    }`}
+                  >
+                    <div className="text-2xl">📎</div>
+                    <div>
+                      <p className="text-sm font-medium">{metadata?.fileName || 'File'}</p>
+                      <p className={`text-xs ${isOwn ? 'text-gray-600' : 'text-gray-400'}`}>
+                        {metadata?.fileSize ? `${(metadata.fileSize / 1024).toFixed(1)} KB` : ''}
+                      </p>
+                    </div>
+                  </a>
+                );
+              } else if (messageType === 'voice' || (metadata?.mediaType === 'voice')) {
+                // Display voice message with audio player
+                const audioUrl = metadata?.downloadUrl || message.text;
+                return (
+                  <div className="space-y-2">
+                    <div className={`inline-flex items-center gap-2 p-3 rounded-2xl ${
+                      isOwn 
+                        ? 'bg-white text-black' 
+                        : 'bg-[#262626] text-gray-300'
+                    }`}>
+                      <div className="text-2xl">🎤</div>
+                      <div>
+                        <p className="text-sm font-medium">Voice message</p>
+                        <p className={`text-xs ${isOwn ? 'text-gray-600' : 'text-gray-400'}`}>
+                          {metadata?.duration ? `${metadata.duration}s` : ''}
+                        </p>
+                      </div>
+                    </div>
+                    {audioUrl && audioUrl !== 'undefined' && !audioUrl.includes('[') && (
+                      <audio controls className="max-w-xs">
+                        <source src={audioUrl} type="audio/webm" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    )}
+                  </div>
+                );
+              } else {
+                // Default text message with chat bubble
+                const textContent = message.text || (message as any).decryptedContent || (message as any).content || '[Encrypted message]';
+                
+                if (isEditing && isOwn) {
+                  return (
+                    <div className="inline-block">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editText}
+                          onChange={(e) => setEditText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if (editText.trim()) {
+                                onEdit?.(message.id, editText.trim());
+                                setIsEditing(false);
+                              }
+                            }
+                            if (e.key === 'Escape') {
+                              setIsEditing(false);
+                              setEditText(textContent);
+                            }
+                          }}
+                          className="px-4 py-2 rounded-2xl text-sm bg-[#262626] text-gray-300 border border-gray-600 focus:outline-none focus:border-gray-500"
+                          placeholder="Edit message..."
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => {
+                            if (editText.trim()) {
+                              onEdit?.(message.id, editText.trim());
+                              setIsEditing(false);
+                            }
+                          }}
+                          className="p-1.5 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setIsEditing(false);
+                            setEditText(textContent);
+                          }}
+                          className="p-1.5 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                        >
+                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">Press Enter to save, Esc to cancel</p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div className={`inline-block px-4 py-2 rounded-2xl text-sm ${
+                    isOwn 
+                      ? 'bg-white text-black' 
+                      : 'bg-[#262626] text-gray-300'
+                  }`}>
+                    <div className="flex items-end gap-2">
+                      <span className="whitespace-pre-wrap break-words">
+                        {textContent}
+                      </span>
+                      <span className={`text-[10px] whitespace-nowrap ${
+                        isOwn ? 'text-gray-600' : 'text-gray-500'
+                      }`}>
+                        {formatTime(message.timestamp)}
+                      </span>
+                      {isOwn && (
+                        <MessageStatus 
+                          status={message.status || (
+                            message.read && message.read.length > 0 ? 'read' :
+                            message.delivered && message.delivered.length > 0 ? 'delivered' :
+                            'sent'
+                          )}
+                          className="inline-flex"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+            })()}
+          </div>
+          
+          {/* Reactions */}
+          {message.reactions && (() => {
+            const validReactions = Object.entries(message.reactions)
+              .filter(([key, users]) => {
+                // Filter out non-emoji keys (like delete, clear, add, set)
+                // Only show actual emoji reactions that have users
+                const invalidKeys = ['delete', 'clear', 'add', 'set', 'remove'];
+                const userArray = Array.isArray(users) ? users : [];
+                return !invalidKeys.includes(key) && userArray.length > 0;
+              });
             
-            {/* Message status indicators */}
-            {isOwn && (
-              <div className="flex items-center ml-2">
-                {message.readBy && message.readBy.length > 0 ? (
-                  <span className="text-xs opacity-70 text-blue-400">✓✓</span>
-                ) : (
-                  <span className="text-xs opacity-70">✓</span>
-                )}
+            return validReactions.length > 0 ? (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {validReactions.map(([emoji, users]) => {
+                  // Ensure users is an array
+                  const userArray = Array.isArray(users) ? users : [];
+                  return (
+                    <button
+                      key={emoji}
+                      onClick={() => onReact?.(message.id, emoji)}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                        userArray.includes(currentUserId)
+                          ? 'bg-blue-500/20 border border-blue-500/50'
+                          : 'bg-[#1a1a1a] border border-[#262626] hover:bg-[#262626]'
+                      }`}
+                    >
+                      <span>{emoji}</span>
+                      <span className="text-gray-400">{userArray.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null;
+          })()}
+          
+          {/* Edited indicator only */}
+          {message.edited && (
+            <div className={`text-xs mt-0.5 ${isOwn ? 'text-right' : 'text-left'}`}>
+              <span className="text-gray-500 italic">(edited)</span>
+            </div>
+          )}
+        </div>
+        
+        {/* Combined Action Buttons - positioned next to message */}
+        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* Message Actions Menu */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowActions(!showActions)}
+                  className="p-0.5 hover:bg-[#262626] rounded transition-colors"
+                >
+                  <MoreVertical className="w-3 h-3 text-gray-400" />
+                </button>
+            
+            {showActions && (
+            <div className="absolute z-10 mt-1 bg-[#1a1a1a] border border-[#262626] rounded-lg shadow-lg py-1 min-w-[150px] right-0">
+              <button
+                onClick={() => {
+                  onReply?.(message);
+                  setShowActions(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#262626] flex items-center gap-2"
+              >
+                <Reply className="w-3 h-3" />
+                Reply
+              </button>
+              
+              {isOwn && (
+                <button
+                  onClick={() => {
+                    setIsEditing(true);
+                    setShowActions(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#262626] flex items-center gap-2"
+                >
+                  <Edit2 className="w-3 h-3" />
+                  Edit
+                </button>
+              )}
+              
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(message.text || '');
+                  setShowActions(false);
+                }}
+                className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#262626] flex items-center gap-2"
+              >
+                <Copy className="w-3 h-3" />
+                Copy
+              </button>
+              
+              {isOwn && (
+                <button
+                  onClick={() => {
+                    onDelete?.(message.id);
+                    setShowActions(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-red-400 hover:bg-[#262626] flex items-center gap-2"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  Delete
+                </button>
+              )}
+            </div>
+          )}
+          </div>
+          
+              {/* Quick Reactions */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowReactions(!showReactions)}
+                  className="p-0.5 hover:bg-[#262626] rounded transition-colors"
+                >
+                  <Smile className="w-3 h-3 text-gray-400" />
+                </button>
+            
+            {showReactions && (
+              <div className="absolute z-10 mt-1 bg-[#1a1a1a] border border-[#262626] rounded-lg shadow-lg p-2 flex gap-1 right-0">
+                {quickReactions.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => {
+                      onReact?.(message.id, emoji);
+                      setShowReactions(false);
+                    }}
+                    className="p-1 hover:bg-[#262626] rounded transition-colors text-lg"
+                  >
+                    {emoji}
+                  </button>
+                ))}
               </div>
             )}
-          </div>
+              </div>
         </div>
       </div>
     </div>
   );
 };
-
-

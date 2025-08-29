@@ -16,6 +16,10 @@ interface VirtualMessageListProps {
     tier?: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
   };
   onLoadMore?: () => void;
+  onReply?: (message: ChatMessage) => void;
+  onEdit?: (messageId: string, newText: string) => void;
+  onDelete?: (messageId: string) => void;
+  onReact?: (messageId: string, emoji: string) => void;
 }
 
 interface MessageItemData {
@@ -26,6 +30,10 @@ interface MessageItemData {
     photoURL?: string;
     tier?: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
   };
+  onReply?: (message: ChatMessage) => void;
+  onEdit?: (messageId: string, newText: string) => void;
+  onDelete?: (messageId: string) => void;
+  onReact?: (messageId: string, emoji: string) => void;
 }
 
 interface MessageItemProps {
@@ -39,7 +47,7 @@ interface MessageItemProps {
  * As specified in chat-architecture.mdc using react-window
  */
 const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
-  const { messages, currentUserId, getUserInfo } = data;
+  const { messages, currentUserId, getUserInfo, onReply, onEdit, onDelete, onReact } = data;
   const message = messages[index];
   const isOwn = message.senderId === currentUserId;
   const user = getUserInfo ? getUserInfo(message.senderId) : undefined;
@@ -53,6 +61,11 @@ const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
         isOwn={isOwn}
         user={user}
         showAvatar={!isOwn}
+        currentUserId={currentUserId}
+        onReply={onReply}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onReact={onReact}
       />
     </div>
   );
@@ -63,7 +76,11 @@ export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   currentUserId,
   height,
   getUserInfo,
-  onLoadMore
+  onLoadMore,
+  onReply,
+  onEdit,
+  onDelete,
+  onReact
 }) => {
   const listRef = useRef<List>(null);
   
@@ -80,7 +97,7 @@ export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   }, [reversedMessages.length]);
 
   // Fixed item height for consistent rendering
-  const itemSize = 80;
+  const itemSize = 100;
 
   // Handle scroll to load more messages
   const handleScroll = ({ scrollOffset }: { scrollOffset: number }) => {
@@ -92,7 +109,11 @@ export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
   const itemData = {
     messages: reversedMessages,
     currentUserId,
-    getUserInfo
+    getUserInfo,
+    onReply,
+    onEdit,
+    onDelete,
+    onReact
   };
 
   return (

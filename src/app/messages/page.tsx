@@ -1,1070 +1,693 @@
-"use client";
+'use client';
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/contexts/auth-context";
-import {
-  ChatMessage,
-  Conversation,
-  listUserConversations,
-  sendMessage,
-  subscribeMessages,
-  subscribeUserConversations,
-  startDirectByUsername,
-} from "@/services/chat/firestore-chat.service";
-import { db } from "@/lib/firebase-config";
-import { collection, query, where, limit, getDocs, getDoc, doc, deleteDoc } from "firebase/firestore";
+import { useChatStore } from "@/stores/chatStore";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { MessageInput } from "@/components/chat/MessageInput";
+import { VirtualMessageList } from "@/components/chat/VirtualMessageList";
+import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
 import { socketService } from "@/services/chat/socket.service";
-import { encryptionService } from "@/services/chat/encryption.service";
-import { storageService } from "@/services/chat/storage.service";
-import { deleteConversation, deleteAllUserConversations } from "@/services/chat/firestore-chat.service";
-import { Plus, Search, Users } from "lucide-react";
+import { offlineQueue } from "@/services/chat/offline-queue.service";
+import { 
+  Plus, Search, Users, Mic, Settings, Bell, Phone, Video, 
+  Info, Star, MoreVertical, Hash, Lock, ChevronDown, 
+  Paperclip, Image as ImageIcon, Smile, Send, File, X, Home, MessageSquare,
+  CreditCard, Wallet, User as UserIcon, Trash2, Camera, Edit2
+} from "lucide-react";
+import { doc, getDoc, deleteDoc, updateDoc, getDocs, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase-config";
 
-// DirectMessageHeader component to avoid IIFE syntax issues
-function DirectMessageHeader({ active, user, getUserInfo, connectionStatus }: {
-  active: Conversation;
-  user: any;
-  getUserInfo: (userId: string) => any;
-  connectionStatus: 'connecting' | 'connected' | 'fallback';
-}) {
-  const otherUserId = active.members.find(id => id !== user.uid);
-  const otherUser = otherUserId ? getUserInfo(otherUserId) : null;
-  
-  return (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center space-x-3">
-        <div className="relative">
-          <img
-            src={otherUser?.photoURL || '/default-avatar.png'}
-            alt={otherUser?.displayName || 'User'}
-            className="w-10 h-10 rounded-full object-cover"
-          />
-          {/* Tier ring */}
-          <div className={`absolute inset-0 rounded-full border-2 ${
-            otherUser?.tier === 'starter' ? 'border-gray-400' :
-            otherUser?.tier === 'rising' ? 'border-blue-500' :
-            otherUser?.tier === 'pro' ? 'border-purple-500' :
-            otherUser?.tier === 'pixlbeast' ? 'border-yellow-500' :
-            otherUser?.tier === 'pixlionaire' ? 'border-red-500' :
-            'border-gray-400'
-          }`}></div>
-        </div>
-        <div>
-          <h1 className="text-white text-sm font-semibold">
-            {otherUser?.displayName || 'Unknown User'}
-          </h1>
-          <div className="flex items-center space-x-2">
-            <div className={`text-xs px-2 py-0.5 rounded-full ${
-              otherUser?.tier === 'starter' ? 'bg-gray-600 text-gray-200' :
-              otherUser?.tier === 'rising' ? 'bg-blue-600 text-blue-100' :
-              otherUser?.tier === 'pro' ? 'bg-purple-600 text-purple-100' :
-              otherUser?.tier === 'pixlbeast' ? 'bg-yellow-600 text-yellow-100' :
-              otherUser?.tier === 'pixlionaire' ? 'bg-red-600 text-red-100' :
-              'bg-gray-600 text-gray-200'
-            }`}>
-              {otherUser?.tier || 'starter'}
-            </div>
-            <span className="text-xs text-green-400">● Online</span>
-          </div>
-        </div>
-      </div>
-      
-      {/* Connection Status Indicator */}
-      <div className="flex items-center space-x-2">
-        <div className={`flex items-center space-x-1 text-xs px-2 py-1 rounded-full ${
-          connectionStatus === 'connected' ? 'bg-green-900 text-green-300' :
-          connectionStatus === 'fallback' ? 'bg-yellow-900 text-yellow-300' :
-          'bg-gray-900 text-gray-400'
-        }`}>
-          <div className={`w-2 h-2 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-green-400' :
-            connectionStatus === 'fallback' ? 'bg-yellow-400' :
-            'bg-gray-400'
-          }`}></div>
-          <span>
-            {connectionStatus === 'connected' ? 'Real-time' :
-             connectionStatus === 'fallback' ? 'Firestore' :
-             'Connecting...'}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function MessagesPage() {
+export default function EnhancedMessagesPage() {
   const { user, platformUser } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [active, setActive] = useState<Conversation | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
-  const [showNewChat, setShowNewChat] = useState(false);
-  const [searchUsername, setSearchUsername] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback'>('connecting');
-  // User cache for profile data
-  const [userCache, setUserCache] = useState<Record<string, any>>({});
-
-  // Function to fetch user data from Firestore
-  const fetchUserData = async (userId: string) => {
-    if (userCache[userId]) return userCache[userId];
-
-    try {
-      const userDoc = await getDoc(doc(db, 'users', userId));
-      if (userDoc.exists()) {
-        const userData = { uid: userId, ...userDoc.data() };
-        setUserCache(prev => ({ ...prev, [userId]: userData }));
-        return userData;
-      }
-    } catch (error) {
-      console.error('Failed to fetch user data:', error);
+  const [userProfiles, setUserProfiles] = useState<Map<string, any>>(new Map());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showChannelImageUpload, setShowChannelImageUpload] = useState(false);
+  
+  const {
+    conversations,
+    messages,
+    activeConversationId,
+    isConnected,
+    typing,
+    presence,
+    replyingTo,
+    loadConversations,
+    loadMessages,
+    setActiveConversation,
+    sendMessage,
+    initializeSocket,
+    initializeEncryption,
+    updateTyping,
+    markAsRead,
+    addReaction,
+    deleteConversation,
+    deleteMessage,
+    editMessage,
+    setReplyingTo,
+    reset
+  } = useChatStore();
+  
+  // Set userId in store
+  useEffect(() => {
+    if (user?.uid) {
+      useChatStore.setState({ userId: user.uid });
     }
-    
-    return null;
-  };
+  }, [user]);
 
-  // Initialize encryption, presence, and Socket.io
+  // Initialize chat system
   useEffect(() => {
     if (!user) return;
-    
+
     const initializeChat = async () => {
       try {
-        setError(null);
+        await initializeEncryption(user.uid);
+        await keyExchangeService.initializeUserKeys(user.uid);
+        await presenceService.initializePresence(user.uid);
         
-        // BUG FIX: 2025-01-28 - Add Firebase connectivity check and timeout
-        // Problem: Firebase connectivity issues causing page to hang indefinitely
-        // Solution: Check network status, add timeout, and handle offline scenarios
-        // Impact: Better error handling and user feedback for connectivity issues
+        const socket = await socketService.initialize(user.uid);
         
-        if (!navigator.onLine) {
-          throw new Error('No internet connection. Please check your network and try again.');
-        }
-        
-        // Add timeout wrapper for all Firebase operations
-        const initWithTimeout = async () => {
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Firebase connection timeout. Please refresh the page.')), 15000);
+        if (socket) {
+          initializeSocket(socket);
+          
+          socket.on('connect', () => {
+            setConnectionStatus('connected');
+            console.log('✅ Real-time connection established');
           });
           
-          const initPromise = (async () => {
-            // BUG FIX: 2025-01-28 - Initialize encryption with graceful error handling
-            // Problem: Firebase connectivity issues and key initialization failures
-            // Solution: Add proper error handling and don't clear keys automatically
-            // Impact: More stable initialization without losing existing keys
-            
-            // Initialize encryption keys with error handling
-            try {
-              await keyExchangeService.initializeUserKeys(user.uid);
-              console.log('✅ Encryption keys initialized');
-            } catch (error) {
-              console.error('🔑 Failed to initialize encryption keys:', error);
-              throw new Error('Failed to initialize secure messaging. Please try refreshing the page.');
-            }
-            
-            // Initialize presence (non-critical)
-            try {
-              await presenceService.initializePresence(user.uid);
-              console.log('✅ Presence service initialized');
-            } catch (error) {
-              console.warn('⚠️ Presence service failed to initialize (non-critical):', error);
-            }
-            
-            // Initialize Socket.io connection (optional enhancement)
-            try {
-              await socketService.initialize();
-              if (socketService.isSocketConnected()) {
-                setConnectionStatus('connected');
-                console.log('✅ Socket.io connected');
-                
-                // Setup Socket.io event listeners
-                socketService.on('message:new', (message) => {
-                  console.log('📨 Real-time message received:', message.id);
-                  // Remove any optimistic message with same content
-                  setMessages(prev => {
-                    const filtered = prev.filter(m => !m.id.startsWith('temp-'));
-                    return [message as unknown as ChatMessage, ...filtered];
-                  });
-                });
-                
-                socketService.on('message:sent', (data) => {
-                  console.log('✅ Message sent confirmation:', data.messageId);
-                });
-                
-                socketService.on('typing:update', (data) => {
-                  console.log('⌨️ Typing update:', data);
-                  // Handle typing indicators here
-                });
-                
-                socketService.on('presence:update', (data) => {
-                  console.log('👤 Presence update:', data);
-                  // Handle user online/offline status here
-                });
-                
-              } else {
-                setConnectionStatus('fallback');
-                console.log('📡 Using Firestore fallback (Socket.io unavailable)');
-              }
-            } catch (error) {
-              console.warn('⚠️ Socket.io failed to initialize, using Firestore fallback:', error);
-              setConnectionStatus('fallback');
-            }
-          })();
-          
-          return Promise.race([initPromise, timeoutPromise]);
-        };
-        
-        await initWithTimeout();
-        
-        setIsInitializing(false);
-        
-        // Set active conversation now that initialization is complete
-        if (conversations.length > 0 && !active) {
-          setActive(conversations[0]);
+          socket.on('disconnect', () => {
+            setConnectionStatus('fallback');
+            console.log('⚠️ Falling back to Firestore');
+          });
+        } else {
+          console.warn('Socket connection not available, using Firestore fallback');
+          setConnectionStatus('fallback');
         }
+        
+        await loadConversations();
+        
+        const queueStatus = offlineQueue.getStatus();
+        if (queueStatus.queueSize > 0) {
+          console.log(`📦 ${queueStatus.queueSize} messages in offline queue`);
+        }
+        
       } catch (error) {
         console.error('Failed to initialize chat:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to initialize secure chat. Please refresh the page.';
-        setError(errorMessage);
-        setIsInitializing(false);
+        setConnectionStatus('fallback');
       }
     };
 
     initializeChat();
 
-    // Cleanup on unmount
     return () => {
-      presenceService.cleanup();
+      presenceService.stopHeartbeat();
       socketService.disconnect();
+      reset();
     };
   }, [user]);
 
-  // Subscribe to conversations in real-time
+  // Load messages for active conversation
   useEffect(() => {
-    if (!user || isInitializing) return;
-    
-    console.log('🔄 Setting up real-time conversation subscription for user:', user.uid);
-    
-    const unsubscribe = subscribeUserConversations(user.uid, (conversations) => {
-      console.log('📋 Received conversation update:', conversations.length, 'conversations');
+    if (activeConversationId) {
+      loadMessages(activeConversationId);
       
-      // Deduplicate conversations by ID
-      const uniqueConversations = conversations.filter((conv, index, self) => 
-        index === self.findIndex(c => c.id === conv.id)
-      );
+      const conversationMessages = messages.get(activeConversationId) || [];
+      const unreadIds = conversationMessages
+        .filter(m => m.senderId !== user?.uid && !m.read?.includes(user?.uid || ''))
+        .map(m => m.id);
       
-      setConversations(uniqueConversations);
-      
-      // Set active conversation if none is selected and we have conversations
-      if (uniqueConversations.length > 0 && !active) {
-        setActive(uniqueConversations[0]);
+      if (unreadIds.length > 0) {
+        markAsRead(unreadIds, user?.uid || '');
       }
-
-      // Preload user data for all conversation members
-      const allMemberIds = new Set<string>();
-      uniqueConversations.forEach(conv => {
-        conv.members.forEach(memberId => {
-          if (memberId !== user.uid) {
-            allMemberIds.add(memberId);
-          }
-        });
-      });
-
-      // Fetch user data for all members
-      Array.from(allMemberIds).forEach(userId => {
-        fetchUserData(userId);
-      });
-    });
-    
-    return () => {
-      console.log('🔄 Cleaning up conversation subscription');
-      unsubscribe();
-    };
-  }, [user, isInitializing, active]);
-
-  // Subscribe to messages and Socket.io events
+    }
+  }, [activeConversationId]);
+  
+  // Fetch user profiles for conversations
   useEffect(() => {
-    if (!active) return;
-    
-    // Subscribe to Firestore messages for persistence and history
-    // This provides the authoritative message store with dual encryption
-    setMessagesLoading(true);
-    const unsub = subscribeMessages(active.id, (firestoreMessages) => {
-      console.log('📚 Received', firestoreMessages.length, 'messages from Firestore subscription');
+    const fetchUserProfiles = async () => {
+      const profiles = new Map();
       
-      // Filter out any messages with decryption errors before displaying
-      const validMessages = firestoreMessages.filter(msg => 
-        !msg.text.includes('[Decrypting...]') &&
-        !msg.text.includes('[Decryption failed]') &&
-        !msg.text.includes('[Cannot decrypt]')
-      );
-      
-      // Only update if messages have actually changed (prevents flashing)
-      setMessages(prev => {
-        setMessagesLoading(false);
-        
-        // Check if the messages are actually different
-        if (prev.length === validMessages.length) {
-          const hasChanges = validMessages.some((msg, index) => 
-            prev[index]?.id !== msg.id || 
-            prev[index]?.text !== msg.text
-          );
-          if (!hasChanges) {
-            console.log('📚 No changes in messages, skipping update');
-            return prev;
-          }
-        }
-        console.log('📚 Updating messages from Firestore');
-        return validMessages;
-      });
-    });
-    
-    // Join Socket.io conversation room
-    socketService.joinConversation(active.id);
-    
-    // Listen for real-time messages via Socket.io
-    const handleNewMessage = async (message: any) => {
-      // Normalize conversation ID for comparison (handle direct_userA_userB format)
-      const normalizeId = (id: string) => {
-        if (!id.startsWith('direct_')) return id;
-        const parts = id.replace('direct_', '').split('_');
-        if (parts.length !== 2) return id;
-        return `direct_${parts.sort().join('_')}`;
-      };
-      
-      const normalizedMessageConvId = normalizeId(message.conversationId);
-      const normalizedActiveId = normalizeId(active.id);
-      
-      if (normalizedMessageConvId === normalizedActiveId) {
-        console.log('📨 Received Socket.io message:', message);
-        console.log('📨 Message senderId:', message.senderId, 'Current userId:', user?.uid);
-        
-        // IMPORTANT: Skip own messages from Socket.io since they're already handled optimistically
-        // and will be properly stored via Firestore with dual encryption
-        const currentUserId = user?.uid;
-        const isOwnMessage = message.senderId === currentUserId;
-        
-        if (isOwnMessage) {
-          console.log('🔄 Skipping own message from Socket.io (already shown optimistically)');
-          return; // Don't process own messages from Socket.io
-        }
-        
-        // Decrypt the message content for messages from others
-        let decryptedText = message.content; // Default to encrypted content
-        
-        try {
-          if (message.nonce) {
-            // For messages from others, decrypt using sender's public key
-            const senderPublicKey = await keyExchangeService.getPublicKey(message.senderId);
-            if (senderPublicKey) {
-              decryptedText = encryptionService.decryptMessage(
-                { content: message.content, nonce: message.nonce },
-                senderPublicKey
-              );
-              console.log('🔓 Successfully decrypted Socket.io message from:', message.senderId);
-            } else {
-              console.warn('⚠️ Could not get public key for sender:', message.senderId);
-              decryptedText = '[Unable to decrypt - key not found]';
+      for (const conversation of conversations.values()) {
+        for (const memberId of conversation.members) {
+          if (memberId !== user?.uid && !profiles.has(memberId)) {
+            try {
+              const userDoc = await getDoc(doc(db, 'users', memberId));
+              if (userDoc.exists()) {
+                const userData = userDoc.data();
+                const avatarUrl = userData.profile?.avatarUrl || 
+                                userData.avatarUrl || 
+                                userData.photoURL || 
+                                '/default-avatar.png';
+                
+                const profile = {
+                  displayName: userData.displayName || userData.email?.split('@')[0] || 'Unknown User',
+                  photoURL: avatarUrl,
+                  tier: userData.tier?.current || userData.tier || 'starter',
+                  username: userData.username,
+                  email: userData.email
+                };
+                
+                profiles.set(memberId, profile);
+              }
+            } catch (error) {
+              console.error('Failed to fetch user profile:', error);
             }
           }
-        } catch (error) {
-          console.error('🔥 Failed to decrypt Socket.io message:', error);
-          decryptedText = '[Decryption failed]';
         }
-        
-        // Convert Socket.io message format to ChatMessage format
-        const chatMessage: ChatMessage = {
-          id: message.id,
-          senderId: message.senderId,
-          text: decryptedText,
-          timestamp: { toDate: () => new Date(message.timestamp) } as any,
-          readBy: message.read || [],
-          deliveredTo: message.delivered || []
-        };
-        
-        // Add message from other users (own messages are skipped above)
-        setMessages(prev => {
-          // Check if this message already exists (from Firestore subscription)
-          const messageExists = prev.some(msg => msg.id === message.id);
-          if (messageExists) {
-            console.log('📋 Message already exists from Firestore, skipping Socket.io duplicate');
-            return prev;
-          }
-          
-          // Add the new message to the list (messages are in DESC order)
-          console.log('➕ Adding new message from Socket.io to chat');
-          return [chatMessage, ...prev];
-        });
       }
-    };
-    
-    const handleMessageSent = (data: { messageId: string; timestamp: string }) => {
-      console.log('✅ Message sent confirmation:', data);
       
-      // Replace optimistic message with confirmed one
-      setMessages(prev => prev.map(msg => {
-        if (msg.id.startsWith('temp-')) {
-          return {
-            ...msg,
-            id: data.messageId,
-            timestamp: { toDate: () => new Date(data.timestamp) } as any
-          };
-        }
-        return msg;
-      }));
+      setUserProfiles(profiles);
     };
     
-    const handleTypingUpdate = (data: { conversationId: string; userId: string; typing: boolean }) => {
-      // Normalize conversation ID for comparison
-      const normalizeId = (id: string) => {
-        if (!id.startsWith('direct_')) return id;
-        const parts = id.replace('direct_', '').split('_');
-        if (parts.length !== 2) return id;
-        return `direct_${parts.sort().join('_')}`;
-      };
-      
-      const normalizedDataConvId = normalizeId(data.conversationId);
-      const normalizedActiveId = normalizeId(active.id);
-      
-      if (normalizedDataConvId === normalizedActiveId && data.userId !== user?.uid) {
-        // Handle typing indicator updates
-        console.log('Typing update:', data);
-      }
-    };
-    
-    socketService.on('message:new', handleNewMessage);
-    socketService.on('message:sent', handleMessageSent);
-    socketService.on('typing:update', handleTypingUpdate);
-    
-    return () => {
-      unsub();
-      socketService.leaveConversation(active.id);
-      socketService.off('message:new', handleNewMessage);
-      socketService.off('message:sent', handleMessageSent);
-      socketService.off('typing:update', handleTypingUpdate);
-    };
-  }, [active, user]);
+    if (conversations.size > 0 && user) {
+      fetchUserProfiles();
+    }
+  }, [conversations, user]);
 
-  const handleSend = async (text: string) => {
-    if (!user || !active) return;
+  const activeConversation = activeConversationId ? conversations.get(activeConversationId) : null;
+  const activeMessages = activeConversationId ? messages.get(activeConversationId) || [] : [];
+  const typingUsers = activeConversationId ? typing.get(activeConversationId) || [] : [];
+
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || !activeConversationId) return;
+    await sendMessage(text, 'text');
+  };
+
+  const handleMediaSend = async (mediaMessage: any) => {
+    if (!activeConversationId) return;
     
-    // BUG FIX: 2025-01-28 - Check if encryption is initialized before sending
-    // Problem: User could try to send messages before key initialization is complete
-    // Solution: Check initialization status and prevent sending until ready
-    // Impact: Prevents "No key pair available" errors when sending messages
+    const messageType = mediaMessage.mediaType === 'image' ? 'image' : 
+                       mediaMessage.mediaType === 'voice' ? 'voice' : 
+                       mediaMessage.mediaType === 'file' ? 'file' : 'media';
     
-    if (isInitializing) {
-      console.warn('⚠️ Chat is still initializing, please wait...');
-      return;
-    }
-    
-    // Verify encryption service has keys
-    const hasKeys = encryptionService.getPublicKey() !== null;
-    if (!hasKeys) {
-      console.error('🔥 Encryption keys not available, cannot send message');
-      setError('Encryption not ready. Please wait for initialization to complete.');
-      return;
-    }
-    
-    // BUG FIX: 2025-01-28 - Add optimistic update to reduce message delay
-    // Problem: There's a delay when a message is sent before it shows in chat window
-    // Solution: Add optimistic message immediately, then let real-time subscription update it
-    // Impact: Messages appear instantly for better user experience
-    
-    const optimisticMessage: ChatMessage = {
-      id: `temp-${Date.now()}`,
-      senderId: user.uid,
-      text: text,
-      timestamp: { toDate: () => new Date() } as any,
-      readBy: [],
-      deliveredTo: []
-    };
-    
-    // Add optimistic message immediately at the beginning (messages are in DESC order from Firestore)
-    setMessages(prev => [optimisticMessage, ...prev]);
-    
-    try {
-      // BUG FIX: 2025-01-28 - Use Socket.io for real-time messaging when available
-      // Problem: Messages only sent via Firestore, missing real-time performance
-      // Solution: Use Socket.io when connected, fallback to Firestore
-      // Impact: Sub-200ms message delivery when Socket.io server is available
-      
-      if (socketService.isSocketConnected()) {
-        // Get recipient's public key for encryption
-        const otherUserId = active.members.find(id => id !== user.uid);
-        if (!otherUserId) {
-          throw new Error('Cannot find recipient in conversation');
-        }
-        
-        const recipientKey = await keyExchangeService.getPublicKey(otherUserId);
-        const senderKey = encryptionService.getPublicKey();
-        
-        if (!recipientKey || !senderKey) {
-          throw new Error('Encryption keys not available');
-        }
-        
-        // Encrypt message for recipient
-        const recipientEncrypted = encryptionService.encryptMessage(text, recipientKey);
-        // Encrypt message for sender (dual encryption)
-        const senderEncrypted = encryptionService.encryptMessage(text, senderKey);
-        
-        // Send via Socket.io for real-time delivery
-        socketService.sendMessage({
-          conversationId: active.id,
-          type: 'text',
-          text: recipientEncrypted.content,  // Encrypted for recipient
-          nonce: recipientEncrypted.nonce,    // Nonce for recipient
-          plainText: text  // Include plain text for sender's own display (will not be sent to others)
-        });
-        
-        console.log('📤 Message sent via Socket.io with sub-200ms delivery');
-        
-        // ALWAYS also save to Firestore for persistence and dual encryption
-        // This ensures messages are stored even if Socket.io delivery fails
-        await sendMessage(active.id, user.uid, text);
-        console.log('💾 Message also saved to Firestore for persistence');
-      } else {
-        // Fallback to Firestore only
-        await sendMessage(active.id, user.uid, text);
-        console.log('📤 Message sent via Firestore (Socket.io not available)');
-      }
-      
-      // Real message will replace optimistic one via subscription or Socket.io event
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      setError('Failed to send message. Please try again.');
-      // Remove optimistic message on error
-      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
+    await sendMessage(mediaMessage.downloadUrl || '', messageType, {
+      ...mediaMessage.metadata,
+      downloadUrl: mediaMessage.downloadUrl,
+      encryptedKey: mediaMessage.encryptedKey,
+      nonce: mediaMessage.nonce,
+      mediaType: mediaMessage.mediaType
+    });
+  };
+
+  const handleTyping = (isTyping: boolean) => {
+    if (activeConversationId) {
+      updateTyping(activeConversationId, isTyping);
     }
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
-    if (!user) return;
-    
-    try {
-      await deleteConversation(conversationId, user.uid);
-      
-      // Remove from local state
-      setConversations(prev => prev.filter(c => c.id !== conversationId));
-      
-      // If this was the active conversation, clear it
-      if (active?.id === conversationId) {
-        setActive(null);
+    if (confirm('Delete this conversation? This will remove all messages and start fresh. This action cannot be undone.')) {
+      try {
+        // Delete all messages in the conversation from Firestore
+        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+        const messagesSnapshot = await getDocs(messagesRef);
+        
+        // Delete each message document
+        const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+        await Promise.all(deletePromises);
+        
+        // Delete the conversation document from Firestore
+        await deleteDoc(doc(db, 'conversations', conversationId));
+        
+        // Use store's deleteConversation to clear from local state
+        // This will handle clearing messages and conversation from the store
+        deleteConversation(conversationId);
+        
+        // Reload conversations to ensure sync with Firestore
+        await loadConversations();
+      } catch (error) {
+        console.error('Failed to delete conversation:', error);
       }
-      
-      console.log('✅ Conversation deleted successfully');
-    } catch (error) {
-      console.error('Failed to delete conversation:', error);
-      setError('Failed to delete conversation. Please try again.');
     }
   };
 
-  const handleDeleteAllConversations = async () => {
-    if (!user) return;
-    
-    if (!confirm('Delete ALL conversations? This action cannot be undone.')) {
-      return;
-    }
-    
-    try {
-      await deleteAllUserConversations(user.uid);
-      
-      // Clear local state
-      setConversations([]);
-      setActive(null);
-      
-      console.log('✅ All conversations deleted successfully');
-    } catch (error) {
-      console.error('Failed to delete all conversations:', error);
-      setError('Failed to delete conversations. Please try again.');
-    }
-  };
+  const handleChangeChannelImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !activeConversation || activeConversation.type !== 'group') return;
 
-  // BUG FIX: 2025-01-28 - Add safe key reset function
-  // Problem: Clearing keys makes existing encrypted messages unreadable
-  // Solution: Provide option to reset keys only after clearing conversations
-  // Impact: Prevents data loss and provides clear user workflow
-  const handleSafeKeyReset = async () => {
-    if (!user) return;
-    
-    const hasConversations = conversations.length > 0;
-    
-    if (hasConversations) {
-      const confirmDelete = confirm(
-        '⚠️ WARNING: Resetting encryption keys will make all existing messages unreadable!\n\n' +
-        'This will:\n' +
-        '• Delete ALL your conversations and messages\n' +
-        '• Generate new encryption keys\n' +
-        '• Allow you to start fresh with working encryption\n\n' +
-        'Do you want to continue?'
-      );
-      
-      if (!confirmDelete) return;
-      
-      // First delete all conversations
-      await handleDeleteAllConversations();
-    }
-    
-    try {
-      // Clear encryption keys
-      console.log('🔑 Clearing all stored keys for fresh start');
-      await storageService.clearAll();
-      
-      // Clear user keys from Firestore
-      console.log('🔑 Clearing user keys from Firestore');
-      await deleteDoc(doc(db, 'userKeys', user.uid));
-      
-      // Reinitialize encryption
-      await keyExchangeService.initializeUserKeys(user.uid);
-      
-      console.log('✅ Encryption keys reset successfully - you can now send messages');
-      
-    } catch (error) {
-      console.error('❌ Error resetting keys:', error);
-      setError('Failed to reset encryption keys. Please try again.');
-    }
-  };
-
-  const handleStartNewChat = async (targetUsername?: string) => {
-    if (!user) return;
-    
-    const username = targetUsername || searchUsername.trim();
-    if (!username) return;
-    
-    // BUG FIX: 2025-01-28 - Prevent users from starting chats with themselves
-    // Problem: Users could attempt to message themselves via username search
-    // Solution: Added frontend validation to check if target username matches current user
-    // Impact: Better UX with immediate feedback instead of backend error
-    const normalizedUsername = username.startsWith('@') ? username : `@${username}`;
-    if (normalizedUsername === platformUser?.username) {
-      alert("You cannot send messages to yourself.");
-      return;
-    }
-    
-    try {
-      const conversation = await startDirectByUsername(user.uid, username);
-      if (conversation) {
-        setConversations(prev => {
-          // Check if conversation already exists to avoid duplicates
-          const exists = prev.find(c => c.id === conversation.id);
-          if (exists) {
-            return prev; // Don't add duplicate
-          }
-          return [conversation, ...prev];
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        // Update in Firestore
+        await updateDoc(doc(db, 'conversations', activeConversationId!), {
+          'groupInfo.photoURL': base64
         });
-        setActive(conversation);
-        setShowNewChat(false);
-        setSearchUsername("");
-        setSearchResults([]);
-      } else {
-        alert("User not found. Make sure they have an account and try their @username.");
+        
+        // Small delay to ensure Firestore has updated
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Reload conversations to get the updated data
+        await loadConversations();
+        
+        console.log('✅ Group image updated successfully');
+      } catch (error) {
+        console.error('Failed to update channel image:', error);
       }
-    } catch (error) {
-      console.error('Failed to start conversation:', error);
-      if (error instanceof Error && error.message.includes('Cannot create conversation with yourself')) {
-        alert("You cannot send messages to yourself.");
-      } else {
-        alert("Failed to start conversation. Please try again.");
-      }
-    }
-  };
-
-  const handleSearchInputChange = (value: string) => {
-    // Enforce @ prefix
-    if (value && !value.startsWith('@')) {
-      value = '@' + value;
-    }
-    setSearchUsername(value);
-  };
-
-  // Smart search for users
-  const searchUsers = async (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      setSearchResults([]);
-      return;
-    }
-
-    setIsSearching(true);
-    try {
-      // Ensure @ prefix
-      const normalizedSearch = searchTerm.startsWith('@') ? searchTerm : `@${searchTerm}`;
-      
-      // Search users collection
-      const usersRef = collection(db, 'users');
-      const q = query(
-        usersRef,
-        where('username', '>=', normalizedSearch),
-        where('username', '<=', normalizedSearch + '\uf8ff'),
-        limit(10)
-      );
-      
-      const snapshot = await getDocs(q);
-      const results = snapshot.docs.map(doc => ({
-        uid: doc.id,
-        ...doc.data()
-      }));
-      
-      // BUG FIX: 2025-01-28 - Filter out current user from search results
-      // Problem: Users could see themselves in search results and attempt self-messaging
-      // Solution: Filter out current user from search results
-      // Impact: Prevents confusion and self-messaging attempts
-      const filteredResults = results.filter(result => result.uid !== user?.uid);
-      setSearchResults(filteredResults);
-    } catch (error) {
-      console.error('Search failed:', error);
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Debounced search effect
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchUsername.length >= 2) {
-        searchUsers(searchUsername);
-      } else {
-        setSearchResults([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [searchUsername]);
-
-  const getUserInfo = (userId: string) => {
-    // Try to get from platform user data first (current user)
-    if (userId === user?.uid && platformUser) {
-      return {
-        displayName: platformUser.profile?.firstName && platformUser.profile?.lastName 
-          ? `${platformUser.profile.firstName} ${platformUser.profile.lastName}`
-          : platformUser.username,
-        photoURL: platformUser.profile?.avatarUrl || '/default-avatar.png',
-        tier: platformUser.tier?.current || 'starter'
-      };
-    }
-
-    // Look in user cache
-    const cachedUser = userCache[userId];
-    if (cachedUser) {
-      return {
-        displayName: cachedUser.profile?.firstName && cachedUser.profile?.lastName 
-          ? `${cachedUser.profile.firstName} ${cachedUser.profile.lastName}`
-          : cachedUser.username,
-        photoURL: cachedUser.profile?.avatarUrl || '/default-avatar.png',
-        tier: cachedUser.tier?.current || 'starter'
-      };
-    }
-
-    // Look in search results
-    const searchResult = searchResults.find(u => u.uid === userId);
-    if (searchResult) {
-      return {
-        displayName: searchResult.profile?.firstName && searchResult.profile?.lastName 
-          ? `${searchResult.profile.firstName} ${searchResult.profile.lastName}`
-          : searchResult.username,
-        photoURL: searchResult.profile?.avatarUrl || '/default-avatar.png',
-        tier: searchResult.tier?.current || 'starter'
-      };
-    }
-
-    // Fetch user data if not in cache
-    fetchUserData(userId);
-
-    // Fallback while loading
-    return {
-      displayName: `User ${userId.slice(-4)}`,
-      photoURL: '/default-avatar.png',
-      tier: 'starter' as const
     };
+    reader.readAsDataURL(file);
   };
 
   if (!user) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center text-gray-400">
-        Please sign in to view your messages.
+      <div className="flex items-center justify-center h-screen bg-black">
+        <div className="text-gray-400">Please sign in to access messages</div>
       </div>
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-gray-400">
-        <div className="text-center max-w-md">
-          <div className="text-red-500 text-4xl mb-4">⚠️</div>
-          <h3 className="text-lg font-medium mb-2 text-red-400">Chat System Error</h3>
-          <p className="text-sm mb-4">{error}</p>
-          {/* BUG FIX: 2025-01-28 - Show network status and troubleshooting tips */}
-          <div className="text-xs text-gray-500 mb-4 space-y-1">
-            <p>Network status: {navigator.onLine ? '🟢 Online' : '🔴 Offline'}</p>
-            {!navigator.onLine && <p>Please check your internet connection</p>}
-            {error.includes('timeout') && (
-              <p>Firebase connection is slow. This may be a temporary issue.</p>
-            )}
-            {error.includes('offline') && (
-              <p>Firebase is reporting offline status. Check your connection.</p>
-            )}
-          </div>
-          <div className="space-x-2">
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
-            >
-              Refresh Page
-            </button>
-            <button
-              onClick={() => setError(null)}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm rounded"
-            >
-              Try Again
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Get conversation display info
+  const getConversationInfo = () => {
+    if (!activeConversation) return null;
+    
+    if (activeConversation.type === 'group') {
+      return {
+        name: activeConversation.groupInfo?.name || 'Group Chat',
+        avatar: activeConversation.groupInfo?.photoURL || '/default-group.svg',
+        subtitle: `${activeConversation.members.length} members`,
+        isGroup: true
+      };
+    } else {
+      const otherUserId = activeConversation.members.find(id => id !== user.uid);
+      const otherUser = otherUserId ? userProfiles.get(otherUserId) : null;
+      return {
+        name: otherUser?.displayName || 'Direct Message',
+        avatar: otherUser?.photoURL || '/default-avatar.png',
+        subtitle: presence.get(otherUserId || '') ? 'Active now' : 'Offline',
+        isGroup: false,
+        tier: otherUser?.tier
+      };
+    }
+  };
 
-  if (isInitializing) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-gray-400">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p>Initializing secure chat...</p>
-          <p className="text-xs mt-2 opacity-70">Setting up encryption keys...</p>
-          {/* BUG FIX: 2025-01-28 - Show connection status during initialization */}
-          <p className="text-xs text-gray-500 mt-1">
-            {!navigator.onLine ? '⚠️ No internet connection' : '🔄 Connecting to Firebase...'}
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const conversationInfo = getConversationInfo();
+
+  // Get tier ring color
+  const getTierRingColor = (tier?: string) => {
+    switch (tier) {
+      case 'pixlionaire': return 'ring-2 ring-purple-500';
+      case 'pixlbeast': return 'ring-2 ring-amber-500';
+      case 'pro': return 'ring-2 ring-green-500';
+      case 'rising': return 'ring-2 ring-blue-500';
+      default: return 'ring-1 ring-gray-600';
+    }
+  };
 
   return (
-    <div className="h-[calc(100vh-64px)] bg-black flex">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-gray-900 bg-gray-950 flex flex-col">
-        {/* Header with New Chat button */}
-        <div className="p-3 border-b border-gray-800">
-                      <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-white">Messages</h2>
-              <div className="flex items-center space-x-1">
-                <button
-                  onClick={handleSafeKeyReset}
-                  className="p-1 text-yellow-400 hover:text-yellow-300 hover:bg-gray-800 rounded text-xs"
-                  title="Reset encryption keys (fixes decryption issues)"
-                >
-                  🔑
-                </button>
-                <button
-                  onClick={handleDeleteAllConversations}
-                  className="p-1 text-red-400 hover:text-red-300 hover:bg-gray-800 rounded text-xs"
-                  title="Delete all conversations (for testing)"
-                >
-                  🗑️
-                </button>
-                <button
-                  onClick={() => setShowNewChat(!showNewChat)}
-                  className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded"
-                  title="Start new chat"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
+    <div className="fixed inset-0 bg-black flex flex-col">
+      {/* New Conversation Modal */}
+      <NewConversationModal
+        isOpen={showNewConversation}
+        onClose={() => setShowNewConversation(false)}
+        currentUserId={user.uid}
+      />
+      
+      <div className="flex flex-1 overflow-hidden">
+        {/* Channel Sidebar */}
+        <div className="w-64 bg-[#0a0a0a] border-r border-[#262626] flex flex-col">
+          {/* Workspace Header */}
+          <div className="p-4 border-b border-[#262626]">
+            <button className="w-full flex items-center justify-between hover:bg-[#1a1a1a] px-2 py-1 rounded transition-colors">
+              <span className="font-semibold text-white">PXL Chat</span>
+              <ChevronDown className="w-4 h-4 text-gray-400" />
+            </button>
+          </div>
+
+          {/* Search */}
+          <div className="p-3 border-b border-[#262626]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-1.5 bg-[#1a1a1a] text-gray-300 rounded-md outline-none text-sm"
+              />
             </div>
-          
+          </div>
+
+          {/* Channels & DMs */}
+          <div className="flex-1 overflow-y-auto">
+            {/* Channels Section */}
+            <div className="px-3 py-2">
+              <button className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
+                <ChevronDown className="w-3 h-3" />
+                <span>Channels</span>
+              </button>
+              
+              {Array.from(conversations.values())
+                .filter(c => c.type === 'group')
+                .map(conv => (
+                  <div key={conv.id} className="group relative">
+                    <div
+                      onClick={() => setActiveConversation(conv.id)}
+                      className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#1a1a1a] transition-colors cursor-pointer ${
+                        activeConversationId === conv.id ? 'bg-[#1a1a1a] text-white' : 'text-gray-400'
+                      }`}
+                    >
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={conv.groupInfo?.photoURL || '/default-group.svg'}
+                          alt={conv.groupInfo?.name || 'Group'}
+                          className="w-10 h-10 rounded-full object-cover bg-[#262626]"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = '/default-group.svg';
+                          }}
+                        />
+                      </div>
+                      <span className="text-sm truncate flex-1">{conv.groupInfo?.name || 'group-chat'}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteConversation(conv.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                      >
+                        <Trash2 className="w-3 h-3 text-red-400" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              
+              <button
+                onClick={() => setShowNewConversation(true)}
+                className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400 mt-1"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm">Add channel</span>
+              </button>
+            </div>
+
+            {/* Direct Messages Section */}
+            <div className="px-3 py-2 border-t border-[#262626]">
+              <button className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
+                <ChevronDown className="w-3 h-3" />
+                <span>Direct Messages</span>
+              </button>
+              
+              {Array.from(conversations.values())
+                .filter(c => c.type === 'direct')
+                .map(conv => {
+                  const otherUserId = conv.members.find(id => id !== user.uid);
+                  const otherUser = otherUserId ? userProfiles.get(otherUserId) : null;
+                  const isOnline = presence.get(otherUserId || '');
+                  
+                  return (
+                    <div key={conv.id} className="group relative">
+                      <div
+                        onClick={() => setActiveConversation(conv.id)}
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#1a1a1a] transition-colors cursor-pointer ${
+                          activeConversationId === conv.id ? 'bg-[#1a1a1a] text-white' : 'text-gray-400'
+                        }`}
+                      >
+                        <div className="relative flex-shrink-0">
+                          <img
+                            src={otherUser?.photoURL || '/default-avatar.png'}
+                            alt={otherUser?.displayName || 'User'}
+                            className={`w-10 h-10 rounded-full object-cover bg-[#262626] ${getTierRingColor(otherUser?.tier)}`}
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/default-avatar.png';
+                            }}
+                          />
+                          {isOnline && (
+                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border border-[#0a0a0a]" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm truncate">
+                              {otherUser?.displayName || 'Unknown User'}
+                            </span>
+                            {otherUser?.tier && otherUser.tier !== 'starter' && (
+                              <span className={`text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0 ${
+                                otherUser.tier === 'pixlionaire' ? 'bg-purple-900/30 text-purple-400' :
+                                otherUser.tier === 'pixlbeast' ? 'bg-amber-900/30 text-amber-400' :
+                                otherUser.tier === 'pro' ? 'bg-green-900/30 text-green-400' :
+                                otherUser.tier === 'rising' ? 'bg-blue-900/30 text-blue-400' :
+                                'bg-gray-900/30 text-gray-400'
+                              }`}>
+                                {otherUser.tier.toUpperCase()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteConversation(conv.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-500/20 rounded transition-all"
+                        >
+                          <Trash2 className="w-3 h-3 text-red-400" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                
+              <button
+                onClick={() => setShowNewConversation(true)}
+                className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400 mt-1"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-sm">New message</span>
+              </button>
+            </div>
+          </div>
+
           {/* Connection Status */}
-          {connectionStatus !== 'connecting' && (
-            <div className="flex items-center text-xs text-gray-400 mb-2">
-              <div className={`w-2 h-2 rounded-full mr-2 ${
-                connectionStatus === 'connected' ? 'bg-green-500' : 'bg-yellow-500'
-              }`} />
-              {connectionStatus === 'connected' ? 'Real-time messaging' : 'Secure messaging'}
+          <div className="p-3 border-t border-[#262626]">
+            <div className={`text-xs px-2 py-1 rounded text-center ${
+              connectionStatus === 'connected' ? 'bg-green-900/20 text-green-400' :
+              connectionStatus === 'fallback' ? 'bg-yellow-900/20 text-yellow-400' :
+              'bg-gray-900 text-gray-500'
+            }`}>
+              {connectionStatus === 'connected' ? '● Connected' :
+               connectionStatus === 'fallback' ? '● Fallback Mode' :
+               '○ Connecting...'}
             </div>
-          )}
-          
-          {/* BUG FIX: 2025-01-28 - Add encryption status indicator */}
-          {/* Problem: Users don't know when encryption is still initializing */}
-          {/* Solution: Show clear status indicator for encryption readiness */}
-          {/* Impact: Users understand when they can safely send messages */}
-          {(isInitializing || encryptionService.getPublicKey() === null) && (
-            <div className="flex items-center text-xs text-yellow-400 mb-2 p-2 bg-yellow-900/10 rounded border border-yellow-500/20">
-              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse mr-2" />
-              {isInitializing ? 'Initializing secure chat...' : 'Setting up encryption...'}
-            </div>
-          )}
-          
-          {/* New Chat Form */}
-          {showNewChat && (
-            <div className="space-y-2">
-              <div className="relative">
-                <Search className="absolute left-2 top-2 h-4 w-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Enter @username"
-                  value={searchUsername}
-                  onChange={(e) => handleSearchInputChange(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleStartNewChat()}
-                  className="w-full pl-8 pr-3 py-1 bg-gray-800 border border-gray-700 rounded text-white text-sm focus:outline-none focus:border-blue-500"
-                />
-                {isSearching && (
-                  <div className="absolute right-2 top-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+          </div>
+        </div>
+
+        {/* Main Chat Area */}
+        <div className="flex-1 flex flex-col bg-black">
+          {activeConversation ? (
+            <>
+              {/* Chat Header */}
+              <div className="h-14 border-b border-[#262626] bg-[#0a0a0a] flex items-center justify-between px-4">
+                <div className="flex items-center gap-3">
+                  {conversationInfo?.isGroup ? (
+                    <div className="relative group">
+                      <img
+                        src={conversationInfo.avatar}
+                        alt={conversationInfo.name}
+                        className="w-9 h-9 rounded-full object-cover bg-[#262626] cursor-pointer"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/default-group.svg';
+                        }}
+                      />
+                      <label className="absolute inset-0 cursor-pointer opacity-0 hover:opacity-100 bg-black/50 rounded-full flex items-center justify-center transition-opacity">
+                        <Camera className="w-4 h-4 text-white" />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleChangeChannelImage}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  ) : (
+                    <img
+                      src={conversationInfo?.avatar}
+                      alt={conversationInfo?.name}
+                      className={`w-9 h-9 rounded-full object-cover bg-[#262626] ${getTierRingColor(conversationInfo?.tier)}`}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/default-avatar.png';
+                      }}
+                    />
+                  )}
+                  
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-white">
+                        {conversationInfo?.name}
+                      </span>
+                      {conversationInfo?.tier && conversationInfo.tier !== 'starter' && (
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          conversationInfo.tier === 'pixlionaire' ? 'bg-purple-900/20 text-purple-400' :
+                          conversationInfo.tier === 'pixlbeast' ? 'bg-amber-900/20 text-amber-400' :
+                          conversationInfo.tier === 'pro' ? 'bg-green-900/20 text-green-400' :
+                          conversationInfo.tier === 'rising' ? 'bg-blue-900/20 text-blue-400' :
+                          'bg-gray-900/20 text-gray-400'
+                        }`}>
+                          {conversationInfo.tier}
+                        </span>
+                      )}
+                    </div>
+                    {typingUsers.length > 0 ? (
+                      <p className="text-xs text-gray-500">
+                        {typingUsers.length === 1 ? 'typing...' : `${typingUsers.length} people typing...`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">{conversationInfo?.subtitle}</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
+                    <Phone className="w-4 h-4 text-gray-400" />
+                  </button>
+                  <button className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
+                    <Video className="w-4 h-4 text-gray-400" />
+                  </button>
+                  {activeConversation.type === 'group' && (
+                    <button 
+                      onClick={() => setShowRightSidebar(!showRightSidebar)}
+                      className="p-2 hover:bg-[#1a1a1a] rounded transition-colors"
+                    >
+                      <Info className="w-4 h-4 text-gray-400" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto">
+                {activeMessages.length > 0 ? (
+                  <VirtualMessageList
+                    messages={activeMessages}
+                    currentUserId={user.uid}
+                    height={typeof window !== 'undefined' ? window.innerHeight - 180 : 500}
+                    getUserInfo={(userId) => {
+                      const profile = userProfiles.get(userId);
+                      if (profile) return profile;
+                      
+                      if (userId === user.uid) {
+                        return {
+                          displayName: user.displayName || user.email?.split('@')[0] || 'You',
+                          photoURL: user.photoURL || '/default-avatar.png',
+                          tier: platformUser?.tier?.current || 'starter'
+                        };
+                      }
+                      
+                      return {
+                        displayName: 'User',
+                        photoURL: '/default-avatar.png',
+                        tier: 'starter' as const
+                      };
+                    }}
+                    onLoadMore={() => {
+                      const oldest = activeMessages[0];
+                      if (oldest && activeConversationId) {
+                        loadMessages(activeConversationId, {
+                          limit: 50,
+                          before: oldest.id
+                        });
+                      }
+                    }}
+                    onReply={(message) => {
+                      setReplyingTo(message);
+                    }}
+                    onEdit={(messageId, newText) => {
+                      editMessage(messageId, newText);
+                    }}
+                    onDelete={(messageId) => {
+                      deleteMessage(messageId);
+                    }}
+                    onReact={(messageId, emoji) => {
+                      addReaction(messageId, emoji);
+                    }}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <div className="text-5xl mb-4">💬</div>
+                      <p className="text-gray-400">No messages yet. Start the conversation!</p>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="max-h-48 overflow-y-auto bg-gray-800 rounded border border-gray-700">
-                  {searchResults.map((user) => (
-                    <button
-                      key={user.uid}
-                      onClick={() => handleStartNewChat(user.username)}
-                      className="w-full p-2 text-left hover:bg-gray-700 flex items-center space-x-2 first:rounded-t last:rounded-b"
-                    >
-                      <div className="relative">
-                        <img
-                          src={user.profile?.avatarUrl || '/default-avatar.png'}
-                          alt={user.username}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        {/* Tier ring */}
-                        <div className={`absolute inset-0 rounded-full border-2 ${
-                          user.tier?.current === 'starter' ? 'border-gray-400' :
-                          user.tier?.current === 'rising' ? 'border-blue-500' :
-                          user.tier?.current === 'pro' ? 'border-purple-500' :
-                          user.tier?.current === 'pixlbeast' ? 'border-yellow-500' :
-                          user.tier?.current === 'pixlionaire' ? 'border-red-500' :
-                          'border-gray-400'
-                        }`}></div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-white truncate">
-                          {user.profile?.firstName && user.profile?.lastName 
-                            ? `${user.profile.firstName} ${user.profile.lastName}`
-                            : user.username
-                          }
-                        </div>
-                        <div className="text-xs text-gray-400 truncate">{user.username}</div>
-                      </div>
-                      <div className={`text-xs px-2 py-1 rounded-full ${
-                        user.tier?.current === 'starter' ? 'bg-gray-600 text-gray-200' :
-                        user.tier?.current === 'rising' ? 'bg-blue-600 text-blue-100' :
-                        user.tier?.current === 'pro' ? 'bg-purple-600 text-purple-100' :
-                        user.tier?.current === 'pixlbeast' ? 'bg-yellow-600 text-yellow-100' :
-                        user.tier?.current === 'pixlionaire' ? 'bg-red-600 text-red-100' :
-                        'bg-gray-600 text-gray-200'
-                      }`}>
-                        {user.tier?.current || 'starter'}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <button
-                onClick={() => handleStartNewChat()}
-                disabled={!searchUsername.trim()}
-                className="w-full py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white text-sm rounded"
-              >
-                Start Chat
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Conversations List */}
-        <div className="flex-1 overflow-y-auto p-3">
-          {conversations.length === 0 ? (
-            <div className="text-center text-gray-500 mt-8">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p className="text-sm">No conversations yet</p>
-              <p className="text-xs mt-1">Click + to start chatting</p>
-            </div>
+              {/* Message Input */}
+              <MessageInput
+                onSend={handleSendMessage}
+                onMediaSend={handleMediaSend}
+                onTyping={handleTyping}
+                placeholder={`Write a message...`}
+                conversationId={activeConversationId}
+                recipientId={activeConversation.type === 'direct' ? activeConversation.members.find(id => id !== user.uid) : undefined}
+                replyingTo={replyingTo}
+                onCancelReply={() => setReplyingTo(null)}
+              />
+            </>
           ) : (
-            <ConversationList
-              conversations={conversations}
-              activeId={active?.id}
-              onSelect={(c) => setActive(c)}
-              onDelete={handleDeleteConversation}
-              currentUserId={user.uid}
-              getUserInfo={getUserInfo}
-            />
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <MessageSquare className="w-16 h-16 text-gray-700 mx-auto mb-4" />
+                <h3 className="text-xl text-gray-400 mb-2">Select a conversation</h3>
+                <p className="text-gray-600">Choose a channel or DM from the sidebar</p>
+              </div>
+            </div>
           )}
         </div>
-      </aside>
 
-      {/* Main Chat Area */}
-      <main className="flex-1 flex flex-col">
-        {active ? (
-          <>
-            {/* Chat Header */}
-            <div className="border-b border-gray-900 bg-gray-950 p-3">
-              {active.type === "direct" ? (
-                <DirectMessageHeader 
-                  active={active}
-                  user={user}
-                  getUserInfo={getUserInfo}
-                  connectionStatus={connectionStatus}
-                />
-              ) : (
-                // Group chat header
-                <div>
-                  <h1 className="text-white text-sm font-semibold">Group Chat</h1>
-                  <p className="text-xs text-gray-400">
-                    {active.members.length} member{active.members.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
-              )}
+        {/* Right Sidebar - Members for Groups Only */}
+        {activeConversation && activeConversation.type === 'group' && showRightSidebar && (
+          <div className="w-64 bg-[#0a0a0a] border-l border-[#262626] flex flex-col">
+            {/* Header */}
+            <div className="p-4 border-b border-[#262626]">
+              <h3 className="font-semibold text-white">Channel Details</h3>
             </div>
-            
-            {/* Chat Window */}
-            <ChatWindow 
-              messages={messages} 
-              currentUserId={user.uid}
-              conversationId={active.id}
-              memberIds={active.members}
-              getUserInfo={getUserInfo}
-            />
-            
-            {/* Message Input */}
-            <MessageInput 
-              onSend={handleSend} 
-              disabled={isInitializing || encryptionService.getPublicKey() === null}
-              placeholder={
-                isInitializing 
-                  ? "Initializing secure chat..." 
-                  : encryptionService.getPublicKey() === null 
-                    ? "Setting up encryption..." 
-                    : "Type a message..."
-              }
-            />
-          </>
-        ) : (
-          // Welcome Screen
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center text-gray-500">
-              <div className="text-6xl mb-4">💬</div>
-              <h3 className="text-lg font-medium mb-2">Welcome to Secure Chat</h3>
-              <p className="text-sm mb-4">Your messages are end-to-end encrypted</p>
-              <button
-                onClick={() => setShowNewChat(true)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded"
-              >
-                Start Your First Chat
-              </button>
+
+            {/* Members Section */}
+            <div className="p-4">
+              <h4 className="text-sm font-medium text-gray-400 mb-3">Members ({activeConversation.members.length})</h4>
+              <div className="space-y-2">
+                {activeConversation.members.map(memberId => {
+                  const memberProfile = memberId === user.uid ? {
+                    displayName: user.displayName || 'You',
+                    photoURL: user.photoURL || '/default-avatar.png',
+                    tier: platformUser?.tier?.current || 'starter'
+                  } : userProfiles.get(memberId) || {
+                    displayName: 'Loading...',
+                    photoURL: '/default-avatar.png',
+                    tier: 'starter'
+                  };
+                  
+                  return (
+                    <div key={memberId} className="flex items-center gap-2">
+                      <img
+                        src={memberProfile.photoURL}
+                        alt={memberProfile.displayName}
+                        className={`w-8 h-8 rounded-full object-cover ${getTierRingColor(memberProfile.tier)}`}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm text-white">
+                          {memberProfile.displayName}
+                          {memberId === user.uid && ' (You)'}
+                        </div>
+                        <div className="text-xs text-gray-500">{memberProfile.tier}</div>
+                      </div>
+                      {presence.get(memberId) && (
+                        <div className="w-2 h-2 bg-green-500 rounded-full" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }
-
-
