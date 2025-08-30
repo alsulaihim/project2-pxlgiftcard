@@ -229,7 +229,7 @@ export default function PXLConfigPage() {
             <label className="block text-sm font-medium text-gray-400 mb-2">
               Current Exchange Rate
             </label>
-            <div className="flex items-center space-x-3">
+            <div className="flex items-start space-x-3">
               <div className="flex-1">
                 <div className="relative">
                   <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -248,7 +248,7 @@ export default function PXLConfigPage() {
               <button
                 onClick={handleRateUpdate}
                 disabled={saving}
-                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 rounded-lg transition-colors flex items-center space-x-2"
+                className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 rounded-lg transition-colors flex items-center space-x-2 h-[50px]"
               >
                 {saving ? (
                   <RefreshCw className="h-4 w-4 animate-spin" />
