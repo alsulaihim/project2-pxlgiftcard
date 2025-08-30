@@ -230,11 +230,14 @@ export default function AdminDashboardPage() {
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
           <div className="flex items-center justify-between mb-4">
             <TrendingUp className="h-8 w-8 text-yellow-400" />
-            <span className="text-sm text-gray-400">1 USD = {currentRate} PXL</span>
+            <span className="text-sm text-gray-400">1 USD = {currentRate.toFixed(0)} PXL</span>
           </div>
           <p className="text-gray-400 text-sm mb-1">PXL in Circulation</p>
-          <p className="text-2xl font-bold text-white">{formatPXL(metrics.pxlInCirculation)}</p>
-          <p className="text-sm text-gray-500 mt-2">≈ ${(metrics.pxlInCirculation / currentRate).toFixed(2)} USD</p>
+          <p className="text-2xl font-bold text-white flex items-center gap-2">
+            <span>PXL</span>
+            <span>{metrics.pxlInCirculation.toLocaleString('en-US', { maximumFractionDigits: 0 })}</span>
+          </p>
+          <p className="text-sm text-gray-500 mt-2">≈ ${(metrics.pxlInCirculation / currentRate).toLocaleString('en-US', { maximumFractionDigits: 0 })} USD</p>
         </div>
 
         {/* Transactions */}
