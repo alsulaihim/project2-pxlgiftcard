@@ -253,7 +253,8 @@ export const useChatStore = create<ChatState>()(
               {
                 name: groupInfo.name,
                 description: groupInfo.description || '',
-                createdBy: members[0] // First member as creator
+                createdBy: members[0], // First member as creator
+                photoURL: groupInfo.photoURL // Pass the photoURL
               }
             );
             conversationId = conversation.id;

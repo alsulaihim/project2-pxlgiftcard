@@ -95,12 +95,17 @@ export async function createOrGetDirectConversation(currentUserId: string, other
 /**
  * Create a group conversation with specified members and group info.
  */
+// BUG FIX: 2025-01-30 - Add photoURL support to group conversations
+// Problem: Group chat images not showing because photoURL was hardcoded to empty
+// Solution: Accept photoURL in groupInfo parameter and use it when creating conversation
+// Impact: Group chat images now properly display in sidebar
 export async function createGroupConversation(
   memberIds: string[], 
   groupInfo: {
     name: string;
     description?: string;
     createdBy: string;
+    photoURL?: string;
   }
 ): Promise<Conversation> {
   // Validate minimum members for group chat
@@ -121,7 +126,7 @@ export async function createGroupConversation(
       description: groupInfo.description || '',
       createdBy: groupInfo.createdBy,
       admins: [groupInfo.createdBy], // Creator is initial admin
-      photoURL: '', // Can be set later
+      photoURL: groupInfo.photoURL || '/default-group.svg', // Use provided photoURL or default
     },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

@@ -326,6 +326,10 @@ export default function EnhancedMessagesPage() {
     }
   };
 
+  // BUG FIX: 2025-01-30 - Ensure group image updates reflect immediately in sidebar
+  // Problem: Group images not updating in sidebar after upload
+  // Solution: Force refresh of conversations and verify data is loaded correctly
+  // Impact: Group images now display immediately after upload
   const handleChangeChannelImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeConversation || activeConversation.type !== 'group') return;
@@ -345,8 +349,8 @@ export default function EnhancedMessagesPage() {
         
         console.log('✅ Firestore updated, now refreshing conversations...');
         
-        // Wait a moment for Firestore to propagate
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Small delay to ensure Firestore has propagated the change
+        await new Promise(resolve => setTimeout(resolve, 300));
         
         // Reload conversations from Firestore to get the updated data
         await loadConversations();
@@ -354,8 +358,9 @@ export default function EnhancedMessagesPage() {
         // Force a re-render of the sidebar
         setForceUpdate(prev => prev + 1);
         
-        console.log('✅ Group image updated and conversations reloaded');
-        console.log('📸 Updated conversation:', conversations.get(activeConversationId!));
+        // Verify the update was successful
+        const updatedConv = conversations.get(activeConversationId!);
+        console.log('✅ Group image updated. New photoURL:', updatedConv?.groupInfo?.photoURL?.substring(0, 50));
       } catch (error) {
         console.error('Failed to update channel image:', error);
       }
@@ -563,7 +568,7 @@ export default function EnhancedMessagesPage() {
                           if (hasCustomImage) {
                             return (
                               <img
-                                src={conv.groupInfo.photoURL}
+                                src={conv.groupInfo!.photoURL}
                                 alt={conv.groupInfo?.name || 'Group'}
                                 className="w-10 h-10 rounded-full object-cover bg-[#262626]"
                                 onError={(e) => {
