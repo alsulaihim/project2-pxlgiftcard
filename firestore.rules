@@ -161,11 +161,30 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Chat Sessions Collection - removed
+    // Chat Sessions Collection - for live chat support
     match /chat-sessions/{sessionId} {
-      allow read, write: if false;
+      // Allow anyone to create a new chat session (guests and authenticated users)
+      allow create: if true;
+      
+      // Allow reading own sessions (authenticated) or any session (for support/debugging)
+      allow read: if true;
+      
+      // Allow updating own sessions
+      allow update: if resource.data.userId == request.auth.uid || !exists(resource.data.userId);
+      
+      // Only admins can delete sessions
+      allow delete: if isAdmin();
+      
+      // Messages subcollection
       match /messages/{messageId} {
-        allow read, write: if false;
+        // Anyone can read messages in their session
+        allow read: if true;
+        
+        // Anyone can create messages in a session
+        allow create: if true;
+        
+        // No updates or deletes allowed for messages
+        allow update, delete: if false;
       }
     }
     
