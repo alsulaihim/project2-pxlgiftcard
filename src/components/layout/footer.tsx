@@ -79,7 +79,7 @@ export function Footer() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
             {/* Company Info */}
             <div className="flex items-center space-x-3">
-              <span className="text-lg font-black text-white tracking-wider" style={{ fontFamily: "'Orbitron', monospace", fontWeight: 900 }}>
+              <span className="text-sm text-white" style={{ fontFamily: "'Press Start 2P', cursive" }}>
                 HOTPAY
               </span>
               <span className="text-body-small text-gray-400">

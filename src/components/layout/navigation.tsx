@@ -151,7 +151,7 @@ export function Navigation() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo - Vercel style */}
           <Link href="/" className="flex items-center">
-            <span className="text-2xl font-black text-white tracking-wider" style={{ fontFamily: "'Orbitron', monospace", fontWeight: 900 }}>
+            <span className="text-xl text-white" style={{ fontFamily: "'Press Start 2P', cursive" }}>
               HOTPAY
             </span>
           </Link>
