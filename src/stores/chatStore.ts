@@ -11,6 +11,7 @@ import { Socket } from 'socket.io-client';
 import { EncryptionService } from '@/services/chat/encryption.service';
 import { Timestamp, doc, updateDoc, arrayUnion, arrayRemove, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-config';
+import { authManager } from '@/lib/firebase-auth-manager';
 
 // Enable MapSet support for Immer to work with Maps and Sets
 enableMapSet();
@@ -222,10 +223,22 @@ export const useChatStore = create<ChatState>()(
           });
           
           try {
+            // Ensure auth is ready and get user ID
+            const authUser = await authManager.waitForAuth();
+            if (!authUser) {
+              console.error('❌ Cannot load conversations: no authenticated user');
+              throw new Error('User not authenticated');
+            }
+            
+            const userId = authUser.uid;
+            // Update userId in store if not set
+            if (get().userId !== userId) {
+              set((state) => { state.userId = userId; });
+            }
+            
             // Import service functions directly
             const { listUserConversations } = await import('@/services/chat/firestore-chat.service');
-            // Get current user ID from auth context or store
-            const userId = get().userId || get().socket?.data?.userId || 'current-user'; // This should be from auth
+            
             const conversations = await listUserConversations(userId);
             
             console.log('📚 Loaded conversations from Firestore:', conversations.length);

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { doc, getDoc, deleteDoc, updateDoc, getDocs, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase-config";
+import { authManager } from "@/lib/firebase-auth-manager";
 
 export default function EnhancedMessagesPage() {
   const { user, platformUser } = useAuth();
@@ -94,6 +95,22 @@ export default function EnhancedMessagesPage() {
 
     const initializeChat = async () => {
       try {
+        // Wait for Firebase Auth to be ready using auth manager
+        console.log('🔐 Waiting for Firebase Auth...');
+        const authUser = await authManager.waitForAuth();
+        
+        if (!authUser) {
+          console.error('❌ No authenticated user in messages page');
+          return;
+        }
+        
+        // Ensure token is fresh
+        await authManager.ensureFreshToken();
+        console.log('✅ Auth ready with user:', authUser.uid);
+        
+        // Ensure userId is set in the store before any operations
+        useChatStore.setState({ userId: user.uid });
+        
         await initializeEncryption(user.uid);
         await keyExchangeService.initializeUserKeys(user.uid);
         await presenceService.initializePresence(user.uid);

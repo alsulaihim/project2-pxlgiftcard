@@ -1,6 +1,7 @@
 "use client";
 
 import { db, auth } from "@/lib/firebase-config";
+import { authManager } from "@/lib/firebase-auth-manager";
 import {
   addDoc,
   collection,
@@ -66,6 +67,9 @@ export interface ChatMessage {
  * Ensures deterministic doc id ordering by concatenating sorted UIDs.
  */
 export async function createOrGetDirectConversation(currentUserId: string, otherUserId: string): Promise<Conversation> {
+  // Ensure auth is ready before Firestore operations
+  await authManager.waitForAuth();
+  
   // BUG FIX: 2025-01-28 - Prevent users from creating conversations with themselves
   // Problem: Users could send messages to themselves by creating self-conversations
   // Solution: Added validation to reject self-messaging attempts
@@ -108,6 +112,9 @@ export async function createGroupConversation(
     photoURL?: string;
   }
 ): Promise<Conversation> {
+  // Ensure auth is ready
+  await authManager.waitForAuth();
+  
   console.log('📝 Creating group conversation with:', {
     memberIds,
     groupInfoKeys: Object.keys(groupInfo),
@@ -213,6 +220,28 @@ export async function listUserConversations(userId: string): Promise<Conversatio
   // Solution: Add retry logic with exponential backoff
   // Impact: More resilient to temporary network issues
   
+  // Ensure auth is ready and token is fresh
+  const authUser = await authManager.waitForAuth();
+  if (authUser) {
+    await authManager.ensureFreshToken();
+  }
+  
+  console.log('🔍 listUserConversations called with:', {
+    userId,
+    currentAuthUser: authUser?.uid,
+    isAuthenticated: !!authUser
+  });
+  
+  if (!userId) {
+    console.error('❌ No userId provided to listUserConversations');
+    return [];
+  }
+  
+  // Verify the userId matches the authenticated user
+  if (authUser && authUser.uid !== userId) {
+    console.warn('⚠️ userId mismatch:', { provided: userId, authenticated: authUser.uid });
+  }
+  
   const maxRetries = 3;
   let lastError: Error | null = null;
   
@@ -220,11 +249,13 @@ export async function listUserConversations(userId: string): Promise<Conversatio
     try {
       // Avoid composite index requirements: no orderBy in combination with array-contains.
       const q = query(collection(db, "conversations"), where("members", "array-contains", userId), limit(50));
+      console.log(`📋 Attempting to get conversations (attempt ${attempt}/${maxRetries})`);
       const snap = await getDocs(q);
+      console.log(`✅ Successfully loaded ${snap.docs.length} conversations`);
       return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Conversation, "id">) }));
     } catch (error) {
       lastError = error as Error;
-      console.warn(`Attempt ${attempt}/${maxRetries} to load conversations failed:`, error);
+      console.error(`❌ Attempt ${attempt}/${maxRetries} to load conversations failed:`, error);
       
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff)
@@ -240,6 +271,9 @@ export async function listUserConversations(userId: string): Promise<Conversatio
  * Get a specific conversation by ID
  */
 export async function getConversation(conversationId: string): Promise<Conversation | null> {
+  // Ensure auth is ready
+  await authManager.waitForAuth();
+  
   const docRef = doc(db, "conversations", conversationId);
   const docSnap = await getDoc(docRef);
   
@@ -264,6 +298,13 @@ export async function sendMessage(
     nonce?: string;
   }
 ): Promise<void> {
+  // Ensure auth is ready and token is fresh
+  const authUser = await authManager.waitForAuth();
+  if (!authUser || authUser.uid !== senderId) {
+    throw new Error('User not authenticated or ID mismatch');
+  }
+  await authManager.ensureFreshToken();
+  
   try {
     console.log('📤 Sending message to conversation:', conversationId);
     console.log('📤 Sender ID:', senderId);
@@ -712,7 +753,9 @@ export async function markMessageAsRead(conversationId: string, messageId: strin
 export async function deleteConversationMessages(conversationId: string): Promise<void> {
   console.log(`🗑️ Starting deletion of messages for conversation: ${conversationId}`);
   
-  if (!auth.currentUser) {
+  // Ensure auth is ready
+  const authUser = await authManager.waitForAuth();
+  if (!authUser) {
     console.error('❌ User not authenticated when trying to delete messages');
     throw new Error('User not authenticated');
   }
