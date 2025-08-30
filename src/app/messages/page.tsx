@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useChatStore } from "@/stores/chatStore";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -32,6 +32,8 @@ export default function EnhancedMessagesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showChannelImageUpload, setShowChannelImageUpload] = useState(false);
   const [messageListHeight, setMessageListHeight] = useState(600);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingState = useRef<boolean>(false);
   
   const {
     conversations,
@@ -63,8 +65,8 @@ export default function EnhancedMessagesPage() {
   // Calculate message list height dynamically
   useEffect(() => {
     const calculateHeight = () => {
-      // Account for header (80px), message input (120px), and some padding
-      const height = window.innerHeight - 200;
+      // Account for header (128px with padding), message input (120px), and some padding
+      const height = window.innerHeight - 268;
       setMessageListHeight(Math.max(400, height)); // Minimum 400px
     };
 
@@ -256,9 +258,35 @@ export default function EnhancedMessagesPage() {
   };
 
   const handleTyping = (isTyping: boolean) => {
-    if (activeConversationId) {
-      console.log(`📝 Sending typing ${isTyping ? 'start' : 'stop'} for conversation: ${activeConversationId}`);
-      updateTyping(activeConversationId, isTyping);
+    if (!activeConversationId) return;
+    
+    // Clear any existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    
+    if (isTyping) {
+      // If starting to type, send immediately if not already typing
+      if (!lastTypingState.current) {
+        console.log(`📝 Sending typing start for conversation: ${activeConversationId}`);
+        updateTyping(activeConversationId, true);
+        lastTypingState.current = true;
+      }
+      
+      // Set timeout to stop typing after 3 seconds of inactivity
+      typingTimeoutRef.current = setTimeout(() => {
+        console.log(`📝 Auto-stopping typing for conversation: ${activeConversationId}`);
+        updateTyping(activeConversationId, false);
+        lastTypingState.current = false;
+      }, 3000);
+    } else {
+      // If explicitly stopping, send stop immediately
+      if (lastTypingState.current) {
+        console.log(`📝 Sending typing stop for conversation: ${activeConversationId}`);
+        updateTyping(activeConversationId, false);
+        lastTypingState.current = false;
+      }
     }
   };
 
@@ -614,8 +642,8 @@ export default function EnhancedMessagesPage() {
         <div className="flex-1 flex flex-col bg-black">
           {activeConversation ? (
             <>
-              {/* Chat Header */}
-              <div className="h-14 border-b border-[#262626] bg-[#0a0a0a] flex items-center justify-between px-4">
+              {/* Chat Header - with top padding to avoid being covered by page header */}
+              <div className="h-32 pt-20 border-b border-[#262626] bg-[#0a0a0a] flex items-center justify-between px-4 relative z-10">
                 <div className="flex items-center gap-3">
                   {conversationInfo?.isGroup ? (
                     <div className="relative group">
@@ -691,12 +719,12 @@ export default function EnhancedMessagesPage() {
                           
                           // Always show online/offline status for direct messages
                           return isOnline ? (
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                              <span className="text-green-500">Online</span>
+                              <span className="text-green-500 font-medium text-sm">Online</span>
                             </div>
                           ) : (
-                            <div className="text-gray-400">Offline</div>
+                            <div className="text-gray-400 font-medium text-sm">Offline</div>
                           );
                         }
                         

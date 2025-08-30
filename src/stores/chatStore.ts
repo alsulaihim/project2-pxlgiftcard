@@ -1182,6 +1182,26 @@ export const useChatStore = create<ChatState>()(
             });
           });
           
+          // Listen for typing events
+          socket.on('typing:update', (data: { conversationId: string; userId: string; typing: boolean; user?: any }) => {
+            console.log('⌨️ Typing update:', data);
+            const state = get();
+            
+            // Don't show own typing indicator
+            if (data.userId !== state.userId) {
+              state.setTypingUser(data.conversationId, data.userId, data.typing);
+            }
+          });
+          
+          socket.on('typing:current', (data: { conversationId: string; typingUsers: string[] }) => {
+            console.log('⌨️ Current typing users:', data);
+            set((state) => {
+              // Set all currently typing users for this conversation
+              const filtered = data.typingUsers.filter(userId => userId !== state.userId);
+              state.typing.set(data.conversationId, filtered);
+            });
+          });
+          
           // Update the socket reference and connection status
           set((state) => {
             state.socket = socket as any;

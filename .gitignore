@@ -28,6 +28,7 @@ functions/node_modules/
 # Service account keys
 **/service-account-key.json
 **/firebase-admin-key.json
+**/serviceAccountKey.json
 
 # Testing
 coverage/
