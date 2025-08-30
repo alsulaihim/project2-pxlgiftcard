@@ -153,14 +153,11 @@ export function Navigation() {
           <Link href={user && platformUser ? "/dashboard" : "/"} className="flex items-center space-x-3">
             <Image 
               src="/logo.svg" 
-              alt="PXL Logo" 
+              alt="HOTPAY Logo" 
               width={40} 
               height={40} 
               className="h-10 w-10"
             />
-            <span className="hidden sm:inline text-lg font-semibold text-white">
-              GiftCard
-            </span>
           </Link>
 
           {/* Desktop Navigation - Vercel style */}

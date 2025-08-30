@@ -82,13 +82,13 @@ export function Footer() {
             <div className="flex items-center space-x-2">
               <Image 
                 src="/logo.svg" 
-                alt="PXL Logo" 
+                alt="HOTPAY Logo" 
                 width={24} 
                 height={24} 
                 className="h-6 w-6"
               />
               <span className="text-body-small text-gray-400">
-                © {currentYear} GiftCard + PXL Platform. All rights reserved.
+                © {currentYear} HOTPAY Platform. All rights reserved.
               </span>
             </div>
 
@@ -121,7 +121,7 @@ export function Footer() {
           {/* Additional Legal Text */}
           <div className="mt-6 text-caption text-gray-500">
             <p>
-              PXL is a digital currency for exclusive use within the GiftCard + PXL Platform. 
+              PXL is a digital currency for exclusive use within the HOTPAY Platform. 
               Not redeemable for cash. Subject to terms and conditions. 
               Platform operated in compliance with applicable financial regulations.
             </p>
