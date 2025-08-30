@@ -16,6 +16,7 @@ interface VoiceRecorderProps {
 }
 
 export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, autoStart = false }) => {
+  const { activeConversationId, updateRecording } = useChatStore();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -65,6 +66,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
+      
+      // Emit recording start event
+      if (activeConversationId) {
+        updateRecording(activeConversationId, true);
+      }
       
       // Set up audio analysis for waveform
       const audioContext = new AudioContext();
@@ -149,6 +155,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       
+      // Emit recording stop event
+      if (activeConversationId) {
+        updateRecording(activeConversationId, false);
+      }
+      
       // Stop all audio tracks immediately
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
@@ -192,6 +203,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
 
   const handleSend = async () => {
     if (audioBlob) {
+      // Ensure recording indicator is cleared
+      if (activeConversationId) {
+        updateRecording(activeConversationId, false);
+      }
+      
       // Convert to base64 for sending
       const reader = new FileReader();
       reader.onloadend = async () => {
@@ -251,6 +267,12 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
   const handleCancel = () => {
     stopRecording();
     resetRecorder();
+    
+    // Ensure recording indicator is cleared
+    if (activeConversationId) {
+      updateRecording(activeConversationId, false);
+    }
+    
     if (onCancel) onCancel();
   };
 

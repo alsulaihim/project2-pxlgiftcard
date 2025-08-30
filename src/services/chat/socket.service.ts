@@ -35,6 +35,7 @@ export interface SocketEvents {
   'message:delivered': (data: { messageId: string; userId: string }) => void;
   'message:read': (data: { conversationId: string; messageIds: string[]; userId: string }) => void;
   'typing:update': (data: { conversationId: string; userId: string; typing: boolean }) => void;
+  'recording:update': (data: { conversationId: string; userId: string; recording: boolean }) => void;
   'presence:update': (data: { userId: string; online: boolean; lastSeen?: string }) => void;
   'error': (error: { message: string }) => void;
   'connect': () => void;
@@ -202,6 +203,10 @@ export class SocketService {
     // Presence events
     this.socket.on('typing:update', (data) => {
       this.emit('typing:update', data);
+    });
+
+    this.socket.on('recording:update', (data) => {
+      this.emit('recording:update', data);
     });
 
     this.socket.on('presence:update', (data) => {
@@ -403,6 +408,27 @@ export class SocketService {
         conversationId: normalizedId 
       });
       console.log(`⌨️ Sent typing ${typing ? 'start' : 'stop'} for conversation: ${normalizedId}`);
+    }
+  }
+
+  /**
+   * Send recording indicator
+   */
+  sendRecording(conversationId: string, recording: boolean): void {
+    if (this.isConnected && this.socket) {
+      // Normalize conversation ID to ensure recording events are sent to the correct room
+      const normalizeId = (id: string) => {
+        if (!id.startsWith('direct_')) return id;
+        const parts = id.replace('direct_', '').split('_');
+        if (parts.length !== 2) return id;
+        return `direct_${parts.sort().join('_')}`;
+      };
+      
+      const normalizedId = normalizeId(conversationId);
+      
+      // Send recording data to the server
+      this.socket.emit(recording ? 'recording:start' : 'recording:stop', normalizedId);
+      console.log(`🎤 Sent recording ${recording ? 'start' : 'stop'} for conversation: ${normalizedId}`);
     }
   }
 

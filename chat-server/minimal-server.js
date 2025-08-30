@@ -305,6 +305,23 @@ io.on('connection', (socket) => {
     });
   });
   
+  // Handle recording indicators
+  socket.on('recording:start', (conversationId) => {
+    console.log(`🎤 User ${socket.data.userId} started recording in ${conversationId}`);
+    socket.to(conversationId).emit('recording:update', {
+      userId: socket.data.userId,
+      recording: true
+    });
+  });
+  
+  socket.on('recording:stop', (conversationId) => {
+    console.log(`🎤 User ${socket.data.userId} stopped recording in ${conversationId}`);
+    socket.to(conversationId).emit('recording:update', {
+      userId: socket.data.userId,
+      recording: false
+    });
+  });
+  
   // Handle new conversation notification
   socket.on('notify-user-new-conversation', (data) => {
     console.log(`🔔 New conversation notification for user ${data.userId}: ${data.conversationId}`);

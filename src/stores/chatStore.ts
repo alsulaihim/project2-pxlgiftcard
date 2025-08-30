@@ -85,6 +85,7 @@ export interface ChatState {
   
   // Real-time states
   typing: Map<string, string[]>; // conversationId -> userIds typing
+  recording: Map<string, string[]>; // conversationId -> userIds recording
   presence: Map<string, boolean>; // userId -> online status
   lastSeen: Map<string, Date>; // userId -> last seen time
   
@@ -130,6 +131,8 @@ export interface ChatState {
   // Actions - Real-time
   updateTyping: (conversationId: string, isTyping: boolean) => void;
   setTypingUser: (conversationId: string, userId: string, isTyping: boolean) => void;
+  updateRecording: (conversationId: string, isRecording: boolean) => void;
+  setRecordingUser: (conversationId: string, userId: string, isRecording: boolean) => void;
   updatePresence: (userId: string, isOnline: boolean, lastSeen?: Date) => void;
   markAsDelivered: (messageId: string, userId: string) => void;
   markAsRead: (messageIds: string[], userId: string) => void;
@@ -171,6 +174,7 @@ export const useChatStore = create<ChatState>()(
         activeConversationId: null,
         userId: undefined,
         typing: new Map(),
+        recording: new Map(),
         presence: new Map(),
         lastSeen: new Map(),
         offlineQueue: [],
@@ -923,6 +927,28 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
+        updateRecording: (conversationId, isRecording) => {
+          // Use the SocketService to send recording indicators
+          const socketService = (window as any).socketService;
+          if (socketService) {
+            socketService.sendRecording(conversationId, isRecording);
+          }
+        },
+        
+        setRecordingUser: (conversationId, userId, isRecording) => set((state) => {
+          const recordingUsers = state.recording.get(conversationId) || [];
+          
+          if (isRecording) {
+            // Add user to recording list if not already there
+            if (!recordingUsers.includes(userId)) {
+              state.recording.set(conversationId, [...recordingUsers, userId]);
+            }
+          } else {
+            // Remove user from recording list
+            state.recording.set(conversationId, recordingUsers.filter(id => id !== userId));
+          }
+        }),
+
         updatePresence: (userId, isOnline, lastSeen) => set((state) => {
           state.presence.set(userId, isOnline);
           if (lastSeen) {
@@ -1282,6 +1308,17 @@ export const useChatStore = create<ChatState>()(
             // Don't show own typing indicator
             if (data.userId !== state.userId) {
               state.setTypingUser(data.conversationId, data.userId, data.typing);
+            }
+          });
+          
+          // Listen for recording events
+          socket.on('recording:update', (data: { conversationId: string; userId: string; recording: boolean; user?: any }) => {
+            console.log('🎤 Recording update:', data);
+            const state = get();
+            
+            // Don't show own recording indicator
+            if (data.userId !== state.userId) {
+              state.setRecordingUser(data.conversationId, data.userId, data.recording);
             }
           });
           

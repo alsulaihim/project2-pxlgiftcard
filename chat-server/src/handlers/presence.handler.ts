@@ -12,10 +12,17 @@ export interface TypingData {
   typing: boolean;
 }
 
+export interface RecordingData {
+  conversationId: string;
+  recording: boolean;
+}
+
 export class PresenceHandler {
   private typingUsers = new Map<string, Set<string>>(); // conversationId -> Set of userIds
+  private recordingUsers = new Map<string, Set<string>>(); // conversationId -> Set of userIds recording
   private onlineUsers = new Set<string>(); // Set of online userIds
   private typingTimeouts = new Map<string, NodeJS.Timeout>(); // userId:conversationId -> timeout
+  private recordingTimeouts = new Map<string, NodeJS.Timeout>(); // userId:conversationId -> timeout for recording
 
   constructor(private io: Server) {}
 
@@ -78,6 +85,9 @@ export class PresenceHandler {
     
     // Clear any typing indicators
     this.clearAllTypingForUser(userId);
+    
+    // Clear any recording indicators
+    this.clearAllRecordingForUser(userId);
     
     // Broadcast offline status
     this.io.emit('presence:update', {
@@ -171,6 +181,95 @@ export class PresenceHandler {
 
     } catch (error) {
       logger.error('❌ Failed to handle typing indicator:', error);
+    }
+  };
+
+  /**
+   * Handle recording indicator start/stop
+   */
+  public handleRecording = async (
+    socket: AuthenticatedSocket,
+    data: RecordingData | string
+  ): Promise<void> => {
+    try {
+      // Handle both object format and string format for backwards compatibility
+      let conversationId: string;
+      let recording: boolean;
+      
+      if (typeof data === 'string') {
+        conversationId = data;
+        recording = true; // Assume start if just a string
+      } else {
+        conversationId = data.conversationId;
+        recording = data.recording;
+      }
+      
+      const userId = socket.data.userId;
+      
+      // Normalize conversation ID
+      const normalizeId = (id: string) => {
+        if (!id.startsWith('direct_')) return id;
+        const parts = id.replace('direct_', '').split('_');
+        if (parts.length !== 2) return id;
+        return `direct_${parts.sort().join('_')}`;
+      };
+      
+      conversationId = normalizeId(conversationId);
+      
+      logger.info(`🎤 Recording event from ${userId} in ${conversationId}: recording=${recording}`);
+      
+      // Check if user is member of conversation
+      const isMember = await checkConversationMembership(socket, conversationId);
+      if (!isMember) {
+        logger.warn(`⚠️ User ${userId} not a member of ${conversationId}, ignoring recording event`);
+        return;
+      }
+      
+      logger.info(`✅ User ${userId} is member of ${conversationId}, processing recording event`);
+
+      const recordingKey = `${userId}:${conversationId}`;
+
+      if (recording) {
+        // User started recording
+        if (!this.recordingUsers.has(conversationId)) {
+          this.recordingUsers.set(conversationId, new Set());
+        }
+        this.recordingUsers.get(conversationId)!.add(userId);
+
+        // Clear existing timeout
+        const existingTimeout = this.recordingTimeouts.get(recordingKey);
+        if (existingTimeout) {
+          clearTimeout(existingTimeout);
+        }
+
+        // Set auto-stop timeout (60 seconds for recording)
+        const timeout = setTimeout(() => {
+          this.stopRecording(userId, conversationId);
+        }, 60000);
+        
+        this.recordingTimeouts.set(recordingKey, timeout);
+
+        logger.debug(`🎤 User ${userId} started recording in ${conversationId}`);
+      } else {
+        // User stopped recording
+        this.stopRecording(userId, conversationId);
+        logger.debug(`🎤 User ${userId} stopped recording in ${conversationId}`);
+      }
+
+      // Broadcast recording status to conversation members (except sender)
+      socket.to(`conversation:${conversationId}`).emit('recording:update', {
+        conversationId,
+        userId,
+        recording,
+        user: {
+          displayName: socket.data.displayName,
+          photoURL: socket.data.photoURL,
+          tier: socket.data.tier
+        }
+      });
+
+    } catch (error) {
+      logger.error('❌ Failed to handle recording indicator:', error);
     }
   };
 
@@ -284,12 +383,53 @@ export class PresenceHandler {
   }
 
   /**
+   * Stop recording for a user in a conversation
+   */
+  private stopRecording(userId: string, conversationId: string): void {
+    const recordingKey = `${userId}:${conversationId}`;
+    
+    // Clear timeout
+    const timeout = this.recordingTimeouts.get(recordingKey);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.recordingTimeouts.delete(recordingKey);
+    }
+
+    // Remove from recording users
+    const conversationRecording = this.recordingUsers.get(conversationId);
+    if (conversationRecording) {
+      conversationRecording.delete(userId);
+      if (conversationRecording.size === 0) {
+        this.recordingUsers.delete(conversationId);
+      }
+    }
+
+    // Broadcast stop recording
+    this.io.to(`conversation:${conversationId}`).emit('recording:update', {
+      conversationId,
+      userId,
+      recording: false
+    });
+  }
+
+  /**
    * Clear all typing indicators for a user (when they disconnect)
    */
   private clearAllTypingForUser(userId: string): void {
     for (const [conversationId, typingUsers] of this.typingUsers.entries()) {
       if (typingUsers.has(userId)) {
         this.stopTyping(userId, conversationId);
+      }
+    }
+  }
+
+  /**
+   * Clear all recording indicators for a user (when they disconnect)
+   */
+  private clearAllRecordingForUser(userId: string): void {
+    for (const [conversationId, recordingUsers] of this.recordingUsers.entries()) {
+      if (recordingUsers.has(userId)) {
+        this.stopRecording(userId, conversationId);
       }
     }
   }
@@ -330,6 +470,18 @@ export class PresenceHandler {
     socket.on('typing:stop', (data: TypingData) => {
       logger.info(`⌨️ Received typing:stop from ${socket.data.userId}: ${JSON.stringify(data)}`);
       this.handleTyping(socket, { ...data, typing: false });
+    });
+    
+    // Recording events
+    socket.on('recording:start', (data: RecordingData | string) => {
+      logger.info(`🎤 Received recording:start from ${socket.data.userId}: ${JSON.stringify(data)}`);
+      const recordingData = typeof data === 'string' ? { conversationId: data, recording: true } : { ...data, recording: true };
+      this.handleRecording(socket, recordingData);
+    });
+    socket.on('recording:stop', (data: RecordingData | string) => {
+      logger.info(`🎤 Received recording:stop from ${socket.data.userId}: ${JSON.stringify(data)}`);
+      const recordingData = typeof data === 'string' ? { conversationId: data, recording: false } : { ...data, recording: false };
+      this.handleRecording(socket, recordingData);
     });
     
     // Conversation events with acknowledgement

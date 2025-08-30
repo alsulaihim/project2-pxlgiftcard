@@ -45,6 +45,7 @@ export default function EnhancedMessagesPage() {
     activeConversationId,
     isConnected,
     typing,
+    recording,
     presence,
     replyingTo,
     loadConversations,
@@ -287,6 +288,7 @@ export default function EnhancedMessagesPage() {
     }));
   }, [activeConversationId, messages]);
   const typingUsers = activeConversationId ? typing.get(activeConversationId) || [] : [];
+  const recordingUsers = activeConversationId ? recording.get(activeConversationId) || [] : [];
 
   const handleSendMessage = async (text: string) => {
     if (!text.trim() || !activeConversationId) return;
@@ -859,7 +861,19 @@ export default function EnhancedMessagesPage() {
                           const otherUserId = activeConversation.members.find(id => id !== user.uid);
                           const isOnline = otherUserId ? presence.get(otherUserId) : false;
                           
-                          // Show typing if someone is typing, otherwise show online status
+                          // Show recording if someone is recording, then typing, otherwise show online status
+                          if (recordingUsers.length > 0) {
+                            return (
+                              <div className="flex items-center gap-1 text-red-400">
+                                <Mic className="w-3 h-3 animate-pulse" />
+                                <span>
+                                  {recordingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                                </span>
+                                <span>{recordingUsers.length === 1 ? 'is' : 'are'} recording</span>
+                              </div>
+                            );
+                          }
+                          
                           if (typingUsers.length > 0) {
                             return (
                               <div className="flex items-center gap-1">
@@ -887,7 +901,19 @@ export default function EnhancedMessagesPage() {
                           );
                         }
                         
-                        // For group conversations, show typing or subtitle
+                        // For group conversations, show recording, then typing, or subtitle
+                        if (recordingUsers.length > 0) {
+                          return (
+                            <div className="flex items-center gap-1 text-red-400">
+                              <Mic className="w-3 h-3 animate-pulse" />
+                              <span>
+                                {recordingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                              </span>
+                              <span>{recordingUsers.length === 1 ? 'is' : 'are'} recording</span>
+                            </div>
+                          );
+                        }
+                        
                         if (typingUsers.length > 0) {
                           return (
                             <div className="flex items-center gap-1">
