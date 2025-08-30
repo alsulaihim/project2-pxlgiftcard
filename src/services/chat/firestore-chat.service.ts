@@ -136,36 +136,40 @@ export async function createGroupConversation(
     photoURL = groupInfo.photoURL;
   }
 
-  // BUG FIX: 2025-01-30 - Use Timestamp.now() instead of serverTimestamp()
-  // Problem: serverTimestamp() might be causing issues with nested objects
-  // Solution: Use Timestamp.now() for immediate timestamp value
+  // BUG FIX: 2025-01-30 - Create clean object structure for Firestore
+  // Problem: Firestore rejects nested objects with certain structures
+  // Solution: Create a simple JSON-serializable object
   // Impact: Fixes "invalid nested entity" error
+  
+  // Create a simple object for groupInfo
+  const groupInfoData = {
+    name: String(groupInfo.name || 'Unnamed Group'),
+    description: String(groupInfo.description || ''),
+    createdBy: String(groupInfo.createdBy),
+    admins: [String(groupInfo.createdBy)],
+    photoURL: String(photoURL)
+  };
+  
   const conversationData = {
     type: "group" as const,
     members: memberIds,
-    groupInfo: {
-      name: groupInfo.name || 'Unnamed Group',
-      description: groupInfo.description || '',
-      createdBy: groupInfo.createdBy,
-      admins: [groupInfo.createdBy],
-      photoURL: photoURL
-    },
+    groupInfo: groupInfoData,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
 
-  // Log the data being sent (without serverTimestamp which can't be stringified)
+  // Log the data being sent
   console.log('📤 Sending to Firestore:', {
     type: conversationData.type,
     members: conversationData.members,
     groupInfo: {
-      name: conversationData.groupInfo.name,
-      description: conversationData.groupInfo.description,
-      createdBy: conversationData.groupInfo.createdBy,
-      admins: conversationData.groupInfo.admins,
-      photoURL: conversationData.groupInfo.photoURL.substring(0, 50) + '...'
+      name: groupInfoData.name,
+      description: groupInfoData.description,
+      createdBy: groupInfoData.createdBy,
+      admins: groupInfoData.admins,
+      photoURL: (groupInfoData.photoURL || '').substring(0, 50) + '...'
     },
-    timestamps: 'serverTimestamp()'
+    timestamps: 'Timestamp.now()'
   });
 
   try {
@@ -178,9 +182,9 @@ export async function createGroupConversation(
     console.error('❌ Error code:', error.code);
     console.error('❌ Data that caused error:', {
       type: conversationData.type,
-      membersCount: conversationData.members.length,
-      groupInfoKeys: Object.keys(conversationData.groupInfo),
-      groupInfo: conversationData.groupInfo
+      membersCount: conversationData.members ? conversationData.members.length : 0,
+      groupInfo: conversationData.groupInfo,
+      allKeys: Object.keys(conversationData)
     });
     throw error;
   }
