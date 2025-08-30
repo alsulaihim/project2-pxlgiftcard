@@ -26,7 +26,8 @@ import {
   Package,
   TrendingUp,
   AlertCircle,
-  X
+  X,
+  FileSpreadsheet
 } from "lucide-react";
 
 interface Supplier {
@@ -350,6 +351,33 @@ export default function SuppliersPage() {
     }
   };
 
+  const downloadCSVTemplate = () => {
+    // Create CSV template with headers and sample data
+    const headers = ['name', 'email', 'phone', 'commission', 'categories', 'status', 'notes'];
+    const sampleData = [
+      ['Blackhawk Network', 'contact@blackhawk.com', '+1-555-0100', '10', 'Amazon;iTunes;Google Play', 'active', 'Primary supplier for digital cards'],
+      ['InComm Payments', 'sales@incomm.com', '+1-555-0200', '12', 'Visa;Mastercard;Steam', 'active', 'Global payment solutions provider'],
+      ['Gift Card Mall', 'support@giftcardmall.com', '+1-555-0300', '8', 'Walmart;Target;Home Depot', 'active', 'Retail gift cards specialist']
+    ];
+    
+    // Combine headers and sample data
+    const csvContent = [
+      headers.join(','),
+      ...sampleData.map(row => row.join(','))
+    ].join('\n');
+    
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'supplier_import_template.csv');
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -360,18 +388,19 @@ export default function SuppliersPage() {
       const lines = text.split('\n');
       const headers = lines[0].split(',').map(h => h.trim());
       
-      // Expected headers: name,email,phone,commission,categories
+      // Expected headers: name,email,phone,commission,categories,status,notes
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split(',').map(v => v.trim());
-        if (values.length < 5) continue;
+        if (values.length < 5 || !values[0]) continue; // Skip empty rows
 
         const supplierData = {
           name: values[0],
           contactEmail: values[1],
           contactPhone: values[2],
           commission: parseFloat(values[3]) || 10,
-          categories: values[4].split(';').map(c => c.trim()),
-          status: 'active' as const,
+          categories: values[4] ? values[4].split(';').map(c => c.trim()) : [],
+          status: (values[5] === 'active' || values[5] === 'inactive' || values[5] === 'pending') ? values[5] : 'active' as const,
+          notes: values[6] || '',
           performanceScore: 100,
           deliveryTimeAvg: 24,
           qualityScore: 100,
@@ -432,6 +461,14 @@ export default function SuppliersPage() {
             className="hidden"
             aria-label="CSV file upload"
           />
+          <button
+            onClick={downloadCSVTemplate}
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            title="Download CSV template with sample data"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            Download Template
+          </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
