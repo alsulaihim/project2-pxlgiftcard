@@ -62,6 +62,7 @@ export interface Conversation {
     name: string;
     description: string;
     photoURL: string;
+    createdBy: string;
     admins: string[];
   };
   unreadCount?: number;
@@ -234,6 +235,21 @@ export const useChatStore = create<ChatState>()(
               state.conversations = new Map(conversations.map(c => [c.id, c as any]));
               state.isLoading = false;
             });
+            
+            // BUG FIX: 2025-01-30 - Auto-join all group conversations
+            // Problem: Users couldn't see messages in group chats until they sent a message
+            // Solution: Automatically join all group conversation rooms when loading conversations
+            // Impact: Users will now receive real-time messages in all their group chats
+            const socketService = get().socket ? SocketService.getInstance() : null;
+            if (socketService && socketService.isConnected) {
+              const groupConversations = conversations.filter(c => c.type === 'group');
+              console.log(`🚪 Auto-joining ${groupConversations.length} group conversations`);
+              
+              for (const conversation of groupConversations) {
+                console.log(`🚪 Joining group conversation: ${conversation.id}`);
+                socketService.joinConversation(conversation.id);
+              }
+            }
           } catch (error: any) {
             set((state) => {
               state.error = error.message;
@@ -269,6 +285,16 @@ export const useChatStore = create<ChatState>()(
               cleanGroupInfo
             );
             conversationId = conversation.id;
+            
+            // BUG FIX: 2025-01-30 - Join group conversation immediately after creation
+            // Problem: Creator doesn't receive messages in new group chats
+            // Solution: Join the conversation room right after creating it
+            // Impact: Creator can receive messages immediately in new groups
+            const socketService = get().socket ? SocketService.getInstance() : null;
+            if (socketService && socketService.isConnected) {
+              console.log(`🚪 Joining newly created group conversation: ${conversationId}`);
+              socketService.joinConversation(conversationId);
+            }
           } else {
             // Direct conversation between two users
             const conversation = await createOrGetDirectConversation(

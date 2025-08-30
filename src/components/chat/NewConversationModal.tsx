@@ -135,17 +135,30 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
 
     setUploadingImage(true);
     try {
-      // For now, convert to base64 for preview
-      // In production, upload to Firebase Storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const result = reader.result as string;
-        setGroupImage(result);
-        setUploadingImage(false);
-      };
-      reader.readAsDataURL(file);
+      // BUG FIX: 2025-01-30 - Upload image to Firebase Storage instead of using base64
+      // Problem: Firebase Firestore rejects base64 data URLs as they're invalid nested entities
+      // Solution: Upload to Firebase Storage and store only the download URL
+      // Impact: Group chat images now work properly without Firebase errors
+      
+      const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+      const { storage } = await import('@/lib/firebase-config');
+      
+      // Create a unique filename
+      const timestamp = Date.now();
+      const filename = `group-images/${timestamp}-${file.name}`;
+      
+      // Upload to Firebase Storage
+      const storageRef = ref(storage, filename);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      // Set the Firebase Storage URL instead of base64
+      setGroupImage(downloadURL);
+      setUploadingImage(false);
     } catch (error) {
       console.error('Failed to upload image:', error);
+      // Fallback to default image on error
+      setGroupImage('/default-group.svg');
       setUploadingImage(false);
     }
   };

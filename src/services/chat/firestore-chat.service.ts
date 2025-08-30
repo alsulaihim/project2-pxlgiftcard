@@ -130,10 +130,24 @@ export async function createGroupConversation(
   // Solution: Ensure all fields have valid values
   // Impact: Prevents Firestore errors when creating group conversations
   
-  // Ensure photoURL is a valid string
+  // BUG FIX: 2025-01-30 - Validate photoURL to prevent Firebase nested entity errors
+  // Problem: Base64 data URLs cause "invalid nested entity" errors
+  // Solution: Reject base64 URLs and only accept regular URLs or default image
+  // Impact: Prevents Firebase errors when creating group conversations
+  
   let photoURL = '/default-group.svg';
   if (groupInfo.photoURL && typeof groupInfo.photoURL === 'string' && groupInfo.photoURL.length > 0) {
-    photoURL = groupInfo.photoURL;
+    // Check if it's a base64 data URL (these cause Firebase errors)
+    if (groupInfo.photoURL.startsWith('data:')) {
+      console.warn('⚠️ Base64 data URLs not supported for group photos. Use Firebase Storage instead.');
+      photoURL = '/default-group.svg';
+    } else if (groupInfo.photoURL.length > 2048) {
+      // Firebase has limits on string field sizes
+      console.warn('⚠️ Photo URL too long. Using default image.');
+      photoURL = '/default-group.svg';
+    } else {
+      photoURL = groupInfo.photoURL;
+    }
   }
 
   // BUG FIX: 2025-01-30 - Create clean object structure for Firestore

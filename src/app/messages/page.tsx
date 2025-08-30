@@ -116,12 +116,12 @@ export default function EnhancedMessagesPage() {
           });
           
           // Listen for typing updates from other users
-          socketService.on('typing:update', (data: { conversationId: string; userId: string; isTyping: boolean }) => {
+          socketService.on('typing:update', (data: { conversationId: string; userId: string; typing: boolean }) => {
             console.log('⌨️ Typing update:', data);
             
             // Don't show typing for current user
             if (data.userId !== user.uid) {
-              setTypingUser(data.conversationId, data.userId, data.isTyping);
+              setTypingUser(data.conversationId, data.userId, data.typing);
             }
           });
           
@@ -151,7 +151,7 @@ export default function EnhancedMessagesPage() {
     initializeChat();
 
     return () => {
-      presenceService.stopHeartbeat();
+      presenceService.cleanup();
       socketService.disconnect();
       reset();
     };
@@ -190,7 +190,7 @@ export default function EnhancedMessagesPage() {
     const fetchUserProfiles = async () => {
       const profiles = new Map();
       
-      for (const conversation of conversations.values()) {
+      for (const conversation of Array.from(conversations.values())) {
         for (const memberId of conversation.members) {
           if (memberId !== user?.uid && !profiles.has(memberId)) {
             try {
@@ -256,7 +256,7 @@ export default function EnhancedMessagesPage() {
     
     const messageType = mediaMessage.mediaType === 'image' ? 'image' : 
                        mediaMessage.mediaType === 'voice' ? 'voice' : 
-                       mediaMessage.mediaType === 'file' ? 'file' : 'media';
+                       mediaMessage.mediaType === 'file' ? 'file' : 'text';
     
     await sendMessage(mediaMessage.downloadUrl || '', messageType, {
       ...mediaMessage.metadata,
@@ -881,7 +881,7 @@ export default function EnhancedMessagesPage() {
                     <div className="flex-1 overflow-hidden">
                       <VirtualMessageList
                         messages={activeMessages}
-                        currentUserId={user?.uid || userId || 'test-user-1'}
+                        currentUserId={user?.uid || 'test-user-1'}
                         height={messageListHeight}
                         getUserInfo={getUserInfo}
                         onLoadMore={handleLoadMore}
@@ -909,7 +909,7 @@ export default function EnhancedMessagesPage() {
                 onTyping={handleTyping}
                 placeholder={`Write a message...`}
                 conversationId={activeConversationId}
-                recipientId={activeConversation.type === 'direct' ? activeConversation.members.find(id => id !== user.uid) : undefined}
+                recipientId={activeConversation.type === 'direct' ? activeConversation.members.find(id => id !== user.uid) || undefined : undefined}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}
               />

@@ -196,8 +196,8 @@ export default function EnhancedMessagesPage() {
         <div className="flex-1 overflow-y-auto">
           <ConversationList
             conversations={Array.from(conversations.values())}
-            activeConversationId={activeConversationId || ''}
-            onSelectConversation={setActiveConversation}
+            activeId={activeConversationId || ''}
+            onSelect={(c) => setActiveConversation(c.id)}
             currentUserId={user.uid}
           />
         </div>

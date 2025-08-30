@@ -46,6 +46,23 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
     
+    // BUG FIX: 2025-01-30 - Add rules for group chat images
+    // Problem: Firebase Storage denying access to group-images/ path
+    // Solution: Add specific rules for group chat image uploads
+    // Impact: Users can now upload and view group chat images
+    match /group-images/{allPaths=**} {
+      // Allow authenticated users to upload group images
+      allow write: if request.auth != null
+        && request.resource.size < 5 * 1024 * 1024 // Max 5MB
+        && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Allow public read access to group images (for displaying in chat)
+      allow read: if true;
+      
+      // Allow authenticated users to delete group images
+      allow delete: if request.auth != null;
+    }
+    
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;
