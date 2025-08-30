@@ -125,20 +125,21 @@ export async function createGroupConversation(
     memberIds.push(groupInfo.createdBy);
   }
 
-  // BUG FIX: 2025-01-30 - Validate photoURL to prevent Firestore errors
-  // Problem: Base64 images or undefined values can cause "invalid nested entity" errors
-  // Solution: Validate and sanitize photoURL before saving
+  // BUG FIX: 2025-01-30 - Ensure all fields are properly defined to prevent Firestore errors
+  // Problem: Undefined or null values can cause "invalid nested entity" errors
+  // Solution: Ensure all fields have valid values
   // Impact: Prevents Firestore errors when creating group conversations
-  let validPhotoURL = '/default-group.svg';
-  if (groupInfo.photoURL) {
-    // If it's a base64 image, ensure it's properly formatted
-    if (groupInfo.photoURL.startsWith('data:image')) {
-      validPhotoURL = groupInfo.photoURL;
-    } else if (groupInfo.photoURL.startsWith('/') || groupInfo.photoURL.startsWith('http')) {
-      validPhotoURL = groupInfo.photoURL;
-    }
+  
+  // Ensure photoURL is a valid string
+  let photoURL = '/default-group.svg';
+  if (groupInfo.photoURL && typeof groupInfo.photoURL === 'string' && groupInfo.photoURL.length > 0) {
+    photoURL = groupInfo.photoURL;
   }
 
+  // BUG FIX: 2025-01-30 - Use Timestamp.now() instead of serverTimestamp()
+  // Problem: serverTimestamp() might be causing issues with nested objects
+  // Solution: Use Timestamp.now() for immediate timestamp value
+  // Impact: Fixes "invalid nested entity" error
   const conversationData = {
     type: "group" as const,
     members: memberIds,
@@ -146,28 +147,41 @@ export async function createGroupConversation(
       name: groupInfo.name || 'Unnamed Group',
       description: groupInfo.description || '',
       createdBy: groupInfo.createdBy,
-      admins: [groupInfo.createdBy], // Creator is initial admin
-      photoURL: validPhotoURL, // Use validated photoURL
+      admins: [groupInfo.createdBy],
+      photoURL: photoURL
     },
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
   };
 
-  console.log('📤 Sending to Firestore:', JSON.stringify({
-    ...conversationData,
+  // Log the data being sent (without serverTimestamp which can't be stringified)
+  console.log('📤 Sending to Firestore:', {
+    type: conversationData.type,
+    members: conversationData.members,
     groupInfo: {
-      ...conversationData.groupInfo,
+      name: conversationData.groupInfo.name,
+      description: conversationData.groupInfo.description,
+      createdBy: conversationData.groupInfo.createdBy,
+      admins: conversationData.groupInfo.admins,
       photoURL: conversationData.groupInfo.photoURL.substring(0, 50) + '...'
-    }
-  }, null, 2));
+    },
+    timestamps: 'serverTimestamp()'
+  });
 
   try {
     const ref = await addDoc(collection(db, "conversations"), conversationData);
     const snap = await getDoc(ref);
+    console.log('✅ Group conversation created successfully:', ref.id);
     return { id: ref.id, ...(snap.data() as Omit<Conversation, "id">) };
   } catch (error: any) {
-    console.error('❌ Failed to create group conversation:', error);
-    console.error('❌ Data that caused error:', conversationData);
+    console.error('❌ Failed to create group conversation:', error.message);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Data that caused error:', {
+      type: conversationData.type,
+      membersCount: conversationData.members.length,
+      groupInfoKeys: Object.keys(conversationData.groupInfo),
+      groupInfo: conversationData.groupInfo
+    });
     throw error;
   }
 }
