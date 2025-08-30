@@ -220,16 +220,25 @@ export async function listUserConversations(userId: string): Promise<Conversatio
   // Solution: Add retry logic with exponential backoff
   // Impact: More resilient to temporary network issues
   
+  console.log('🔍 listUserConversations START - userId:', userId);
+  console.log('🔍 auth.currentUser BEFORE wait:', auth.currentUser?.uid);
+  
   // Ensure auth is ready and token is fresh
   const authUser = await authManager.waitForAuth();
+  console.log('🔍 authManager.waitForAuth result:', authUser?.uid);
+  
   if (authUser) {
-    await authManager.ensureFreshToken();
+    const token = await authManager.ensureFreshToken();
+    console.log('🔍 Token refreshed:', !!token);
   }
+  
+  console.log('🔍 auth.currentUser AFTER wait:', auth.currentUser?.uid);
   
   console.log('🔍 listUserConversations called with:', {
     userId,
     currentAuthUser: authUser?.uid,
-    isAuthenticated: !!authUser
+    isAuthenticated: !!authUser,
+    authCurrentUser: auth.currentUser?.uid
   });
   
   if (!userId) {
@@ -240,6 +249,12 @@ export async function listUserConversations(userId: string): Promise<Conversatio
   // Verify the userId matches the authenticated user
   if (authUser && authUser.uid !== userId) {
     console.warn('⚠️ userId mismatch:', { provided: userId, authenticated: authUser.uid });
+  }
+  
+  // Check if auth.currentUser is available
+  if (!auth.currentUser) {
+    console.error('❌ auth.currentUser is null even after waiting!');
+    console.log('🔍 Attempting to continue anyway with userId:', userId);
   }
   
   const maxRetries = 3;
