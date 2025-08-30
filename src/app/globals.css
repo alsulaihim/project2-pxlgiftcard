@@ -4,15 +4,7 @@
 
 /* Font imports */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-
-/* HK Modular font for logo */
-@font-face {
-  font-family: 'HK Modular';
-  src: url('https://fonts.cdnfonts.com/s/95208/HKModular-Bold.woff') format('woff');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
 
 /* Vercel Geist font (fallback to Inter) */
 @font-face {
