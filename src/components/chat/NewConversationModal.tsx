@@ -169,8 +169,8 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
       const groupInfo = conversationType === 'group' ? {
         name: groupName,
         description: '',
-        photoURL: groupImage || '/default-group.svg',
-        admins: [currentUserId]
+        photoURL: groupImage || '/default-group.svg'
+        // admins will be set by createGroupConversation
       } : undefined;
 
       const conversationId = await createConversation(

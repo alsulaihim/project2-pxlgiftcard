@@ -245,17 +245,28 @@ export const useChatStore = create<ChatState>()(
         createConversation: async (members, type, groupInfo) => {
           const { createGroupConversation, createOrGetDirectConversation } = await import('@/services/chat/firestore-chat.service');
           
+          console.log('🎯 ChatStore createConversation called:', { 
+            members, 
+            type, 
+            groupInfoKeys: groupInfo ? Object.keys(groupInfo) : null 
+          });
+          
           let conversationId: string;
           
           if (type === 'group' && groupInfo) {
+            // Filter out any unexpected fields from groupInfo
+            const cleanGroupInfo = {
+              name: groupInfo.name,
+              description: groupInfo.description || '',
+              createdBy: members[0], // First member as creator
+              photoURL: groupInfo.photoURL || '/default-group.svg'
+            };
+            
+            console.log('🧹 Cleaned groupInfo:', cleanGroupInfo);
+            
             const conversation = await createGroupConversation(
               members,
-              {
-                name: groupInfo.name,
-                description: groupInfo.description || '',
-                createdBy: members[0], // First member as creator
-                photoURL: groupInfo.photoURL // Pass the photoURL
-              }
+              cleanGroupInfo
             );
             conversationId = conversation.id;
           } else {

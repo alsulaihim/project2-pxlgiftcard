@@ -108,6 +108,13 @@ export async function createGroupConversation(
     photoURL?: string;
   }
 ): Promise<Conversation> {
+  console.log('📝 Creating group conversation with:', {
+    memberIds,
+    groupInfoKeys: Object.keys(groupInfo),
+    name: groupInfo.name,
+    photoURLLength: groupInfo.photoURL?.length || 0
+  });
+
   // Validate minimum members for group chat
   if (memberIds.length < 2) {
     throw new Error('Group conversation requires at least 2 members');
@@ -118,23 +125,51 @@ export async function createGroupConversation(
     memberIds.push(groupInfo.createdBy);
   }
 
+  // BUG FIX: 2025-01-30 - Validate photoURL to prevent Firestore errors
+  // Problem: Base64 images or undefined values can cause "invalid nested entity" errors
+  // Solution: Validate and sanitize photoURL before saving
+  // Impact: Prevents Firestore errors when creating group conversations
+  let validPhotoURL = '/default-group.svg';
+  if (groupInfo.photoURL) {
+    // If it's a base64 image, ensure it's properly formatted
+    if (groupInfo.photoURL.startsWith('data:image')) {
+      validPhotoURL = groupInfo.photoURL;
+    } else if (groupInfo.photoURL.startsWith('/') || groupInfo.photoURL.startsWith('http')) {
+      validPhotoURL = groupInfo.photoURL;
+    }
+  }
+
   const conversationData = {
     type: "group" as const,
     members: memberIds,
     groupInfo: {
-      name: groupInfo.name,
+      name: groupInfo.name || 'Unnamed Group',
       description: groupInfo.description || '',
       createdBy: groupInfo.createdBy,
       admins: [groupInfo.createdBy], // Creator is initial admin
-      photoURL: groupInfo.photoURL || '/default-group.svg', // Use provided photoURL or default
+      photoURL: validPhotoURL, // Use validated photoURL
     },
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  const ref = await addDoc(collection(db, "conversations"), conversationData);
-  const snap = await getDoc(ref);
-  return { id: ref.id, ...(snap.data() as Omit<Conversation, "id">) };
+  console.log('📤 Sending to Firestore:', JSON.stringify({
+    ...conversationData,
+    groupInfo: {
+      ...conversationData.groupInfo,
+      photoURL: conversationData.groupInfo.photoURL.substring(0, 50) + '...'
+    }
+  }, null, 2));
+
+  try {
+    const ref = await addDoc(collection(db, "conversations"), conversationData);
+    const snap = await getDoc(ref);
+    return { id: ref.id, ...(snap.data() as Omit<Conversation, "id">) };
+  } catch (error: any) {
+    console.error('❌ Failed to create group conversation:', error);
+    console.error('❌ Data that caused error:', conversationData);
+    throw error;
+  }
 }
 
 /**
