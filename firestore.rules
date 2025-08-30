@@ -161,6 +161,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // Products Collection - Public read, admin write
+    match /products/{productId} {
+      // Anyone can read products (for marketplace display)
+      allow read: if true;
+      
+      // Only admins can create, update, or delete products
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
     // Chat Sessions Collection - for live chat support
     match /chat-sessions/{sessionId} {
       // Allow anyone to create a new chat session (guests and authenticated users)
