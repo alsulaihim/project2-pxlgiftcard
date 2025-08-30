@@ -665,44 +665,60 @@ export default function EnhancedMessagesPage() {
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {typingUsers.length > 0 ? (
-                        <div className="flex items-center gap-1">
-                          <span>
-                            {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
-                          </span>
-                          <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
-                          <div className="flex gap-0.5">
-                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
-                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
-                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
-                          </div>
-                        </div>
-                      ) : activeConversation.type === 'direct' ? (
-                        (() => {
+                    <div className="text-sm">
+                      {(() => {
+                        // Always show status for direct messages
+                        if (activeConversation.type === 'direct') {
                           const otherUserId = activeConversation.members.find(id => id !== user.uid);
-                          const isOnline = otherUserId && presence.get(otherUserId);
-                          // Debug presence
-                          if (otherUserId) {
-                            console.log('👤 Presence check:', {
-                              otherUserId,
-                              isOnline,
-                              presenceSize: presence.size,
-                              allOnlineUsers: Array.from(presence.entries()).filter(([, online]) => online).map(([id]) => id)
-                            });
+                          const isOnline = otherUserId ? presence.get(otherUserId) : false;
+                          
+                          // Show typing if someone is typing, otherwise show online status
+                          if (typingUsers.length > 0) {
+                            return (
+                              <div className="flex items-center gap-1">
+                                <span>
+                                  {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                                </span>
+                                <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
+                                <div className="flex gap-0.5">
+                                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
+                                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                                  <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                                </div>
+                              </div>
+                            );
                           }
+                          
+                          // Always show online/offline status for direct messages
                           return isOnline ? (
-                            <span className="flex items-center gap-1">
+                            <div className="flex items-center gap-1">
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                              <span>Online</span>
-                            </span>
+                              <span className="text-green-500">Online</span>
+                            </div>
                           ) : (
-                            <span className="text-gray-400">Offline</span>
+                            <div className="text-gray-400">Offline</div>
                           );
-                        })()
-                      ) : (
-                        <span>{conversationInfo?.subtitle}</span>
-                      )}
+                        }
+                        
+                        // For group conversations, show typing or subtitle
+                        if (typingUsers.length > 0) {
+                          return (
+                            <div className="flex items-center gap-1">
+                              <span>
+                                {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                              </span>
+                              <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
+                              <div className="flex gap-0.5">
+                                <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
+                                <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                                <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        return <span>{conversationInfo?.subtitle || ''}</span>;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -729,11 +745,6 @@ export default function EnhancedMessagesPage() {
               <div className="flex-1 overflow-hidden flex flex-col">
                 {activeMessages.length > 0 ? (
                   <>
-                    <div className="p-4 pb-2">
-                      <div className="text-sm text-gray-500">
-                        Showing {activeMessages.length} messages
-                      </div>
-                    </div>
                     <div className="flex-1 overflow-hidden">
                       <VirtualMessageList
                         messages={activeMessages}
