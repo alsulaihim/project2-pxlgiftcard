@@ -233,6 +233,18 @@ export class StorageService {
   }
 
   /**
+   * Save key pair (convenience method that uses storeKeyPair)
+   */
+  async saveKeyPair(keyPair: KeyPair, userId?: string): Promise<void> {
+    // If no userId provided, try to get from auth context
+    if (!userId) {
+      // For now, we'll require userId to be passed
+      throw new Error('userId is required to save key pair');
+    }
+    return this.storeKeyPair(userId, keyPair);
+  }
+
+  /**
    * Clear all stored data (for debugging/reset)
    */
   async clearAll(): Promise<void> {

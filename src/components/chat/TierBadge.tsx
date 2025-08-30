@@ -55,7 +55,7 @@ export const TierBadge: React.FC<TierBadgeProps> = ({
     }
   };
 
-  const config = tierConfig[tier];
+  const config = tierConfig[tier] || tierConfig.starter; // Default to starter if tier is invalid
   
   const sizeClasses = {
     sm: 'w-4 h-4 text-[10px]',

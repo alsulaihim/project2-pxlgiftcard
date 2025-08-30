@@ -20,6 +20,32 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
     
+    // Chat Media - Allow authenticated users to upload/read chat media
+    match /chat-media/{conversationId}/{allPaths=**} {
+      // Allow authenticated users to upload media to conversations
+      // Simplified rules for development - just require authentication
+      allow write: if request.auth != null;
+      
+      // Allow authenticated users to read chat media
+      allow read: if request.auth != null;
+      
+      // Allow authenticated users to delete their own uploads
+      allow delete: if request.auth != null;
+    }
+    
+    // Voice Messages - Store voice recordings
+    match /voice-messages/{conversationId}/{allPaths=**} {
+      // Allow authenticated users to upload voice messages
+      // Simplified for development
+      allow write: if request.auth != null;
+      
+      // Allow authenticated users to read voice messages
+      allow read: if request.auth != null;
+      
+      // Allow deletion by authenticated users
+      allow delete: if request.auth != null;
+    }
+    
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

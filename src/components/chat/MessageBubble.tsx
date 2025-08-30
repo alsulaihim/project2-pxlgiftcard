@@ -61,6 +61,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const messageType = (message as any).type || 'text';
   const metadata = (message as any).metadata;
+  
+  // Show message ID when shift is held
+  const [showId, setShowId] = React.useState(false);
+  
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.shiftKey) setShowId(true);
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (!e.shiftKey) setShowId(false);
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
 
   return (
     <div 
@@ -69,6 +89,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         setShowActions(false);
         setShowReactions(false);
       }}
+      title={`Message ID: ${message.id} (Hold Shift to see ID)`}
     >
       <div className={`flex ${isOwn ? 'flex-row-reverse' : 'flex-row'} items-start gap-2 max-w-[70%]`}>
         {/* Avatar */}
@@ -85,6 +106,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         
         {/* Message wrapper with inline actions */}
         <div className="flex flex-col">
+          {/* Message ID - shown when shift is held */}
+          {showId && (
+            <div className="text-[10px] text-yellow-500 mb-1 font-mono bg-black/50 px-2 py-0.5 rounded">
+              ID: {message.id}
+            </div>
+          )}
+          
           {/* User name - only for other users */}
           {!isOwn && (
             <div className="flex items-center gap-2 mb-1">
@@ -297,16 +325,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       }`}>
                         {formatTime(message.timestamp)}
                       </span>
-                      {isOwn && (
-                        <MessageStatus 
-                          status={message.status || (
+                      {isOwn && (() => {
+                        const status = message.id.startsWith('temp-') ? 'sending' :
+                          message.status || (
                             message.read && message.read.length > 0 ? 'read' :
                             message.delivered && message.delivered.length > 0 ? 'delivered' :
                             'sent'
-                          )}
-                          className="inline-flex"
-                        />
-                      )}
+                          );
+                        
+                        // Debug logging
+                        if (message.id && !message.id.startsWith('temp-')) {
+                          console.log(`📬 Message ${message.id} status:`, {
+                            status,
+                            read: message.read,
+                            delivered: message.delivered,
+                            hasRead: message.read && message.read.length > 0,
+                            hasDelivered: message.delivered && message.delivered.length > 0
+                          });
+                        }
+                        
+                        return (
+                          <MessageStatus 
+                            status={status}
+                            className="inline-flex"
+                          />
+                        );
+                      })()}
                     </div>
                   </div>
                 );
@@ -316,13 +360,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           
           {/* Reactions */}
           {message.reactions && (() => {
+            console.log(`🎨 Rendering reactions for message ${message.id}:`, message.reactions);
             const validReactions = Object.entries(message.reactions)
               .filter(([key, users]) => {
                 // Filter out non-emoji keys (like delete, clear, add, set)
                 // Only show actual emoji reactions that have users
                 const invalidKeys = ['delete', 'clear', 'add', 'set', 'remove'];
                 const userArray = Array.isArray(users) ? users : [];
-                return !invalidKeys.includes(key) && userArray.length > 0;
+                const isValid = !invalidKeys.includes(key) && userArray.length > 0;
+                if (!isValid && userArray.length === 0) {
+                  console.log(`🚫 Filtering out reaction ${key} with no users`);
+                }
+                return isValid;
               });
             
             return validReactions.length > 0 ? (
@@ -336,8 +385,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                       onClick={() => onReact?.(message.id, emoji)}
                       className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
                         userArray.includes(currentUserId)
-                          ? 'bg-blue-500/20 border border-blue-500/50'
-                          : 'bg-[#1a1a1a] border border-[#262626] hover:bg-[#262626]'
+                          ? 'bg-blue-500/20'
+                          : 'bg-[#1a1a1a] hover:bg-[#262626]'
                       }`}
                     >
                       <span>{emoji}</span>

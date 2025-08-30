@@ -9,7 +9,8 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import { Socket } from 'socket.io-client';
 import { EncryptionService } from '@/services/chat/encryption.service';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc, updateDoc, arrayUnion, arrayRemove, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-config';
 
 // Enable MapSet support for Immer to work with Maps and Sets
 enableMapSet();
@@ -27,7 +28,7 @@ export interface Message {
   delivered: string[];
   read: string[];
   replyTo?: string;
-  reactions?: Map<string, string[]>; // emoji -> userIds
+  reactions?: { [emoji: string]: string[] }; // emoji -> userIds
   metadata?: {
     fileName?: string;
     fileSize?: number;
@@ -121,12 +122,13 @@ export interface ChatState {
   loadMoreMessages: (conversationId: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
   editMessage: (messageId: string, newContent: string) => void;
-  addReaction: (messageId: string, emoji: string) => void;
-  removeReaction: (messageId: string, emoji: string) => void;
+  addReaction: (messageId: string, emoji: string) => Promise<void>;
+  removeReaction: (messageId: string, emoji: string) => Promise<void>;
   setReplyingTo: (message: Message | null) => void;
   
   // Actions - Real-time
   updateTyping: (conversationId: string, isTyping: boolean) => void;
+  setTypingUser: (conversationId: string, userId: string, isTyping: boolean) => void;
   updatePresence: (userId: string, isOnline: boolean, lastSeen?: Date) => void;
   markAsDelivered: (messageId: string, userId: string) => void;
   markAsRead: (messageIds: string[], userId: string) => void;
@@ -185,9 +187,26 @@ export const useChatStore = create<ChatState>()(
 
         // Conversation actions
         setActiveConversation: (id) => set((state) => {
+          // Leave previous conversation room if exists
+          const previousId = state.activeConversationId;
+          const socketService = (window as any).socketService;
+          
+          if (socketService && previousId && previousId !== id) {
+            socketService.leaveConversation(previousId);
+          }
+          
           state.activeConversationId = id;
+          
           if (id) {
             state.markConversationAsRead(id);
+            
+            // Join new conversation room to receive typing events
+            if (socketService) {
+              console.log(`🚪 Joining conversation room: ${id}`);
+              socketService.joinConversation(id);
+            } else {
+              console.warn('⚠️ SocketService not available to join conversation');
+            }
           }
         }),
 
@@ -291,24 +310,10 @@ export const useChatStore = create<ChatState>()(
             }
           }
 
-          // Optimistically add message
-          const tempMessage: Message = {
-            id: `temp-${Date.now()}`,
-            conversationId,
-            senderId: state.userId || 'current-user',
-            type,
-            content: encryptedContent,
-            decryptedContent: content,
-            nonce,
-            timestamp: Timestamp.now(),
-            delivered: [],
-            read: [],
-            metadata: metadata || {},
-            status: 'sending',
-            replyTo: state.replyingTo?.id
-          };
-
-          // Don't add message optimistically since Firestore subscription will handle it
+          // Get reply ID before clearing
+          const replyToId = state.replyingTo?.id;
+          
+          // Clear reply state immediately
           set((state) => {
             state.replyingTo = null;
           });
@@ -320,7 +325,7 @@ export const useChatStore = create<ChatState>()(
               type,
               content: encryptedContent,
               nonce,
-              replyTo: tempMessage.replyTo,
+              replyTo: replyToId,
               metadata
             });
           } else {
@@ -338,15 +343,6 @@ export const useChatStore = create<ChatState>()(
               metadata: metadata || {},
               nonce: nonce
             });
-            
-            // Update temp message status
-            set((state) => {
-              const messages = state.messages.get(conversationId) || [];
-              const msgIndex = messages.findIndex(m => m.id === tempMessage.id);
-              if (msgIndex !== -1) {
-                messages[msgIndex].status = 'sent';
-              }
-            });
           }
         },
 
@@ -361,25 +357,34 @@ export const useChatStore = create<ChatState>()(
             // Subscribe to messages and update state when they arrive
             const unsubscribe = subscribeMessages(conversationId, (firestoreMessages) => {
               console.log('Received messages from Firestore:', firestoreMessages);
+              
               // Convert Firestore messages to our Message type
-              const messages: Message[] = firestoreMessages.map(msg => ({
-                id: msg.id,
-                conversationId,
-                senderId: msg.senderId,
-                type: (msg as any).type || 'text' as const,
-                content: msg.encryptedContent || msg.text,
-                decryptedContent: msg.text, // Already decrypted by subscribeMessages
-                nonce: msg.nonce || '',
-                timestamp: msg.timestamp,
-                delivered: msg.deliveredTo || [],
-                read: msg.readBy || [],
-                reactions: new Map(),
-                status: 'sent' as const,
-                metadata: (msg as any).metadata || {}
-              }));
+              const messages: Message[] = firestoreMessages.map(msg => {
+                console.log(`📦 Processing message ${msg.id}:`, {
+                  reactions: (msg as any).reactions,
+                  deliveredTo: (msg as any).deliveredTo,
+                  readBy: (msg as any).readBy
+                });
+                return {
+                  id: msg.id,
+                  conversationId,
+                  senderId: msg.senderId,
+                  type: (msg as any).type || 'text' as const,
+                  content: msg.encryptedContent || msg.text,
+                  decryptedContent: msg.text, // Already decrypted by subscribeMessages
+                  nonce: msg.nonce || '',
+                  timestamp: msg.timestamp,
+                  delivered: (msg as any).deliveredTo || [],
+                  read: (msg as any).readBy || [],
+                  reactions: (msg as any).reactions || {},
+                  status: 'sent' as const,
+                  metadata: (msg as any).metadata || {}
+                };
+              });
               
               set((state) => {
-                // Replace messages entirely instead of appending to avoid duplicates
+                // Simply replace all messages - no temp message handling needed
+                // since Firestore subscription gives us all messages
                 state.messages.set(conversationId, messages);
                 state.hasMore.set(conversationId, messages.length === (pagination?.limit || 50));
                 state.loadingMore.set(conversationId, false);
@@ -458,40 +463,202 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
-        addReaction: (messageId, emoji) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            const message = messages.find(m => m.id === messageId);
-            if (message) {
-              if (!message.reactions) {
-                message.reactions = new Map();
+        addReaction: async (messageId, emoji) => {
+          const state = get();
+          const userId = state.userId;
+          const activeConvId = state.activeConversationId;
+          
+          if (!userId) {
+            console.error('No userId set - cannot add reaction');
+            return;
+          }
+          
+          console.log('Adding reaction:', { messageId, emoji, userId, activeConvId });
+          
+          // Update local state optimistically
+          set((state) => {
+            for (const [convId, messages] of state.messages) {
+              const message = messages.find(m => m.id === messageId);
+              if (message) {
+                console.log('🔍 Found message for reaction update:', message.id);
+                console.log('🔍 Current reactions before update:', JSON.stringify(message.reactions));
+                
+                if (!message.reactions) {
+                  message.reactions = {};
+                }
+                
+                // Remove user from all other reactions first (only one reaction per user)
+                Object.keys(message.reactions).forEach(existingEmoji => {
+                  if (existingEmoji !== emoji) {
+                    const users = message.reactions![existingEmoji] || [];
+                    const index = users.indexOf(userId);
+                    if (index > -1) {
+                      users.splice(index, 1);
+                      if (users.length === 0) {
+                        delete message.reactions![existingEmoji];
+                      } else {
+                        message.reactions![existingEmoji] = users;
+                      }
+                    }
+                  }
+                });
+                
+                // Add user to the new reaction
+                const users = message.reactions[emoji] || [];
+                if (!users.includes(userId)) {
+                  users.push(userId);
+                  message.reactions[emoji] = users;
+                }
+                
+                console.log('🔍 Reactions after update:', JSON.stringify(message.reactions));
+                break;
               }
-              const users = message.reactions.get(emoji) || [];
-              const userId = state.userId || 'current-user';
-              if (!users.includes(userId)) {
-                users.push(userId);
+            }
+          });
+          
+          // Update Firebase - Simplified approach
+          if (activeConvId) {
+            try {
+              const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
+              
+              // Get current message document
+              const messageDoc = await getDoc(messageRef);
+              if (!messageDoc.exists()) {
+                console.error('Message not found in Firebase');
+                return;
               }
-              message.reactions.set(emoji, users);
-              break;
+              
+              const data = messageDoc.data();
+              let reactions = data.reactions || {};
+              
+              console.log('📥 Current reactions from Firebase:', JSON.stringify(reactions));
+              
+              // Remove user from ALL reactions first (one reaction per user)
+              Object.keys(reactions).forEach(emojiKey => {
+                if (Array.isArray(reactions[emojiKey])) {
+                  reactions[emojiKey] = reactions[emojiKey].filter((u: string) => u !== userId);
+                  // Clean up empty arrays
+                  if (reactions[emojiKey].length === 0) {
+                    delete reactions[emojiKey];
+                  }
+                }
+              });
+              
+              // Add user to the new reaction
+              if (!reactions[emoji]) {
+                reactions[emoji] = [];
+              }
+              reactions[emoji].push(userId);
+              
+              console.log('📤 Updating Firebase with reactions:', JSON.stringify(reactions));
+              
+              // Update the entire reactions field
+              try {
+                // First ensure the document exists and has the reactions field
+                const currentDoc = await getDoc(messageRef);
+                if (!currentDoc.exists()) {
+                  console.error('Message document does not exist');
+                  return;
+                }
+                
+                // Use updateDoc to specifically update the reactions field
+                await updateDoc(messageRef, {
+                  'reactions': reactions
+                });
+                
+                console.log('✅ Reaction added to Firebase successfully');
+                
+                // Optional: Verify the update worked by reading back
+                if (process.env.NODE_ENV === 'development') {
+                  const verifyDoc = await getDoc(messageRef);
+                  const verifyData = verifyDoc.data();
+                  console.log('🔍 Verification - reactions after update:', verifyData?.reactions);
+                }
+              } catch (updateError) {
+                console.error('❌ Failed to update reactions:', updateError);
+                throw updateError;
+              }
+            } catch (error: any) {
+              console.error('❌ Failed to add reaction to Firebase:', error);
+              console.error('Error details:', {
+                code: error.code,
+                message: error.message,
+                messageId,
+                emoji,
+                userId
+              });
             }
           }
-        }),
+        },
 
-        removeReaction: (messageId, emoji) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            const message = messages.find(m => m.id === messageId);
-            if (message && message.reactions) {
-              const users = message.reactions.get(emoji) || [];
-              const userId = state.userId || 'current-user';
-              const filtered = users.filter(u => u !== userId);
-              if (filtered.length > 0) {
-                message.reactions.set(emoji, filtered);
-              } else {
-                message.reactions.delete(emoji);
+        removeReaction: async (messageId, emoji) => {
+          const state = get();
+          const userId = state.userId;
+          const activeConvId = state.activeConversationId;
+          
+          if (!userId) {
+            console.error('No userId set - cannot remove reaction');
+            return;
+          }
+          
+          console.log('Removing reaction:', { messageId, emoji, userId, activeConvId });
+          
+          // Update local state optimistically
+          set((state) => {
+            for (const [convId, messages] of state.messages) {
+              const message = messages.find(m => m.id === messageId);
+              if (message && message.reactions) {
+                const users = message.reactions[emoji] || [];
+                const filtered = users.filter(u => u !== userId);
+                if (filtered.length > 0) {
+                  message.reactions[emoji] = filtered;
+                } else {
+                  delete message.reactions[emoji];
+                }
+                break;
               }
-              break;
+            }
+          });
+          
+          // Update Firebase
+          if (activeConvId) {
+            try {
+              const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
+              
+              // Get current reactions
+              const messageDoc = await getDoc(messageRef);
+              if (!messageDoc.exists()) {
+                console.error('Message not found in Firebase');
+                return;
+              }
+              
+              const data = messageDoc.data();
+              let reactions = data.reactions || {};
+              
+              // Remove user from the specified emoji
+              if (reactions[emoji] && Array.isArray(reactions[emoji])) {
+                reactions[emoji] = reactions[emoji].filter((u: string) => u !== userId);
+                // Remove emoji entirely if no users left
+                if (reactions[emoji].length === 0) {
+                  delete reactions[emoji];
+                }
+              }
+              
+              // Ensure reactions is at least an empty object
+              if (Object.keys(reactions).length === 0) {
+                reactions = {};
+              }
+              
+              // Update with the complete reactions object using merge
+              await setDoc(messageRef, {
+                reactions: reactions
+              }, { merge: true });
+              console.log('Reaction removed from Firebase successfully');
+            } catch (error) {
+              console.error('Failed to remove reaction from Firebase:', error);
             }
           }
-        }),
+        },
 
         setReplyingTo: (message) => set((state) => {
           state.replyingTo = message;
@@ -499,11 +666,27 @@ export const useChatStore = create<ChatState>()(
 
         // Real-time actions
         updateTyping: (conversationId, isTyping) => {
-          const socket = get().socket;
-          if (socket) {
-            socket.emit(isTyping ? 'typing:start' : 'typing:stop', conversationId);
+          // Use the SocketService to send typing indicators
+          // This ensures proper formatting and normalization
+          const socketService = (window as any).socketService;
+          if (socketService) {
+            socketService.sendTyping(conversationId, isTyping);
           }
         },
+        
+        setTypingUser: (conversationId, userId, isTyping) => set((state) => {
+          const typingUsers = state.typing.get(conversationId) || [];
+          
+          if (isTyping) {
+            // Add user to typing list if not already there
+            if (!typingUsers.includes(userId)) {
+              state.typing.set(conversationId, [...typingUsers, userId]);
+            }
+          } else {
+            // Remove user from typing list
+            state.typing.set(conversationId, typingUsers.filter(id => id !== userId));
+          }
+        }),
 
         updatePresence: (userId, isOnline, lastSeen) => set((state) => {
           state.presence.set(userId, isOnline);
@@ -512,27 +695,96 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
-        markAsDelivered: (messageId, userId) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            const message = messages.find(m => m.id === messageId);
-            if (message && !message.delivered.includes(userId)) {
-              message.delivered.push(userId);
-              message.status = 'delivered';
-              break;
+        markAsDelivered: async (messageId, userId) => {
+          const state = get();
+          console.log(`📮 Marking message ${messageId} as delivered to ${userId}`);
+          
+          // Update local state
+          set((state) => {
+            for (const [convId, messages] of state.messages) {
+              const message = messages.find(m => m.id === messageId);
+              if (message && !message.delivered.includes(userId)) {
+                message.delivered.push(userId);
+                message.status = 'delivered';
+                console.log(`✅ Local state updated - message delivered to ${userId}`);
+                break;
+              }
+            }
+          });
+          
+          // Update Firebase
+          const activeConvId = state.activeConversationId;
+          if (activeConvId) {
+            try {
+              const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
+              const messageDoc = await getDoc(messageRef);
+              
+              if (messageDoc.exists()) {
+                const data = messageDoc.data();
+                const deliveredTo = data.deliveredTo || [];
+                
+                if (!deliveredTo.includes(userId)) {
+                  deliveredTo.push(userId);
+                  await updateDoc(messageRef, {
+                    deliveredTo: deliveredTo
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Failed to update delivered status in Firebase:', error);
             }
           }
-        }),
+        },
 
-        markAsRead: (messageIds, userId) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            messages.forEach(message => {
-              if (messageIds.includes(message.id) && !message.read.includes(userId)) {
-                message.read.push(userId);
-                message.status = 'read';
+        markAsRead: async (messageIds, userId) => {
+          const state = get();
+          
+          // Update local state
+          set((state) => {
+            for (const [convId, messages] of state.messages) {
+              messages.forEach(message => {
+                if (messageIds.includes(message.id) && !message.read.includes(userId)) {
+                  message.read.push(userId);
+                  message.status = 'read';
+                }
+              });
+            }
+          });
+          
+          // Update Firebase for each message
+          const activeConvId = state.activeConversationId;
+          if (activeConvId) {
+            for (const messageId of messageIds) {
+              try {
+                const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
+                const messageDoc = await getDoc(messageRef);
+                
+                if (messageDoc.exists()) {
+                  const data = messageDoc.data();
+                  const readBy = data.readBy || [];
+                  const deliveredTo = data.deliveredTo || [];
+                  
+                  // Update both readBy and deliveredTo
+                  if (!readBy.includes(userId)) {
+                    readBy.push(userId);
+                  }
+                  if (!deliveredTo.includes(userId)) {
+                    deliveredTo.push(userId);
+                  }
+                  
+                  await updateDoc(messageRef, {
+                    readBy: readBy,
+                    deliveredTo: deliveredTo
+                  });
+                  
+                  console.log(`✅ Marked message ${messageId} as read by ${userId}`);
+                }
+              } catch (error) {
+                console.error(`Failed to update read status for message ${messageId}:`, error);
               }
-            });
+            }
           }
-        }),
+        },
 
         // Socket actions
         initializeSocket: (socket) => set((state) => {

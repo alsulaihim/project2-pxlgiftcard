@@ -71,6 +71,24 @@ export class MediaService {
    */
   async uploadEncryptedMedia(mediaFile: MediaFile): Promise<EncryptedMediaResult> {
     try {
+      // Check if user is authenticated
+      const { auth } = await import('@/lib/firebase-config');
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('User must be authenticated to upload media');
+      }
+      
+      console.log('📁 Uploading media for user:', currentUser.uid);
+      console.log('📁 Auth token present:', !!currentUser.accessToken);
+      
+      // Force token refresh if needed
+      try {
+        const token = await currentUser.getIdToken(true);
+        console.log('📁 Fresh auth token obtained:', token.substring(0, 20) + '...');
+      } catch (tokenError) {
+        console.error('📁 Failed to refresh auth token:', tokenError);
+      }
+      
       // Validate file
       this.validateFile(mediaFile.file, mediaFile.type);
 
@@ -91,11 +109,48 @@ export class MediaService {
       // Generate unique file path
       const fileId = this.generateFileId();
       const filePath = `chat-media/${mediaFile.conversationId}/${fileId}`;
+      
+      console.log('📁 Uploading to path:', filePath);
+      console.log('📁 File size:', encryptedBlob.size, 'bytes');
 
-      // Upload to Firebase Storage
+      // Upload to Firebase Storage with metadata
       const storageRef = ref(storage, filePath);
-      const uploadResult = await uploadBytes(storageRef, encryptedBlob);
-      const downloadUrl = await getDownloadURL(uploadResult.ref);
+      const metadata = {
+        contentType: 'application/octet-stream',
+        customMetadata: {
+          originalName: processedFile.name,
+          uploadedBy: currentUser.uid,
+          conversationId: mediaFile.conversationId,
+          uploadedAt: new Date().toISOString()
+        }
+      };
+      
+      console.log('📁 Starting upload with metadata:', metadata);
+      
+      let uploadResult;
+      let downloadUrl;
+      
+      try {
+        uploadResult = await uploadBytes(storageRef, encryptedBlob, metadata);
+        console.log('📁 Upload successful, getting download URL...');
+        downloadUrl = await getDownloadURL(uploadResult.ref);
+        console.log('📁 Download URL obtained:', downloadUrl);
+      } catch (storageError: any) {
+        console.error('📁 Storage upload error:', storageError);
+        console.error('📁 Error code:', storageError.code);
+        console.error('📁 Error message:', storageError.message);
+        
+        // More detailed error message
+        if (storageError.code === 'storage/unauthorized') {
+          throw new Error('Storage permission denied. Please ensure you are logged in and try again.');
+        } else if (storageError.code === 'storage/canceled') {
+          throw new Error('Upload was cancelled.');
+        } else if (storageError.code === 'storage/unknown') {
+          throw new Error('An unknown storage error occurred. Please try again.');
+        } else {
+          throw storageError;
+        }
+      }
 
       // Encrypt the file encryption key for the recipient(s)
       let encryptedKey = fileEncryptionKey.privateKey;
@@ -108,15 +163,15 @@ export class MediaService {
       }
 
       // Get file metadata
-      const metadata = await this.getFileMetadata(processedFile, mediaFile.type);
+      const fileMetadata = await this.getFileMetadata(processedFile, mediaFile.type);
 
       console.log('📁 Media file uploaded and encrypted:', fileId);
 
       return {
-        downloadUrl,
+        downloadUrl: downloadUrl!,
         encryptedKey,
         nonce: encryptedData.nonce,
-        metadata
+        metadata: fileMetadata
       };
 
     } catch (error) {

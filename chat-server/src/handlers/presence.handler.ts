@@ -86,8 +86,11 @@ export class PresenceHandler {
       // Verify conversation membership
       const isMember = await checkConversationMembership(socket, conversationId);
       if (!isMember) {
+        logger.warn(`⚠️ User ${userId} not a member of ${conversationId}, ignoring typing event`);
         return;
       }
+      
+      logger.info(`✅ User ${userId} is member of ${conversationId}, processing typing event`);
 
       const typingKey = `${userId}:${conversationId}`;
 
@@ -266,12 +269,14 @@ export class PresenceHandler {
     this.handleUserOnline(socket);
     
     // Typing events
-    socket.on('typing:start', (data: TypingData) => 
-      this.handleTyping(socket, { ...data, typing: true })
-    );
-    socket.on('typing:stop', (data: TypingData) => 
-      this.handleTyping(socket, { ...data, typing: false })
-    );
+    socket.on('typing:start', (data: TypingData) => {
+      logger.info(`⌨️ Received typing:start from ${socket.data.userId}: ${JSON.stringify(data)}`);
+      this.handleTyping(socket, { ...data, typing: true });
+    });
+    socket.on('typing:stop', (data: TypingData) => {
+      logger.info(`⌨️ Received typing:stop from ${socket.data.userId}: ${JSON.stringify(data)}`);
+      this.handleTyping(socket, { ...data, typing: false });
+    });
     
     // Conversation events with acknowledgement
     socket.on('conversation:join', (conversationId: string, callback?: Function) => {

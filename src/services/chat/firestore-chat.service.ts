@@ -56,6 +56,9 @@ export interface ChatMessage {
   timestamp: Timestamp;
   readBy?: string[]; // Array of user IDs who have read this message
   deliveredTo?: string[]; // Array of user IDs who have received this message
+  reactions?: { [emoji: string]: string[] }; // Reactions with emoji as key and array of user IDs
+  type?: string; // Message type (text, image, file, etc.)
+  metadata?: any; // Additional metadata for media messages
 }
 
 /**
@@ -175,14 +178,32 @@ export async function getConversation(conversationId: string): Promise<Conversat
 }
 
 /**
- * Send a text message in a conversation with E2EE encryption and update lastMessage metadata.
+ * Send a message in a conversation with E2EE encryption and update lastMessage metadata.
+ * Supports text, media, and other message types.
  */
-export async function sendMessage(conversationId: string, senderId: string, text: string): Promise<void> {
+export async function sendMessage(
+  conversationId: string, 
+  senderId: string, 
+  text: string,
+  options?: {
+    type?: string;
+    metadata?: any;
+    nonce?: string;
+  }
+): Promise<void> {
   try {
+    console.log('📤 Sending message to conversation:', conversationId);
+    console.log('📤 Sender ID:', senderId);
+    
     // Get conversation to find recipient(s)
     const conversation = await getConversation(conversationId);
     if (!conversation) {
-      throw new Error('Conversation not found');
+      console.error('❌ Conversation not found with ID:', conversationId);
+      console.error('❌ This might happen if the conversation was deleted');
+      
+      // Try to recreate the conversation if it's a direct message
+      // This helps when a conversation was deleted but users want to message again
+      throw new Error(`Conversation not found: ${conversationId}`);
     }
 
     // For direct messages, encrypt for both participants
@@ -191,7 +212,11 @@ export async function sendMessage(conversationId: string, senderId: string, text
     let senderEncryptedContent = '';
     let senderNonce = '';
     
-    if (conversation.type === 'direct') {
+    // Skip encryption for media messages (they contain URLs, not sensitive content)
+    // Media content itself is already encrypted separately
+    const isMediaMessage = options?.type && ['image', 'file', 'voice', 'media'].includes(options.type);
+    
+    if (conversation.type === 'direct' && !isMediaMessage) {
       const recipientId = conversation.members.find(id => id !== senderId);
       if (recipientId) {
         try {
@@ -233,11 +258,20 @@ export async function sendMessage(conversationId: string, senderId: string, text
       senderId,
       text: encryptedContent, // Store encrypted content for recipient
       timestamp: serverTimestamp(),
+      type: options?.type || 'text',
+      reactions: {}, // Initialize reactions field to ensure it exists
+      deliveredTo: [], // Initialize delivered array
+      readBy: [], // Initialize read array
     };
     
+    // Add metadata if provided (for media messages)
+    if (options?.metadata) {
+      messageData.metadata = options.metadata;
+    }
+    
     // Only include nonce if it has a value
-    if (nonce) {
-      messageData.nonce = nonce;
+    if (nonce || options?.nonce) {
+      messageData.nonce = nonce || options.nonce;
     }
     
     // Store sender's encrypted version if available
@@ -319,8 +353,17 @@ export function subscribeMessages(
     // Process all messages and wait for decryption to complete
     const messagePromises = snapshot.docs.map(async (docSnap) => {
       const data = docSnap.data();
+      
+      // Check if this is a media message - they don't need decryption
+      const isMediaMessage = data.type && ['image', 'file', 'voice', 'media'].includes(data.type);
+      
       // Don't show encrypted text initially - wait for decryption
       let decryptedText = data.nonce || data.senderNonce ? '[Decrypting...]' : data.text;
+      
+      // Skip decryption for media messages - they contain URLs
+      if (isMediaMessage) {
+        decryptedText = data.text; // URL doesn't need decryption
+      }
       
       // BUG FIX: 2025-01-28 - Use appropriate encrypted version for sender vs recipient
       // Problem: Sender couldn't decrypt their own messages because they were encrypted for recipient
@@ -329,7 +372,7 @@ export function subscribeMessages(
       const currentUserId = encryptionService.getCurrentUserId?.();
       const hasKeyPair = encryptionService.getPublicKey() !== null;
       
-      if (hasKeyPair && (data.nonce || data.senderNonce)) {
+      if (hasKeyPair && (data.nonce || data.senderNonce) && !isMediaMessage) {
         try {
           console.log('🔐 Retrieved encrypted message from Firestore:');
           console.log('🔐 Sender ID:', data.senderId);
@@ -360,7 +403,9 @@ export function subscribeMessages(
                 nonce: data.nonce,
                 timestamp: data.timestamp,
                 readBy: data.readBy,
-                deliveredTo: data.deliveredTo
+                deliveredTo: data.deliveredTo,
+                type: data.type || 'text',
+                metadata: data.metadata || {}
               };
             } else {
               // Legacy dual encryption attempt (will fail)
@@ -433,11 +478,18 @@ export function subscribeMessages(
             console.log('🔐 Attempting to decrypt message from:', data.senderId);
             
             try {
-              decryptedText = encryptionService.decryptMessage(
+              const decrypted = encryptionService.decryptMessage(
                 { content: encryptedContent, nonce: nonce },
                 publicKeyForDecryption
               );
-              console.log('🔓 Message decrypted successfully from:', data.senderId);
+              
+              if (decrypted === null) {
+                // Decryption returned null (can't decrypt with current keys)
+                decryptedText = '[Unable to decrypt - different encryption keys]';
+              } else {
+                decryptedText = decrypted;
+                console.log('🔓 Message decrypted successfully from:', data.senderId);
+              }
             } catch (innerError) {
               // If decryption fails, it might be an old message with broken encryption
               // Try to handle gracefully
@@ -463,7 +515,21 @@ export function subscribeMessages(
         decryptedText = '[Loading encrypted message...]';
       }
       
-      return {
+      // Handle reactions - check if field exists
+      const messageReactions = data.reactions || {};
+      
+      // Debug what we're getting from Firebase for ALL messages
+      if (docSnap.id === 'Gfn2zM5Ua4aI63uH9vqX' || docSnap.id === 'HesOjcGFryyQPoF7ZVdN') {
+        console.log(`🔍 Debug for problematic message ${docSnap.id}:`, {
+          hasReactionsField: 'reactions' in data,
+          reactionsValue: data.reactions,
+          reactionsType: typeof data.reactions,
+          dataKeys: Object.keys(data),
+          fullData: JSON.stringify(data)
+        });
+      }
+      
+      const messageData = {
         id: docSnap.id,
         senderId: data.senderId,
         text: decryptedText,
@@ -471,8 +537,18 @@ export function subscribeMessages(
         nonce: data.nonce,
         timestamp: data.timestamp,
         readBy: data.readBy,
-        deliveredTo: data.deliveredTo
+        deliveredTo: data.deliveredTo,
+        type: data.type || 'text',
+        metadata: data.metadata || {},
+        reactions: messageReactions
       };
+      
+      // Debug reactions
+      if (data.reactions && Object.keys(data.reactions).length > 0) {
+        console.log('📊 Message has reactions:', docSnap.id, data.reactions);
+      }
+      
+      return messageData;
     });
     
     // Wait for all messages to be decrypted before updating UI
@@ -483,6 +559,11 @@ export function subscribeMessages(
       for (const result of results) {
         if (result.status === 'fulfilled') {
           const msg = result.value;
+          // Check if msg.text exists before using includes
+          if (!msg.text) {
+            // Skip messages with null text (failed decryption)
+            continue;
+          }
           // Include all messages but mark their status
           if (!msg.text.includes('[Decryption failed]') && 
               !msg.text.includes('[Cannot decrypt]') &&

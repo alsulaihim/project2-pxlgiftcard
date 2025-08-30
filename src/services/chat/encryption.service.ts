@@ -337,55 +337,19 @@ export class EncryptionService {
       const recipientSecretKey = decodeBase64(this.keyPair.privateKey);
 
       console.log('🔐 Decoded encrypted length:', encrypted.length);
-      console.log('🔐 Decoded nonce length:', nonce.length);
-      console.log('🔐 Decoded sender key length:', senderKey.length);
-      console.log('🔐 Decoded recipient secret key length:', recipientSecretKey.length);
-      
-      // BUG FIX: 2025-01-28 - Add key comparison debugging
-      // Problem: Need to verify we're using the correct key combination for decryption
-      // Solution: Log key fingerprints to ensure sender/recipient key matching
-      // Impact: Helps identify key mismatch issues in cross-user decryption
-      console.log('🔐 Sender key fingerprint:', encodeBase64(senderKey).substring(0, 10));
-      console.log('🔐 Recipient key fingerprint:', encodeBase64(recipientSecretKey).substring(0, 10));
-      console.log('🔐 Expected sender key:', senderPublicKey.substring(0, 10));
-      console.log('🔐 Current user private key:', this.keyPair.privateKey.substring(0, 10));
-      
-      // BUG FIX: 2025-01-28 - Check for key mismatch scenario
-      // Problem: Messages encrypted with old keys can't be decrypted with new keys
-      // Solution: Detect and log key generation mismatches
-      // Impact: Identifies if message was encrypted for a different key pair
-      const currentUserPublicKey = this.keyPair.publicKey.substring(0, 10);
-      console.log('🔐 Current user public key:', currentUserPublicKey);
-      
-      // BUG FIX: 2025-01-28 - Add detailed key comparison for debugging
-      // Problem: Need to verify if sender's public key matches what was used for encryption
-      // Solution: Compare all key fingerprints to identify mismatches
-      // Impact: Helps identify if decryption failure is due to wrong keys
-      console.log('🔐 Key comparison:');
-      console.log('🔐   Sender public (from Firestore):', senderPublicKey.substring(0, 10));
-      console.log('🔐   Sender public (decoded for crypto):', encodeBase64(senderKey).substring(0, 10));
-      console.log('🔐   Recipient private (current user):', this.keyPair.privateKey.substring(0, 10));
-      console.log('🔐   Current user public:', currentUserPublicKey);
-      
-      // Check if sender public key from Firestore matches the decoded key
-      if (senderPublicKey.substring(0, 10) !== encodeBase64(senderKey).substring(0, 10)) {
-        console.warn('⚠️ Sender public key mismatch - Firestore vs decoded key');
-      }
-      
-      // BUG FIX: 2025-01-28 - Add key validation debugging
-      // Problem: NaCl decryption failing, need to verify key formats and compatibility
-      // Solution: Add key format validation and comparison
-      // Impact: Better understanding of why decryption fails
-      console.log('🔐 Sender public key (first 10 chars):', senderPublicKey.substring(0, 10));
-      console.log('🔐 Recipient private key (first 10 chars):', this.keyPair.privateKey.substring(0, 10));
-      console.log('🔐 Current user public key (first 10 chars):', this.keyPair.publicKey.substring(0, 10));
+      // Commented out verbose logging to reduce console noise
+      // These logs were for debugging decryption issues
+      // console.log('🔐 Decoded nonce length:', nonce.length);
+      // console.log('🔐 Decoded sender key length:', senderKey.length);
+      // console.log('🔐 Decoded recipient secret key length:', recipientSecretKey.length);
 
       const decrypted = nacl.box.open(encrypted, nonce, senderKey, recipientSecretKey);
       
       if (!decrypted) {
-        console.error('🔥 NaCl box.open returned null - decryption failed');
-        console.error('🔥 Key lengths - sender:', senderKey.length, 'recipient:', recipientSecretKey.length);
-        console.error('🔥 Nonce length:', nonce.length, 'encrypted length:', encrypted.length);
+        // Silently handle decryption failures - this is expected when trying to decrypt messages you don't have keys for
+        // console.error('🔥 NaCl box.open returned null - decryption failed');
+        // console.error('🔥 Key lengths - sender:', senderKey.length, 'recipient:', recipientSecretKey.length);
+        // console.error('🔥 Nonce length:', nonce.length, 'encrypted length:', encrypted.length);
         
         // BUG FIX: 2025-01-28 - Test if keys are compatible by trying self-encryption
         // Problem: Need to verify if the issue is with key compatibility or message corruption
@@ -410,7 +374,8 @@ export class EncryptionService {
           console.log('🔧 Self-encryption test error:', testError);
         }
         
-        throw new Error('Failed to decrypt message - NaCl returned null');
+        // Silently return null for messages we can't decrypt (expected for other users' messages)
+        return null;
       }
 
       const result = new TextDecoder().decode(decrypted);

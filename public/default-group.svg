@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" fill="#4B5563" rx="50"/>
+  <g transform="translate(50, 50)">
+    <!-- Center person -->
+    <circle cx="0" cy="-10" r="8" fill="#E5E7EB"/>
+    <path d="M -15 10 Q -15 -5, 0 -5 Q 15 -5, 15 10 Z" fill="#E5E7EB"/>
+    
+    <!-- Left person -->
+    <circle cx="-20" cy="-5" r="7" fill="#D1D5DB"/>
+    <path d="M -33 10 Q -33 -0, -20 -0 Q -7 -0, -7 10 Z" fill="#D1D5DB"/>
+    
+    <!-- Right person -->
+    <circle cx="20" cy="-5" r="7" fill="#D1D5DB"/>
+    <path d="M 7 10 Q 7 -0, 20 -0 Q 33 -0, 33 10 Z" fill="#D1D5DB"/>
+  </g>
+</svg>

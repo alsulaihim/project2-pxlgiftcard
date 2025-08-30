@@ -25,6 +25,16 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
           ? c.members.find(id => id !== currentUserId)
           : null;
         const otherUser = otherUserId && getUserInfo ? getUserInfo(otherUserId) : null;
+        
+        // For group chats, use group info
+        const isGroup = c.type === 'group';
+        
+        // Ensure we always have valid user data
+        const displayUser = otherUser || {
+          displayName: 'Loading...',
+          photoURL: '/default-avatar.png',
+          tier: 'starter' as const
+        };
 
         return (
           <div
@@ -38,33 +48,48 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
               className="w-full text-left px-3 py-2 rounded-lg"
             >
               <div className="flex items-center space-x-2 mb-1">
-                {c.type === "direct" && otherUser ? (
-                  <>
-                    <div className="relative flex-shrink-0">
-                      <img
-                        src={otherUser.photoURL || '/default-avatar.png'}
-                        alt={otherUser.displayName || 'User'}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                      {/* Tier ring */}
-                      <div className={`absolute inset-0 rounded-full border-2 ${
-                        otherUser.tier === 'starter' ? 'border-gray-400' :
-                        otherUser.tier === 'rising' ? 'border-blue-500' :
-                        otherUser.tier === 'pro' ? 'border-purple-500' :
-                        otherUser.tier === 'pixlbeast' ? 'border-yellow-500' :
-                        otherUser.tier === 'pixlionaire' ? 'border-red-500' :
-                        'border-gray-400'
-                      }`}></div>
+                {/* Profile picture */}
+                <div className="relative flex-shrink-0">
+                  <img
+                    src={isGroup ? (c.groupInfo?.photoURL || '/default-group.svg') : (displayUser.photoURL || '/default-avatar.png')}
+                    alt={isGroup ? c.groupInfo?.name : displayUser.displayName}
+                    className="w-10 h-10 rounded-full object-cover border-2 border-gray-900 bg-gray-700"
+                    onError={(e) => {
+                      console.error('❌ Failed to load image:', isGroup ? c.groupInfo?.photoURL : displayUser.photoURL);
+                      (e.target as HTMLImageElement).src = isGroup ? '/default-group.svg' : '/default-avatar.png';
+                    }}
+                  />
+                  {/* Tier badge for direct messages only */}
+                  {!isGroup && displayUser.tier && (
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-gray-900" 
+                      style={{
+                        backgroundColor: 
+                          displayUser.tier === 'starter' ? '#6B7280' :
+                          displayUser.tier === 'rising' ? '#3B82F6' :
+                          displayUser.tier === 'pro' ? '#10B981' :
+                          displayUser.tier === 'pixlbeast' ? '#F59E0B' :
+                          displayUser.tier === 'pixlionaire' ? '#A855F7' :
+                          '#6B7280',
+                        color: 'white'
+                      }}>
+                      {displayUser.tier === 'starter' ? 'S' :
+                       displayUser.tier === 'rising' ? 'R' :
+                       displayUser.tier === 'pro' ? 'P' :
+                       displayUser.tier === 'pixlbeast' ? 'B' :
+                       displayUser.tier === 'pixlionaire' ? 'X' : 'S'}
                     </div>
-                    <div className="text-sm font-medium truncate">
-                      {otherUser.displayName || 'Unknown User'}
+                  )}
+                  {/* Group icon badge */}
+                  {isGroup && (
+                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-gray-900 bg-purple-600">
+                      G
                     </div>
-                  </>
-                ) : (
-                  <div className="text-sm font-medium truncate">
-                    {c.type === "direct" ? "Direct Message" : "Group Chat"}
-                  </div>
-                )}
+                  )}
+                </div>
+                {/* Name */}
+                <div className="text-sm font-medium truncate">
+                  {isGroup ? (c.groupInfo?.name || 'Group Chat') : displayUser.displayName}
+                </div>
               </div>
               {c.lastMessage?.text && (
                 <div className="text-xs text-gray-400 truncate pl-12">{c.lastMessage.text}</div>

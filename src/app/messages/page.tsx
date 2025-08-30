@@ -7,6 +7,7 @@ import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { VirtualMessageList } from "@/components/chat/VirtualMessageList";
+import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
@@ -46,8 +47,11 @@ export default function EnhancedMessagesPage() {
     initializeSocket,
     initializeEncryption,
     updateTyping,
+    setTypingUser,
     markAsRead,
+    markAsDelivered,
     addReaction,
+    removeReaction,
     deleteConversation,
     deleteMessage,
     editMessage,
@@ -74,6 +78,9 @@ export default function EnhancedMessagesPage() {
         
         const socket = await socketService.initialize(user.uid);
         
+        // Expose socketService to window for store access
+        (window as any).socketService = socketService;
+        
         if (socket) {
           initializeSocket(socket);
           
@@ -85,6 +92,16 @@ export default function EnhancedMessagesPage() {
           socket.on('disconnect', () => {
             setConnectionStatus('fallback');
             console.log('⚠️ Falling back to Firestore');
+          });
+          
+          // Listen for typing updates from other users
+          socketService.on('typing:update', (data: { conversationId: string; userId: string; isTyping: boolean }) => {
+            console.log('⌨️ Typing update:', data);
+            
+            // Don't show typing for current user
+            if (data.userId !== user.uid) {
+              setTypingUser(data.conversationId, data.userId, data.isTyping);
+            }
           });
         } else {
           console.warn('Socket connection not available, using Firestore fallback');
@@ -115,19 +132,30 @@ export default function EnhancedMessagesPage() {
 
   // Load messages for active conversation
   useEffect(() => {
-    if (activeConversationId) {
+    if (activeConversationId && user?.uid) {
       loadMessages(activeConversationId);
       
       const conversationMessages = messages.get(activeConversationId) || [];
+      
+      // Mark messages as delivered first
+      const undeliveredIds = conversationMessages
+        .filter(m => m.senderId !== user.uid && !m.delivered?.includes(user.uid))
+        .map(m => m.id);
+      
+      for (const msgId of undeliveredIds) {
+        markAsDelivered(msgId, user.uid);
+      }
+      
+      // Then mark as read
       const unreadIds = conversationMessages
-        .filter(m => m.senderId !== user?.uid && !m.read?.includes(user?.uid || ''))
+        .filter(m => m.senderId !== user.uid && !m.read?.includes(user.uid))
         .map(m => m.id);
       
       if (unreadIds.length > 0) {
-        markAsRead(unreadIds, user?.uid || '');
+        markAsRead(unreadIds, user.uid);
       }
     }
-  }, [activeConversationId]);
+  }, [activeConversationId, user?.uid]);
   
   // Fetch user profiles for conversations
   useEffect(() => {
@@ -198,6 +226,7 @@ export default function EnhancedMessagesPage() {
 
   const handleTyping = (isTyping: boolean) => {
     if (activeConversationId) {
+      console.log(`📝 Sending typing ${isTyping ? 'start' : 'stop'} for conversation: ${activeConversationId}`);
       updateTyping(activeConversationId, isTyping);
     }
   };
@@ -533,9 +562,17 @@ export default function EnhancedMessagesPage() {
                       )}
                     </div>
                     {typingUsers.length > 0 ? (
-                      <p className="text-xs text-gray-500">
-                        {typingUsers.length === 1 ? 'typing...' : `${typingUsers.length} people typing...`}
-                      </p>
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <span>
+                          {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                        </span>
+                        <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
+                        <div className="flex gap-0.5">
+                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
+                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                        </div>
+                      </div>
                     ) : (
                       <p className="text-xs text-gray-500">{conversationInfo?.subtitle}</p>
                     )}
@@ -603,8 +640,16 @@ export default function EnhancedMessagesPage() {
                     onDelete={(messageId) => {
                       deleteMessage(messageId);
                     }}
-                    onReact={(messageId, emoji) => {
-                      addReaction(messageId, emoji);
+                    onReact={async (messageId, emoji) => {
+                      // Find the message to check if user already reacted
+                      const message = activeMessages.find(m => m.id === messageId);
+                      if (message?.reactions?.[emoji]?.includes(user.uid)) {
+                        // User already reacted, remove it
+                        await removeReaction(messageId, emoji);
+                      } else {
+                        // User hasn't reacted, add it
+                        await addReaction(messageId, emoji);
+                      }
                     }}
                   />
                 ) : (

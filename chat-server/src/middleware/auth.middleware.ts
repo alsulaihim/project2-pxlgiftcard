@@ -38,12 +38,17 @@ export const authenticateSocket = async (
     // TODO: Re-enable Firebase auth once project ID issue is resolved
     logger.info(`🔧 TEMP: Bypassing Firebase auth for debugging - socket: ${socket.id}`);
     
+    // Generate different test users based on socket ID to ensure uniqueness
+    // Use a simple hash of socket ID to determine user number
+    const userNum = socket.id.charCodeAt(0) % 2 === 0 ? '2' : '1';
+    logger.info(`🔧 TEMP: Socket ${socket.id} assigned to test-user-${userNum}`);
+    
     // Mock user data for testing
     (socket as AuthenticatedSocket).data = {
-      userId: 'test-user-123',
-      email: 'test@example.com',
-      tier: 'pro',
-      displayName: 'Test User',
+      userId: `test-user-${userNum}`,
+      email: `test${userNum}@example.com`,
+      tier: userNum === '1' ? 'pro' : 'rising',
+      displayName: `Test User ${userNum}`,
       photoURL: '/default-avatar.png'
     };
 
@@ -64,6 +69,12 @@ export const checkConversationMembership = async (
   conversationId: string
 ): Promise<boolean> => {
   try {
+    // TEMP: Skip membership check in test mode
+    if (socket.data.userId.startsWith('test-user-')) {
+      logger.info(`🔧 TEMP: Skipping membership check for test user ${socket.data.userId}`);
+      return true;
+    }
+    
     const conversation = await firebaseService.getConversation(conversationId);
     const isMember = conversation.members?.includes(socket.data.userId);
     
