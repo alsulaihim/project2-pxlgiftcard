@@ -223,6 +223,13 @@ export const useChatStore = create<ChatState>()(
             const userId = get().userId || get().socket?.data?.userId || 'current-user'; // This should be from auth
             const conversations = await listUserConversations(userId);
             
+            console.log('📚 Loaded conversations from Firestore:', conversations.length);
+            conversations.forEach(c => {
+              if (c.type === 'group' && c.groupInfo) {
+                console.log(`📸 Group ${c.id}: photoURL = ${c.groupInfo.photoURL?.substring(0, 50)}...`);
+              }
+            });
+            
             set((state) => {
               state.conversations = new Map(conversations.map(c => [c.id, c as any]));
               state.isLoading = false;

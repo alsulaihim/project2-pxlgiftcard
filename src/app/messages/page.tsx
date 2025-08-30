@@ -9,6 +9,7 @@ import { MessageInput } from "@/components/chat/MessageInput";
 import { VirtualMessageList } from "@/components/chat/VirtualMessageList";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
+import { ProfileSlider } from "@/components/chat/ProfileSlider";
 import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
 import { socketService } from "@/services/chat/socket.service";
@@ -34,6 +35,9 @@ export default function EnhancedMessagesPage() {
   const [messageListHeight, setMessageListHeight] = useState(600);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingState = useRef<boolean>(false);
+  const [showProfileSlider, setShowProfileSlider] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<any>(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
   
   const {
     conversations,
@@ -81,6 +85,7 @@ export default function EnhancedMessagesPage() {
       useChatStore.setState({ userId: user.uid });
     }
   }, [user]);
+
 
   // Initialize chat system
   useEffect(() => {
@@ -152,6 +157,7 @@ export default function EnhancedMessagesPage() {
     };
   }, [user]);
 
+
   // Load messages for active conversation
   useEffect(() => {
     if (activeConversationId && user?.uid) {
@@ -199,9 +205,13 @@ export default function EnhancedMessagesPage() {
                 const profile = {
                   displayName: userData.displayName || userData.email?.split('@')[0] || 'Unknown User',
                   photoURL: avatarUrl,
-                  tier: userData.tier?.current || userData.tier || 'starter',
+                  tier: (typeof userData.tier === 'object' ? userData.tier?.current : userData.tier) || 'starter',
                   username: userData.username,
-                  email: userData.email
+                  email: userData.email,
+                  country: userData.profile?.country || userData.country,
+                  region: userData.profile?.region || userData.region,
+                  createdAt: userData.createdAt || userData.timestamps?.created,
+                  lastSeen: userData.lastSeen || userData.timestamps?.lastActive
                 };
                 
                 profiles.set(memberId, profile);
@@ -324,18 +334,28 @@ export default function EnhancedMessagesPage() {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       try {
+        console.log('📸 Updating group image for conversation:', activeConversationId);
+        console.log('📸 Base64 image length:', base64.length);
+        
         // Update in Firestore
         await updateDoc(doc(db, 'conversations', activeConversationId!), {
-          'groupInfo.photoURL': base64
+          'groupInfo.photoURL': base64,
+          'updatedAt': new Date()
         });
         
-        // Small delay to ensure Firestore has updated
+        console.log('✅ Firestore updated, now refreshing conversations...');
+        
+        // Wait a moment for Firestore to propagate
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Reload conversations to get the updated data
+        // Reload conversations from Firestore to get the updated data
         await loadConversations();
         
-        console.log('✅ Group image updated successfully');
+        // Force a re-render of the sidebar
+        setForceUpdate(prev => prev + 1);
+        
+        console.log('✅ Group image updated and conversations reloaded');
+        console.log('📸 Updated conversation:', conversations.get(activeConversationId!));
       } catch (error) {
         console.error('Failed to update channel image:', error);
       }
@@ -354,7 +374,9 @@ export default function EnhancedMessagesPage() {
       return {
         displayName: user?.displayName || user?.email?.split('@')[0] || 'You',
         photoURL: user?.photoURL || '/default-avatar.png',
-        tier: platformUser?.tier?.current || 'starter'
+        tier: platformUser?.tier?.current || 'starter',
+        country: platformUser?.profile?.country,
+        region: platformUser?.profile?.region
       };
     }
     
@@ -450,14 +472,15 @@ export default function EnhancedMessagesPage() {
 
   const conversationInfo = getConversationInfo();
 
-  // Get tier ring color
+  // Get tier ring color - always show a ring for all tiers
   const getTierRingColor = (tier?: string) => {
     switch (tier) {
       case 'pixlionaire': return 'ring-2 ring-purple-500';
       case 'pixlbeast': return 'ring-2 ring-amber-500';
       case 'pro': return 'ring-2 ring-green-500';
       case 'rising': return 'ring-2 ring-blue-500';
-      default: return 'ring-1 ring-gray-600';
+      case 'starter': return 'ring-2 ring-gray-400';
+      default: return 'ring-2 ring-gray-400'; // Default to starter styling
     }
   };
 
@@ -469,6 +492,21 @@ export default function EnhancedMessagesPage() {
         onClose={() => setShowNewConversation(false)}
         currentUserId={user.uid}
       />
+
+      {/* Profile Slider */}
+      {selectedProfile && (
+        <ProfileSlider
+          isOpen={showProfileSlider}
+          onClose={() => {
+            setShowProfileSlider(false);
+            setSelectedProfile(null);
+          }}
+          user={selectedProfile}
+          isOnline={presence.get(selectedProfile.uid) || false}
+          conversationId={activeConversationId || undefined}
+          messages={activeMessages}
+        />
+      )}
       
       <div className="flex flex-1 overflow-hidden">
         {/* Channel Sidebar */}
@@ -506,8 +544,10 @@ export default function EnhancedMessagesPage() {
               
               {Array.from(conversations.values())
                 .filter(c => c.type === 'group')
-                .map(conv => (
-                  <div key={conv.id} className="group relative">
+                .map(conv => {
+                  console.log('Group conversation:', conv.id, 'photoURL:', conv.groupInfo?.photoURL?.substring(0, 50));
+                  return (
+                  <div key={`${conv.id}-${forceUpdate}`} className="group relative">
                     <div
                       onClick={() => setActiveConversation(conv.id)}
                       className={`w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-[#1a1a1a] transition-colors cursor-pointer ${
@@ -515,14 +555,35 @@ export default function EnhancedMessagesPage() {
                       }`}
                     >
                       <div className="relative flex-shrink-0">
-                        <img
-                          src={conv.groupInfo?.photoURL || '/default-group.svg'}
-                          alt={conv.groupInfo?.name || 'Group'}
-                          className="w-10 h-10 rounded-full object-cover bg-[#262626]"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = '/default-group.svg';
-                          }}
-                        />
+                        {(() => {
+                          const hasCustomImage = conv.groupInfo?.photoURL && 
+                                                conv.groupInfo.photoURL !== '/default-group.svg' &&
+                                                conv.groupInfo.photoURL.length > 0;
+                          
+                          if (hasCustomImage) {
+                            return (
+                              <img
+                                src={conv.groupInfo.photoURL}
+                                alt={conv.groupInfo?.name || 'Group'}
+                                className="w-10 h-10 rounded-full object-cover bg-[#262626]"
+                                onError={(e) => {
+                                  console.error('Failed to load group image:', conv.id);
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  const parent = (e.target as HTMLImageElement).parentElement;
+                                  if (parent) {
+                                    parent.innerHTML = '<div class="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center"><svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg></div>';
+                                  }
+                                }}
+                              />
+                            );
+                          } else {
+                            return (
+                              <div className="w-10 h-10 rounded-full bg-[#262626] flex items-center justify-center">
+                                <Users className="w-5 h-5 text-gray-500" />
+                              </div>
+                            );
+                          }
+                        })()}
                       </div>
                       <span className="text-sm truncate flex-1">{conv.groupInfo?.name || 'group-chat'}</span>
                       <button
@@ -536,7 +597,7 @@ export default function EnhancedMessagesPage() {
                       </button>
                     </div>
                   </div>
-                ))}
+                )})}
               
               <button
                 onClick={() => setShowNewConversation(true)}
@@ -573,7 +634,25 @@ export default function EnhancedMessagesPage() {
                           <img
                             src={otherUser?.photoURL || '/default-avatar.png'}
                             alt={otherUser?.displayName || 'User'}
-                            className={`w-10 h-10 rounded-full object-cover bg-[#262626] ${getTierRingColor(otherUser?.tier)}`}
+                            className={`w-10 h-10 rounded-full object-cover bg-[#262626] cursor-pointer hover:opacity-80 transition-opacity ${getTierRingColor(otherUser?.tier)}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (otherUserId) {
+                                const userInfo = getUserInfo(otherUserId);
+                                setSelectedProfile({
+                                  uid: otherUserId,
+                                  displayName: userInfo.displayName,
+                                  email: otherUser?.email,
+                                  photoURL: userInfo.photoURL,
+                                  tier: userInfo.tier,
+                                  createdAt: otherUser?.createdAt,
+                                  lastSeen: otherUser?.lastSeen,
+                                  country: userInfo.country || otherUser?.country,
+                                  region: userInfo.region || otherUser?.region
+                                });
+                                setShowProfileSlider(true);
+                              }
+                            }}
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = '/default-avatar.png';
                             }}
@@ -587,7 +666,7 @@ export default function EnhancedMessagesPage() {
                             <span className="text-sm truncate">
                               {otherUser?.displayName || 'Unknown User'}
                             </span>
-                            {otherUser?.tier && otherUser.tier !== 'starter' && (
+                            {otherUser?.tier && typeof otherUser.tier === 'string' && otherUser.tier !== 'starter' && (
                               <span className={`text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0 ${
                                 otherUser.tier === 'pixlionaire' ? 'bg-purple-900/30 text-purple-400' :
                                 otherUser.tier === 'pixlbeast' ? 'bg-amber-900/30 text-amber-400' :
@@ -595,7 +674,7 @@ export default function EnhancedMessagesPage() {
                                 otherUser.tier === 'rising' ? 'bg-blue-900/30 text-blue-400' :
                                 'bg-gray-900/30 text-gray-400'
                               }`}>
-                                {otherUser.tier.toUpperCase()}
+                                {String(otherUser.tier).toUpperCase()}
                               </span>
                             )}
                           </div>
@@ -669,7 +748,28 @@ export default function EnhancedMessagesPage() {
                     <img
                       src={conversationInfo?.avatar}
                       alt={conversationInfo?.name}
-                      className={`w-9 h-9 rounded-full object-cover bg-[#262626] ${getTierRingColor(conversationInfo?.tier)}`}
+                      className={`w-9 h-9 rounded-full object-cover bg-[#262626] cursor-pointer hover:opacity-80 transition-opacity ${getTierRingColor(conversationInfo?.tier)}`}
+                      onClick={() => {
+                        // For direct messages, show recipient profile
+                        if (activeConversation.type === 'direct') {
+                          const otherUserId = activeConversation.members.find(id => id !== user.uid);
+                          if (otherUserId) {
+                            const userInfo = getUserInfo(otherUserId);
+                            setSelectedProfile({
+                              uid: otherUserId,
+                              displayName: userInfo.displayName,
+                              email: userProfiles.get(otherUserId)?.email,
+                              photoURL: userInfo.photoURL,
+                              tier: userInfo.tier,
+                              createdAt: userProfiles.get(otherUserId)?.createdAt,
+                              lastSeen: userProfiles.get(otherUserId)?.lastSeen,
+                              country: userInfo.country || userProfiles.get(otherUserId)?.country,
+                              region: userInfo.region || userProfiles.get(otherUserId)?.region
+                            });
+                            setShowProfileSlider(true);
+                          }
+                        }
+                      }}
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = '/default-avatar.png';
                       }}

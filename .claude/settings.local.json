@@ -14,7 +14,12 @@
       "Bash(firebase deploy:*)",
       "Bash(convert:*)",
       "Bash(open http://localhost:3009/test-typing.html)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "Bash(firebase projects:list:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(open http://localhost:3009/messages)"
     ],
     "deny": [],
     "ask": []

@@ -116,8 +116,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const correctTier = calculateTier(currentBalance);
         
         // If tier is incorrect, update it
-        if (userData.tier.current !== correctTier) {
-          console.log(`Tier mismatch detected. Current: ${userData.tier.current}, Should be: ${correctTier}`);
+        const currentTier = typeof userData.tier === 'object' ? userData.tier?.current : userData.tier;
+        if (currentTier !== correctTier) {
+          console.log(`Tier mismatch detected. Current: ${currentTier}, Should be: ${correctTier}`);
           
           // Update in Firestore
           await updateDoc(doc(db, 'users', firebaseUser.uid), {
@@ -127,8 +128,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           });
           
           // Update local data
-          userData.tier.current = correctTier;
-          userData.tier.pxlBalance = currentBalance;
+          if (typeof userData.tier === 'object') {
+            userData.tier.current = correctTier;
+            userData.tier.pxlBalance = currentBalance;
+          } else {
+            userData.tier = {
+              current: correctTier,
+              pxlBalance: currentBalance
+            };
+          }
         }
         
         setPlatformUser(userData);

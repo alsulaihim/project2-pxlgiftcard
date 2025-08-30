@@ -338,7 +338,9 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
                     <div className="flex-1 text-left">
                       <div className="font-medium text-white">{user.displayName}</div>
                       {user.username && (
-                        <div className="text-sm text-gray-400">@{user.username}</div>
+                        <div className="text-sm text-gray-400">
+                          {user.username.startsWith('@') ? user.username : `@${user.username}`}
+                        </div>
                       )}
                     </div>
 

@@ -48,28 +48,30 @@ export default function EnhancedMessagesPage() {
     const initializeChat = async () => {
       try {
         // Initialize encryption
-        await initializeEncryption();
+        await initializeEncryption(user.uid);
         
         // Initialize key exchange
-        await keyExchangeService.init();
+        await keyExchangeService.initializeUserKeys(user.uid);
         
         // Initialize presence
-        presenceService.init(user.uid);
+        presenceService.initializePresence(user.uid);
         
         // Initialize socket connection
         const socket = await socketService.initialize(user.uid);
-        initializeSocket(socket);
-        
-        // Set connection status
-        socket.on('connect', () => {
+        if (socket) {
+          initializeSocket(socket);
+          
+          // Set connection status
+          socket.on('connect', () => {
           setConnectionStatus('connected');
           console.log('✅ Real-time connection established');
         });
         
-        socket.on('disconnect', () => {
-          setConnectionStatus('fallback');
-          console.log('⚠️ Falling back to Firestore');
-        });
+          socket.on('disconnect', () => {
+            setConnectionStatus('fallback');
+            console.log('⚠️ Falling back to Firestore');
+          });
+        }
         
         // Load conversations
         await loadConversations();

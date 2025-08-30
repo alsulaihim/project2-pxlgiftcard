@@ -210,10 +210,10 @@ export function Navigation() {
                   <UserAvatar user={platformUser} size={48} />
                   <div className="hidden md:block text-left">
                     <div className="text-sm text-white font-medium">
-                      {platformUser.profile.firstName} {platformUser.profile.lastName}
+                      {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                     </div>
                     <div className="text-xs text-gray-400 capitalize">
-                      {platformUser.tier.current} Tier
+                      {typeof platformUser.tier === 'object' ? platformUser.tier?.current : platformUser.tier || 'starter'} Tier
                     </div>
                   </div>
                 </button>
@@ -226,13 +226,13 @@ export function Navigation() {
                         <UserAvatar user={platformUser} size={40} />
                         <div>
                           <div className="text-sm text-white font-medium">
-                            {platformUser.profile.firstName} {platformUser.profile.lastName}
+                            {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                           </div>
                           <div className="text-xs text-gray-400">
                             {platformUser.username}
                           </div>
                           <div className="text-xs text-blue-400 capitalize">
-                            {platformUser.tier.current} Tier
+                            {typeof platformUser.tier === 'object' ? platformUser.tier?.current : platformUser.tier || 'starter'} Tier
                           </div>
                         </div>
                       </div>
@@ -365,10 +365,10 @@ export function Navigation() {
                   <UserAvatar user={platformUser} size={40} />
                   <div>
                     <div className="text-sm text-white font-medium">
-                      {platformUser.profile.firstName} {platformUser.profile.lastName}
+                      {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                     </div>
                     <div className="text-xs text-gray-400 capitalize">
-                      {platformUser.tier.current} Tier
+                      {typeof platformUser.tier === 'object' ? platformUser.tier?.current : platformUser.tier || 'starter'} Tier
                     </div>
                   </div>
                 </div>
