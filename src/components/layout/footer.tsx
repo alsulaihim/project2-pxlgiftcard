@@ -1,6 +1,5 @@
 import * as React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { Github, Twitter, Mail } from "lucide-react";
 
 /**
@@ -79,14 +78,10 @@ export function Footer() {
         <div className="mt-12 pt-8 border-t border-gray-800">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
             {/* Company Info */}
-            <div className="flex items-center space-x-2">
-              <Image 
-                src="/logo.svg" 
-                alt="HOTPAY Logo" 
-                width={24} 
-                height={24} 
-                className="h-6 w-6"
-              />
+            <div className="flex items-center space-x-3">
+              <span className="text-lg font-bold text-white" style={{ fontFamily: '"HK Modular", "Inter", sans-serif' }}>
+                HOTPAY
+              </span>
               <span className="text-body-small text-gray-400">
                 © {currentYear} HOTPAY Platform. All rights reserved.
               </span>

@@ -150,14 +150,10 @@ export function Navigation() {
       <div className="mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo - Vercel style */}
-          <Link href={user && platformUser ? "/dashboard" : "/"} className="flex items-center space-x-3">
-            <Image 
-              src="/logo.svg" 
-              alt="HOTPAY Logo" 
-              width={40} 
-              height={40} 
-              className="h-10 w-10"
-            />
+          <Link href={user && platformUser ? "/dashboard" : "/"} className="flex items-center">
+            <span className="text-2xl font-bold text-white" style={{ fontFamily: '"HK Modular", "Inter", sans-serif' }}>
+              HOTPAY
+            </span>
           </Link>
 
           {/* Desktop Navigation - Vercel style */}

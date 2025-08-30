@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "GiftCard + PXL Platform | Premium Gift Cards with PXL Currency",
+  title: "HOTPAY | Premium Gift Cards with PXL Currency",
   description: "Shop premium gift cards from top brands. Pay in USD or PXL currency. Unlock tier-based savings up to 13% discount + 3% cashback. Join the community of smart shoppers.",
   keywords: [
     "gift cards",
@@ -23,9 +23,9 @@ export const metadata: Metadata = {
     "premium brands",
     "instant delivery"
   ],
-  authors: [{ name: "GiftCard + PXL Platform Team" }],
-  creator: "GiftCard + PXL Platform",
-  publisher: "GiftCard + PXL Platform",
+  authors: [{ name: "HOTPAY Team" }],
+  creator: "HOTPAY",
+  publisher: "HOTPAY",
   robots: {
     index: true,
     follow: true,
@@ -40,9 +40,9 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://pxlgiftcard.com",
-    siteName: "GiftCard + PXL Platform",
-    title: "Premium Gift Cards with PXL Currency | Up to 13% Savings",
+    url: "https://hotpay.com",
+    siteName: "HOTPAY",
+    title: "HOTPAY - Premium Gift Cards with PXL Currency | Up to 13% Savings",
     description: "Revolutionary gift card platform with PXL digital currency, tier-based rewards, and community features. Start saving today!",
     images: [
       {
