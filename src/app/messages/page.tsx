@@ -6,7 +6,7 @@ import { useChatStore } from "@/stores/chatStore";
 import { ConversationList } from "@/components/chat/ConversationList";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { MessageInput } from "@/components/chat/MessageInput";
-import { VirtualMessageList } from "@/components/chat/VirtualMessageList";
+import { SimpleMessageList } from "@/components/chat/SimpleMessageList";
 import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import { ProfileSlider } from "@/components/chat/ProfileSlider";
@@ -126,9 +126,51 @@ export default function EnhancedMessagesPage() {
           });
           
           // Listen for new messages via WebSocket
-          socketService.on('message:new', (message: any) => {
+          socketService.on('message:new', async (message: any) => {
             console.log('📨 New message received via WebSocket in Messages page:', message);
-            // The message will be handled by the store's initializeSocket handler
+            
+            // Check if conversation exists, if not reload conversations
+            const conversations = useChatStore.getState().conversations;
+            if (!conversations.has(message.conversationId)) {
+              console.log('🆕 New conversation detected, reloading conversations');
+              await loadConversations();
+            }
+            
+            // Add message to the store and remove any temp messages from the same sender
+            const messages = useChatStore.getState().messages.get(message.conversationId) || [];
+            const messageExists = messages.some(m => m.id === message.id);
+            
+            if (!messageExists) {
+              useChatStore.setState((state) => {
+                const conversationMessages = state.messages.get(message.conversationId) || [];
+                // Remove any temp messages from the same sender (they're being replaced by the real message)
+                const filteredMessages = conversationMessages.filter(m => {
+                  // Keep message if it's not a temp message or if it's from a different sender
+                  return !m.id.startsWith('temp_') || m.senderId !== message.senderId;
+                });
+                state.messages.set(message.conversationId, [...filteredMessages, message]);
+              });
+              
+              // Update conversation's last message
+              useChatStore.setState((state) => {
+                const conversation = state.conversations.get(message.conversationId);
+                if (conversation) {
+                  conversation.lastMessage = message;
+                  conversation.lastMessageTime = message.timestamp;
+                  // Increment unread count if not active conversation
+                  if (state.activeConversationId !== message.conversationId && message.senderId !== user?.uid) {
+                    conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+                  }
+                }
+              });
+            }
+          });
+          
+          // Listen for new conversation notifications
+          socketService.on('new-conversation', async (data: { conversationId: string }) => {
+            console.log('🆕 New conversation notification received:', data.conversationId);
+            // Reload conversations to get the new one
+            await loadConversations();
           });
         } else {
           console.warn('Socket connection not available, using Firestore fallback');
@@ -251,6 +293,10 @@ export default function EnhancedMessagesPage() {
     await sendMessage(text, 'text');
   };
 
+  // BUG FIX: 2025-01-30 - Fix media message delivery to recipients
+  // Problem: Media messages not showing for recipients due to missing metadata
+  // Solution: Ensure downloadUrl is both in text field and metadata
+  // Impact: Media messages now properly display for all users
   const handleMediaSend = async (mediaMessage: any) => {
     if (!activeConversationId) return;
     
@@ -258,13 +304,21 @@ export default function EnhancedMessagesPage() {
                        mediaMessage.mediaType === 'voice' ? 'voice' : 
                        mediaMessage.mediaType === 'file' ? 'file' : 'text';
     
-    await sendMessage(mediaMessage.downloadUrl || '', messageType, {
+    // Ensure all media metadata is properly included
+    const metadata = {
       ...mediaMessage.metadata,
       downloadUrl: mediaMessage.downloadUrl,
       encryptedKey: mediaMessage.encryptedKey,
       nonce: mediaMessage.nonce,
-      mediaType: mediaMessage.mediaType
-    });
+      mediaType: mediaMessage.mediaType,
+      fileName: mediaMessage.metadata?.fileName,
+      fileSize: mediaMessage.metadata?.fileSize,
+      duration: mediaMessage.metadata?.duration
+    };
+    
+    // Send downloadUrl as text content for backward compatibility
+    // and full metadata for proper rendering
+    await sendMessage(mediaMessage.downloadUrl || '', messageType, metadata);
   };
 
   const handleTyping = (isTyping: boolean) => {
@@ -314,9 +368,9 @@ export default function EnhancedMessagesPage() {
         // Delete the conversation document from Firestore
         await deleteDoc(doc(db, 'conversations', conversationId));
         
-        // Use store's deleteConversation to clear from local state
-        // This will handle clearing messages and conversation from the store
-        deleteConversation(conversationId);
+        // Use store's deleteConversation to clear from local state AND Firestore
+        // This will handle clearing messages and conversation from both the store and Firestore
+        await deleteConversation(conversationId);
         
         // Reload conversations to ensure sync with Firestore
         await loadConversations();
@@ -879,12 +933,10 @@ export default function EnhancedMessagesPage() {
                 {activeMessages.length > 0 ? (
                   <>
                     <div className="flex-1 overflow-hidden">
-                      <VirtualMessageList
+                      <SimpleMessageList
                         messages={activeMessages}
                         currentUserId={user?.uid || 'test-user-1'}
-                        height={messageListHeight}
                         getUserInfo={getUserInfo}
-                        onLoadMore={handleLoadMore}
                         onReply={handleReply}
                         onEdit={handleEdit}
                         onDelete={handleDelete}

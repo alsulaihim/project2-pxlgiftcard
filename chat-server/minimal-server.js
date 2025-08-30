@@ -305,6 +305,19 @@ io.on('connection', (socket) => {
     });
   });
   
+  // Handle new conversation notification
+  socket.on('notify-user-new-conversation', (data) => {
+    console.log(`🔔 New conversation notification for user ${data.userId}: ${data.conversationId}`);
+    
+    // Find the socket for the target user
+    io.sockets.sockets.forEach((targetSocket) => {
+      if (targetSocket.data && targetSocket.data.userId === data.userId) {
+        console.log(`📤 Sending new conversation notification to user ${data.userId}`);
+        targetSocket.emit('notify-user-new-conversation', { conversationId: data.conversationId });
+      }
+    });
+  });
+  
   // Handle ping/pong for connection health check
   socket.on('ping', (data) => {
     socket.emit('pong', { timestamp: Date.now(), clientTimestamp: data.timestamp });

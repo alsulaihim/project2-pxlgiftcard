@@ -245,25 +245,24 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 // Display voice message with audio player
                 const audioUrl = metadata?.downloadUrl || message.text;
                 return (
-                  <div className="space-y-2">
-                    <div className={`inline-flex items-center gap-2 p-3 rounded-2xl ${
-                      isOwn 
-                        ? 'bg-white text-black' 
-                        : 'bg-[#262626] text-gray-300'
-                    }`}>
-                      <div className="text-2xl">🎤</div>
+                  <div className={`inline-flex items-center gap-3 p-3 rounded-2xl ${
+                    isOwn 
+                      ? 'bg-white text-black' 
+                      : 'bg-[#262626] text-gray-300'
+                  }`}>
+                    <div className="text-xl">🎤</div>
+                    {audioUrl && audioUrl !== 'undefined' && !audioUrl.includes('[') ? (
+                      <audio controls className="max-w-xs">
+                        <source src={audioUrl} type="audio/webm" />
+                        Your browser does not support the audio element.
+                      </audio>
+                    ) : (
                       <div>
                         <p className="text-sm font-medium">Voice message</p>
                         <p className={`text-xs ${isOwn ? 'text-gray-600' : 'text-gray-400'}`}>
                           {metadata?.duration ? `${metadata.duration}s` : ''}
                         </p>
                       </div>
-                    </div>
-                    {audioUrl && audioUrl !== 'undefined' && !audioUrl.includes('[') && (
-                      <audio controls className="max-w-xs">
-                        <source src={audioUrl} type="audio/webm" />
-                        Your browser does not support the audio element.
-                      </audio>
                     )}
                   </div>
                 );

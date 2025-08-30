@@ -208,6 +208,15 @@ export class SocketService {
       this.emit('presence:update', data);
     });
 
+    // New conversation notification
+    this.socket.on('notify-user-new-conversation', async (data: { conversationId: string }) => {
+      console.log('🔔 Notified of new conversation:', data.conversationId);
+      // Join the conversation room immediately
+      this.joinConversation(data.conversationId);
+      // Emit event so the UI can reload conversations
+      this.emit('new-conversation', data);
+    });
+
     // Error handling
     this.socket.on('error', (error) => {
       console.error('Socket.io error:', error);
@@ -325,6 +334,17 @@ export class SocketService {
         }
       });
       console.log(`🚪 Joining conversation with acknowledgement: ${normalizedId}`);
+    }
+  }
+
+  /**
+   * Emit custom event to server
+   */
+  emit(event: string, data: any): void {
+    if (this.isConnected && this.socket) {
+      this.socket.emit(event, data);
+    } else {
+      console.warn(`⚠️ Cannot emit ${event}: Socket not connected`);
     }
   }
 

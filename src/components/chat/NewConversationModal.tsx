@@ -6,8 +6,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
 import { X, Search, Users, User, MessageSquare, Check, Camera } from 'lucide-react';
-import { collection, query, getDocs, where, limit } from 'firebase/firestore';
+import { collection, query, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase-config';
 import { useChatStore } from '@/stores/chatStore';
 import { TierBadge } from './TierBadge';
@@ -103,7 +104,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
         }
         
         setUsers(filteredUsers.slice(0, 10)); // Limit to 10 results
-      } catch (err: any) {
+      } catch (err) {
         console.error('Error searching users:', err);
         setError('Failed to search users. Please try again.');
       } finally {
@@ -204,7 +205,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
       setGroupName('');
       setGroupImage('/default-group.svg');
       setConversationType('direct');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Error creating conversation:', err);
       setError('Failed to create conversation. Please try again.');
     } finally {
@@ -222,8 +223,10 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">New Conversation</h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-1 hover:bg-gray-700 rounded transition-colors"
+              aria-label="Close modal"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
@@ -232,6 +235,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
           {/* Conversation Type Selector */}
           <div className="flex gap-2 mt-4">
             <button
+              type="button"
               onClick={() => setConversationType('direct')}
               className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
                 conversationType === 'direct'
@@ -243,6 +247,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
               Direct Message
             </button>
             <button
+              type="button"
               onClick={() => setConversationType('group')}
               className={`flex-1 py-2 px-4 rounded-lg transition-colors ${
                 conversationType === 'group'
@@ -261,21 +266,26 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
               <div className="flex items-center gap-3">
                 {/* Group Image Upload */}
                 <div className="relative">
-                  <img
+                  <Image
                     src={groupImage}
                     alt="Group"
-                    className="w-16 h-16 rounded-full object-cover bg-gray-700"
+                    width={64}
+                    height={64}
+                    className="rounded-full object-cover bg-gray-700"
                   />
                   <button
+                    type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="absolute bottom-0 right-0 p-1 bg-blue-600 rounded-full hover:bg-blue-700 transition-colors"
                     disabled={uploadingImage}
+                    aria-label="Upload group image"
                   >
                     <Camera className="w-3 h-3 text-white" />
                   </button>
                   <input
                     ref={fileInputRef}
                     type="file"
+                    aria-label="Upload group image file"
                     accept="image/*"
                     onChange={handleImageUpload}
                     className="hidden"
@@ -327,6 +337,7 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
                 const isSelected = selectedUsers.has(user.uid);
                 return (
                   <button
+                    type="button"
                     key={user.uid}
                     onClick={() => handleUserSelect(user.uid)}
                     className={`w-full p-3 rounded-lg transition-colors flex items-center gap-3 ${
@@ -336,10 +347,12 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
                     }`}
                   >
                     <div className="relative">
-                      <img
+                      <Image
                         src={user.photoURL || '/default-avatar.png'}
                         alt={user.displayName}
-                        className="w-10 h-10 rounded-full object-cover"
+                        width={40}
+                        height={40}
+                        className="rounded-full object-cover"
                       />
                       {user.tier && (
                         <div className="absolute -bottom-1 -right-1">
@@ -381,12 +394,14 @@ export const NewConversationModal: React.FC<NewConversationModalProps> = ({
         <div className="p-4 border-t border-gray-700">
           <div className="flex gap-3">
             <button
+              type="button"
               onClick={onClose}
               className="flex-1 py-2 px-4 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
             >
               Cancel
             </button>
             <button
+              type="button"
               onClick={handleStartConversation}
               disabled={selectedUsers.size === 0 || isLoading}
               className={`flex-1 py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${

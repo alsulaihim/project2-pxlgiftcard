@@ -1,6 +1,6 @@
 "use client";
 
-import { db } from "@/lib/firebase-config";
+import { db, auth } from "@/lib/firebase-config";
 import {
   addDoc,
   collection,
@@ -703,6 +703,63 @@ export async function markMessageAsRead(conversationId: string, messageId: strin
         readBy: [...readBy, userId]
       }, { merge: true });
     }
+  }
+}
+
+/**
+ * Delete all messages in a conversation
+ */
+export async function deleteConversationMessages(conversationId: string): Promise<void> {
+  console.log(`🗑️ Starting deletion of messages for conversation: ${conversationId}`);
+  
+  if (!auth.currentUser) {
+    console.error('❌ User not authenticated when trying to delete messages');
+    throw new Error('User not authenticated');
+  }
+
+  try {
+    // Get all messages in the conversation
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const q = query(messagesRef);
+    const snapshot = await getDocs(q);
+    
+    console.log(`📊 Found ${snapshot.size} messages to delete in conversation ${conversationId}`);
+    
+    if (snapshot.size === 0) {
+      console.log(`✅ No messages to delete for conversation ${conversationId}`);
+      return;
+    }
+
+    // Delete each message in batches
+    let batch = writeBatch(db);
+    let batchCount = 0;
+    let totalDeleted = 0;
+    const MAX_BATCH_SIZE = 500; // Firestore batch limit
+
+    for (const doc of snapshot.docs) {
+      batch.delete(doc.ref);
+      batchCount++;
+      totalDeleted++;
+
+      // Commit batch if we reach the limit and create a new one
+      if (batchCount >= MAX_BATCH_SIZE) {
+        await batch.commit();
+        console.log(`📦 Committed batch of ${batchCount} deletions`);
+        batch = writeBatch(db); // Create new batch for next set
+        batchCount = 0;
+      }
+    }
+
+    // Commit any remaining deletes
+    if (batchCount > 0) {
+      await batch.commit();
+      console.log(`📦 Committed final batch of ${batchCount} deletions`);
+    }
+
+    console.log(`✅ Successfully deleted ${totalDeleted} messages from conversation ${conversationId}`);
+  } catch (error) {
+    console.error('❌ Error deleting conversation messages:', error);
+    throw error;
   }
 }
 

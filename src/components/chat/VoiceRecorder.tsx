@@ -12,9 +12,10 @@ import { useChatStore } from '@/stores/chatStore';
 interface VoiceRecorderProps {
   onSend?: (audioBlob: Blob, duration: number) => void;
   onCancel?: () => void;
+  autoStart?: boolean;
 }
 
-export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }) => {
+export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, autoStart = false }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -29,11 +30,31 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const mimeTypeRef = useRef<string>('audio/webm');
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   const { sendMessage } = useChatStore();
 
+  // Auto-start recording if autoStart is true
+  useEffect(() => {
+    if (autoStart && !isRecording && !audioBlob) {
+      const timer = setTimeout(() => {
+        startRecording();
+      }, 100); // Small delay to ensure component is mounted
+      return () => clearTimeout(timer);
+    }
+  }, []); // Run only once on mount
+
   useEffect(() => {
     return () => {
+      // Cleanup on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
       if (timerRef.current) clearInterval(timerRef.current);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -43,17 +64,30 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       
       // Set up audio analysis for waveform
       const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
       const source = audioContext.createMediaStreamSource(stream);
       const analyser = audioContext.createAnalyser();
       analyser.fftSize = 256;
       source.connect(analyser);
       analyserRef.current = analyser;
       
+      // Check for supported mime types
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+        mimeType = 'audio/ogg;codecs=opus';
+      }
+      mimeTypeRef.current = mimeType;
+      
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: mimeType
       });
       
       mediaRecorderRef.current = mediaRecorder;
@@ -66,10 +100,10 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
       };
       
       mediaRecorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const blob = new Blob(audioChunksRef.current, { type: mimeTypeRef.current });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));
-        stream.getTracks().forEach(track => track.stop());
+        // Stream tracks are now stopped in stopRecording() to ensure immediate release
       };
       
       mediaRecorder.start(100); // Collect data every 100ms
@@ -90,7 +124,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
   };
 
   const updateWaveform = () => {
-    if (!analyserRef.current || !isRecording) return;
+    if (!analyserRef.current) return;
     
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteTimeDomainData(dataArray);
@@ -105,13 +139,30 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
     
     setWaveformData(prev => [...prev.slice(-49), ...samples].slice(-50));
     
-    animationFrameRef.current = requestAnimationFrame(updateWaveform);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      animationFrameRef.current = requestAnimationFrame(updateWaveform);
+    }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      
+      // Stop all audio tracks immediately
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => {
+          track.stop();
+        });
+        streamRef.current = null;
+      }
+      
+      // Close audio context
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+      
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -149,7 +200,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
         // Send voice message
         await sendMessage(base64Audio, 'voice', {
           duration: recordingTime,
-          mimeType: 'audio/webm'
+          mimeType: mimeTypeRef.current
         });
         
         if (onSend) {
@@ -171,9 +222,23 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
       setAudioUrl(null);
     }
     setWaveformData([]);
+    
+    // Ensure all resources are cleaned up
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
     }
   };
 
@@ -191,7 +256,7 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel }
 
   return (
     <div className="flex items-center gap-2 p-2 bg-gray-800 rounded-lg">
-      {!isRecording && !audioBlob && (
+      {!isRecording && !audioBlob && !autoStart && (
         <button
           onClick={startRecording}
           className="p-3 bg-blue-600 hover:bg-blue-700 rounded-full transition-colors"

@@ -114,7 +114,7 @@ export interface ChatState {
   setActiveConversation: (id: string | null) => void;
   loadConversations: () => Promise<void>;
   createConversation: (members: string[], type: 'direct' | 'group', groupInfo?: any) => Promise<string>;
-  deleteConversation: (id: string) => void;
+  deleteConversation: (id: string) => Promise<void>;
   markConversationAsRead: (conversationId: string) => void;
   
   // Actions - Messages
@@ -240,7 +240,7 @@ export const useChatStore = create<ChatState>()(
             // Problem: Users couldn't see messages in group chats until they sent a message
             // Solution: Automatically join all group conversation rooms when loading conversations
             // Impact: Users will now receive real-time messages in all their group chats
-            const socketService = get().socket ? SocketService.getInstance() : null;
+            const socketService = (window as any).socketService;
             if (socketService && socketService.isConnected) {
               const groupConversations = conversations.filter(c => c.type === 'group');
               console.log(`🚪 Auto-joining ${groupConversations.length} group conversations`);
@@ -290,7 +290,7 @@ export const useChatStore = create<ChatState>()(
             // Problem: Creator doesn't receive messages in new group chats
             // Solution: Join the conversation room right after creating it
             // Impact: Creator can receive messages immediately in new groups
-            const socketService = get().socket ? SocketService.getInstance() : null;
+            const socketService = (window as any).socketService;
             if (socketService && socketService.isConnected) {
               console.log(`🚪 Joining newly created group conversation: ${conversationId}`);
               socketService.joinConversation(conversationId);
@@ -302,6 +302,26 @@ export const useChatStore = create<ChatState>()(
               members[1]
             );
             conversationId = conversation.id;
+            
+            // BUG FIX: 2025-01-30 - Join direct conversation immediately after creation
+            // Problem: Messages not delivered immediately in new direct conversations
+            // Solution: Both users need to join the conversation room
+            // Impact: Real-time messaging works immediately in new conversations
+            const socketService = (window as any).socketService;
+            if (socketService && socketService.isConnected) {
+              console.log(`🚪 Joining newly created direct conversation: ${conversationId}`);
+              socketService.joinConversation(conversationId);
+              
+              // Notify the other user to join the conversation
+              const currentUserId = get().userId;
+              const otherUserId = members.find(id => id !== currentUserId);
+              if (otherUserId) {
+                socketService.emit('notify-user-new-conversation', {
+                  userId: otherUserId,
+                  conversationId: conversationId
+                });
+              }
+            }
           }
           
           await get().loadConversations();
@@ -309,13 +329,35 @@ export const useChatStore = create<ChatState>()(
           return conversationId;
         },
 
-        deleteConversation: (id) => set((state) => {
-          state.conversations.delete(id);
-          state.messages.delete(id);
-          if (state.activeConversationId === id) {
-            state.activeConversationId = null;
+        deleteConversation: async (id) => {
+          try {
+            // Import Firestore service to delete messages
+            const { deleteConversationMessages } = await import('@/services/chat/firestore-chat.service');
+            
+            // Delete all messages from Firestore
+            await deleteConversationMessages(id);
+            console.log(`🗑️ Deleted all messages for conversation: ${id}`);
+            
+            // Update local state
+            set((state) => {
+              state.conversations.delete(id);
+              state.messages.delete(id);
+              if (state.activeConversationId === id) {
+                state.activeConversationId = null;
+              }
+            });
+          } catch (error) {
+            console.error('Error deleting conversation:', error);
+            // Still update local state even if Firestore deletion fails
+            set((state) => {
+              state.conversations.delete(id);
+              state.messages.delete(id);
+              if (state.activeConversationId === id) {
+                state.activeConversationId = null;
+              }
+            });
           }
-        }),
+        },
 
         markConversationAsRead: (conversationId) => set((state) => {
           const conversation = state.conversations.get(conversationId);
@@ -382,7 +424,7 @@ export const useChatStore = create<ChatState>()(
 
           // Create a temporary message to show immediately in UI
           const tempMessage: Message = {
-            id: `temp-${Date.now()}`, // Temporary ID
+            id: `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, // Unique temporary ID
             conversationId,
             senderId: state.userId!,
             type: type || 'text',
@@ -558,13 +600,18 @@ export const useChatStore = create<ChatState>()(
                 // Merge messages: keep WebSocket messages that aren't in Firestore yet
                 const firestoreMessageIds = new Set(messages.map(m => m.id));
                 const webSocketOnlyMessages = existingMessages.filter(m => 
-                  !firestoreMessageIds.has(m.id) && !m.id.startsWith('temp-')
+                  !firestoreMessageIds.has(m.id) && !m.id.startsWith('temp-') && !m.id.startsWith('temp_')
                 );
                 
-                // Combine Firestore messages with WebSocket-only messages
-                const combinedMessages = [...messages, ...webSocketOnlyMessages].sort((a, b) => 
+                // Combine Firestore messages with WebSocket-only messages and deduplicate
+                const allMessages = [...messages, ...webSocketOnlyMessages];
+                const deduplicatedMessages = Array.from(
+                  new Map(allMessages.map(m => [m.id, m])).values()
+                ).sort((a, b) => 
                   new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
                 );
+                
+                const combinedMessages = deduplicatedMessages;
                 
                 state.messages.set(conversationId, combinedMessages);
                 state.hasMore.set(conversationId, messages.length === (pagination?.limit || 50));

@@ -51,11 +51,11 @@ const MessageItem = React.memo<MessageItemProps>(({ index, style, data }) => {
   const message = messages[index];
   const isOwn = message.senderId === currentUserId;
   const user = useMemo(() => getUserInfo ? getUserInfo(message.senderId) : undefined, [getUserInfo, message.senderId]);
-
+  
   return (
     // Note: The style prop is required by react-window for virtual scrolling positioning
-    // This is not a regular inline style but a virtual scrolling requirement
-    <div className="w-full" {...{ style }}>
+    // Use the exact style provided by react-window without modification
+    <div className="w-full px-4 py-3" style={style}>
       <MessageBubble
         message={message}
         isOwn={isOwn}
@@ -98,6 +98,11 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
     }
   }, [orderedMessages.length]);
 
+  // BUG FIX: 2025-01-30 - Proper height calculation for media messages
+  // Problem: Media messages overlapping due to insufficient height allocation
+  // Solution: Increased heights and added proper padding for each message type
+  // Impact: All message types display without overlap
+  
   // Get item size - estimate based on message content
   const getItemSize = useCallback((index: number) => {
     // Return cached size if available
@@ -107,29 +112,51 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
     
     // Estimate size based on message content
     const message = orderedMessages[index];
-    if (!message) return 80;
+    if (!message) return 100;
     
-    // Base height for message bubble
-    let height = 60; // Base padding and UI elements
+    // Base height includes padding and margins
+    let height = 80; // Base padding and UI elements
     
-    // Add height for text content (approximately 20px per 50 characters)
-    const textLength = (message.decryptedContent || message.content || '').length;
-    height += Math.ceil(textLength / 50) * 20;
+    // Check message type and add appropriate height
+    const messageType = message.type || 'text';
+    const metadata = message.metadata || {};
     
-    // Add height for reactions
-    if (message.reactions && Object.keys(message.reactions).length > 0) {
-      height += 35;
+    if (messageType === 'image' || metadata.mediaType === 'image') {
+      // Images: account for thumbnail height + bubble padding + spacing
+      // max-w-sm (384px) with typical aspect ratio needs ~250px
+      // Plus bubble chrome, padding, and safe spacing
+      height = 380;
+    } else if (messageType === 'file' || metadata.mediaType === 'file') {
+      // File attachments: icon + filename + size info + padding
+      height = 140;
+    } else if (messageType === 'voice' || metadata.mediaType === 'voice') {
+      // Voice messages: waveform visualization + controls + padding  
+      height = 160;
+    } else {
+      // Text message - calculate based on content length
+      const textLength = (message.decryptedContent || message.content || message.text || '').length;
+      // Estimate ~50 chars per line, 24px per line
+      const lines = Math.ceil(textLength / 50);
+      height += lines * 24;
     }
     
-    // Add height for reply
-    if (message.replyTo) {
+    // Add height for reactions row
+    if (message.reactions && Object.keys(message.reactions).length > 0) {
       height += 40;
     }
     
-    // Minimum height
-    height = Math.max(height, 60);
-    // Maximum height for a single message
-    height = Math.min(height, 300);
+    // Add height for reply preview
+    if (message.replyTo) {
+      height += 50;
+    }
+    
+    // Add universal spacing buffer to prevent any overlap
+    height += 30;
+    
+    // Minimum height to prevent too-tight spacing
+    height = Math.max(height, 100);
+    // Maximum height for very long messages
+    height = Math.min(height, 600);
     
     itemSizeMap.current[index] = height;
     return height;

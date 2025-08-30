@@ -3,6 +3,7 @@
 import React, { useState, useRef } from "react";
 import { Send, Paperclip, Image, Mic, Smile, Plus, X, Reply } from "lucide-react";
 import { MediaUpload } from './MediaUpload';
+import { VoiceRecorder } from './VoiceRecorder';
 
 interface Props {
   onSend: (text: string) => Promise<void> | void;
@@ -30,8 +31,10 @@ export function MessageInput({
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [showMediaUpload, setShowMediaUpload] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const voiceRecorderRef = useRef<{ startRecording: () => void } | null>(null);
 
   const handleSend = async () => {
     const value = text.trim();
@@ -113,6 +116,20 @@ export function MessageInput({
         </div>
       )}
       
+      {/* Voice Recorder */}
+      {isRecording && (
+        <div className="mb-2">
+          <VoiceRecorder
+            autoStart={true}
+            onCancel={() => setIsRecording(false)}
+            onSend={(audioBlob, duration) => {
+              setIsRecording(false);
+              // Voice message will be sent through the VoiceRecorder component itself
+            }}
+          />
+        </div>
+      )}
+      
       {/* Floating input container */}
       <div className="relative bg-[#1a1a1a] rounded-lg overflow-hidden">
         <div className="flex items-end">
@@ -138,10 +155,22 @@ export function MessageInput({
 
             <button
               type="button"
-              className="p-1.5 hover:bg-[#262626] rounded transition-colors"
-              title="Record voice"
+              onClick={() => {
+                if (!isRecording) {
+                  setIsRecording(true);
+                  // Will trigger VoiceRecorder to start immediately
+                } else {
+                  setIsRecording(false);
+                }
+              }}
+              className={`p-1.5 hover:bg-[#262626] rounded transition-colors ${
+                isRecording ? 'bg-[#262626]' : ''
+              }`}
+              title={isRecording ? "Cancel recording" : "Record voice"}
             >
-              <Mic className="w-4 h-4 text-gray-400 hover:text-gray-300" />
+              <Mic className={`w-4 h-4 ${
+                isRecording ? 'text-red-500 animate-pulse' : 'text-gray-400 hover:text-gray-300'
+              }`} />
             </button>
 
             <button
