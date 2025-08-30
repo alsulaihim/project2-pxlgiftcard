@@ -52,6 +52,18 @@ export class PresenceHandler {
       photoURL: socket.data.photoURL
     });
 
+    // Also emit simpler user:online event
+    this.io.emit('user:online', {
+      userId,
+      displayName: socket.data.displayName
+    });
+
+    // Send current online users to the newly connected user
+    const onlineUsersList = this.getOnlineUsers();
+    socket.emit('presence:online-users', {
+      users: onlineUsersList
+    });
+
     logger.info(`🟢 User online: ${userId} (${socket.data.tier}) - Socket: ${socket.id}`);
   };
 
@@ -72,6 +84,11 @@ export class PresenceHandler {
       userId,
       online: false,
       lastSeen: new Date().toISOString()
+    });
+
+    // Also emit simpler user:offline event
+    this.io.emit('user:offline', {
+      userId
     });
 
     logger.info(`🔴 User offline: ${userId} - Socket: ${socket.id}`);
@@ -282,6 +299,13 @@ export class PresenceHandler {
    */
   public getOnlineUsersCount(): number {
     return this.onlineUsers.size;
+  }
+
+  /**
+   * Get all online users
+   */
+  public getOnlineUsers(): string[] {
+    return Array.from(this.onlineUsers.keys());
   }
 
   /**

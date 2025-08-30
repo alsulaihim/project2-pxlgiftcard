@@ -31,6 +31,7 @@ export default function EnhancedMessagesPage() {
   const [userProfiles, setUserProfiles] = useState<Map<string, any>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
   const [showChannelImageUpload, setShowChannelImageUpload] = useState(false);
+  const [messageListHeight, setMessageListHeight] = useState(600);
   
   const {
     conversations,
@@ -59,6 +60,19 @@ export default function EnhancedMessagesPage() {
     reset
   } = useChatStore();
   
+  // Calculate message list height dynamically
+  useEffect(() => {
+    const calculateHeight = () => {
+      // Account for header (80px), message input (120px), and some padding
+      const height = window.innerHeight - 200;
+      setMessageListHeight(Math.max(400, height)); // Minimum 400px
+    };
+
+    calculateHeight();
+    window.addEventListener('resize', calculateHeight);
+    return () => window.removeEventListener('resize', calculateHeight);
+  }, []);
+
   // Set userId in store
   useEffect(() => {
     if (user?.uid) {
@@ -651,21 +665,45 @@ export default function EnhancedMessagesPage() {
                         </span>
                       )}
                     </div>
-                    {typingUsers.length > 0 ? (
-                      <div className="text-xs text-gray-500 flex items-center gap-1">
-                        <span>
-                          {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
-                        </span>
-                        <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
-                        <div className="flex gap-0.5">
-                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
-                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
-                          <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                    <div className="text-xs text-gray-500">
+                      {typingUsers.length > 0 ? (
+                        <div className="flex items-center gap-1">
+                          <span>
+                            {typingUsers.map(userId => userProfiles.get(userId)?.displayName || 'Someone').join(', ')}
+                          </span>
+                          <span>{typingUsers.length === 1 ? 'is' : 'are'} typing</span>
+                          <div className="flex gap-0.5">
+                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce" />
+                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:100ms]" />
+                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:200ms]" />
+                          </div>
                         </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-gray-500">{conversationInfo?.subtitle}</p>
-                    )}
+                      ) : activeConversation.type === 'direct' ? (
+                        (() => {
+                          const otherUserId = activeConversation.members.find(id => id !== user.uid);
+                          const isOnline = otherUserId && presence.get(otherUserId);
+                          // Debug presence
+                          if (otherUserId) {
+                            console.log('👤 Presence check:', {
+                              otherUserId,
+                              isOnline,
+                              presenceSize: presence.size,
+                              allOnlineUsers: Array.from(presence.entries()).filter(([, online]) => online).map(([id]) => id)
+                            });
+                          }
+                          return isOnline ? (
+                            <span className="flex items-center gap-1">
+                              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                              <span>Online</span>
+                            </span>
+                          ) : (
+                            <span className="text-gray-400">Offline</span>
+                          );
+                        })()
+                      ) : (
+                        <span>{conversationInfo?.subtitle}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
                 
@@ -688,26 +726,28 @@ export default function EnhancedMessagesPage() {
               </div>
 
               {/* Messages Area */}
-              <div className="flex-1 overflow-y-auto">
+              <div className="flex-1 overflow-hidden flex flex-col">
                 {activeMessages.length > 0 ? (
-                  <div className="h-full">
-                    <div className="p-4">
-                      <div className="text-sm text-gray-500 mb-2">
+                  <>
+                    <div className="p-4 pb-2">
+                      <div className="text-sm text-gray-500">
                         Showing {activeMessages.length} messages
                       </div>
                     </div>
-                    <VirtualMessageList
-                      messages={activeMessages}
-                      currentUserId={user?.uid || userId || 'test-user-1'}
-                      height={400}
-                      getUserInfo={getUserInfo}
-                      onLoadMore={handleLoadMore}
-                      onReply={handleReply}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onReact={handleReact}
-                    />
-                  </div>
+                    <div className="flex-1 overflow-hidden">
+                      <VirtualMessageList
+                        messages={activeMessages}
+                        currentUserId={user?.uid || userId || 'test-user-1'}
+                        height={messageListHeight}
+                        getUserInfo={getUserInfo}
+                        onLoadMore={handleLoadMore}
+                        onReply={handleReply}
+                        onEdit={handleEdit}
+                        onDelete={handleDelete}
+                        onReact={handleReact}
+                      />
+                    </div>
+                  </>
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">

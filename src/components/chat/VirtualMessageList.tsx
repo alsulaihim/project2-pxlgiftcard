@@ -2,7 +2,7 @@
 
 /* eslint-disable react/forbid-dom-props */
 import React, { useMemo, useRef, useEffect, useCallback } from 'react';
-import { FixedSizeList as List } from 'react-window';
+import { VariableSizeList as List } from 'react-window';
 import { ChatMessage } from '@/services/chat/firestore-chat.service';
 import { MessageBubble } from './MessageBubble';
 
@@ -83,6 +83,7 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
   onReact
 }) => {
   const listRef = useRef<List>(null);
+  const itemSizeMap = useRef<{ [index: number]: number }>({});
   
   // Messages are already in chronological order (oldest to newest)
   // No need to reverse them
@@ -97,8 +98,50 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
     }
   }, [orderedMessages.length]);
 
-  // Fixed item height for consistent rendering
-  const itemSize = 100;
+  // Get item size - estimate based on message content
+  const getItemSize = useCallback((index: number) => {
+    // Return cached size if available
+    if (itemSizeMap.current[index]) {
+      return itemSizeMap.current[index];
+    }
+    
+    // Estimate size based on message content
+    const message = orderedMessages[index];
+    if (!message) return 80;
+    
+    // Base height for message bubble
+    let height = 60; // Base padding and UI elements
+    
+    // Add height for text content (approximately 20px per 50 characters)
+    const textLength = (message.decryptedContent || message.content || '').length;
+    height += Math.ceil(textLength / 50) * 20;
+    
+    // Add height for reactions
+    if (message.reactions && Object.keys(message.reactions).length > 0) {
+      height += 35;
+    }
+    
+    // Add height for reply
+    if (message.replyTo) {
+      height += 40;
+    }
+    
+    // Minimum height
+    height = Math.max(height, 60);
+    // Maximum height for a single message
+    height = Math.min(height, 300);
+    
+    itemSizeMap.current[index] = height;
+    return height;
+  }, [orderedMessages]);
+
+  // Reset size cache when messages change
+  useEffect(() => {
+    itemSizeMap.current = {};
+    if (listRef.current) {
+      listRef.current.resetAfterIndex(0);
+    }
+  }, [messages]);
 
   // Handle scroll to load more messages
   const handleScroll = useCallback(({ scrollOffset }: { scrollOffset: number }) => {
@@ -125,7 +168,7 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
         height={height}
         width="100%"
         itemCount={orderedMessages.length}
-        itemSize={itemSize}
+        itemSize={getItemSize}
         itemData={itemData}
         onScroll={handleScroll}
         className="scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800"

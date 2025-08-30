@@ -842,18 +842,33 @@ export const useChatStore = create<ChatState>()(
           const state = get();
           console.log(`📮 Marking message ${messageId} as delivered to ${userId}`);
           
+          // Find the message to get its conversation ID
+          let conversationId: string | null = null;
+          let shouldEmit = false;
+          
           // Update local state
           set((state) => {
-            for (const [, messages] of state.messages) {
+            for (const [convId, messages] of state.messages) {
               const message = messages.find((m: any) => m.id === messageId);
               if (message && !message.delivered.includes(userId)) {
                 message.delivered.push(userId);
                 message.status = 'delivered';
+                conversationId = convId;
+                shouldEmit = true;
                 console.log(`✅ Local state updated - message delivered to ${userId}`);
                 break;
               }
             }
           });
+          
+          // Send delivery confirmation via socket if needed
+          if (shouldEmit && conversationId && state.socket) {
+            console.log(`📤 Sending delivery confirmation for message ${messageId}`);
+            state.socket.emit('message:delivered', {
+              conversationId,
+              messageId
+            });
+          }
           
           // Update Firebase
           const activeConvId = state.activeConversationId;
@@ -931,6 +946,11 @@ export const useChatStore = create<ChatState>()(
 
         // Socket actions
         initializeSocket: (socket) => {
+          // Store socket reference
+          set((state) => {
+            state.socket = socket;
+          });
+          
           // Listen for auth success to get user data
           socket.on('auth:success', (userData: any) => {
             console.log('🔑 Auth success received:', userData);
@@ -984,6 +1004,10 @@ export const useChatStore = create<ChatState>()(
               // Fallback to plain text
               decryptedContent = message.text || message.senderText || '[Unable to decrypt]';
             }
+            
+            // Check if this is not our own message before updating state
+            const currentUserId = get().userId;
+            const shouldSendDelivery = message.senderId !== currentUserId;
             
             // Add the message to the appropriate conversation
             set((state) => {
@@ -1052,6 +1076,15 @@ export const useChatStore = create<ChatState>()(
                 }
               }
             });
+            
+            // Send delivery confirmation AFTER state update if this is not our own message
+            if (shouldSendDelivery) {
+              console.log('📮 Sending delivery confirmation for message:', message.id);
+              socket.emit('message:delivered', {
+                conversationId: message.conversationId,
+                messageId: message.id
+              });
+            }
           });
           
           socket.on('message:sent', (data: any) => {
@@ -1099,6 +1132,53 @@ export const useChatStore = create<ChatState>()(
                   break;
                 }
               }
+            });
+          });
+          
+          // Listen for presence updates
+          socket.on('user:online', (data: { userId: string; displayName?: string }) => {
+            console.log('🟢 User online:', data.userId);
+            set((state) => {
+              // Don't mark self as online in presence map
+              if (data.userId !== state.userId) {
+                state.presence.set(data.userId, true);
+              }
+            });
+          });
+          
+          socket.on('user:offline', (data: { userId: string }) => {
+            console.log('🔴 User offline:', data.userId);
+            set((state) => {
+              // Don't mark self as offline in presence map
+              if (data.userId !== state.userId) {
+                state.presence.set(data.userId, false);
+              }
+            });
+          });
+          
+          socket.on('presence:update', (data: { userId: string; online: boolean }) => {
+            console.log('👥 Presence update:', data);
+            set((state) => {
+              // Don't mark self in presence map
+              if (data.userId !== state.userId) {
+                state.presence.set(data.userId, data.online);
+              }
+            });
+          });
+          
+          socket.on('presence:online-users', (data: { users: string[] }) => {
+            console.log('👥 Online users list received:', data.users);
+            set((state) => {
+              // Clear presence and set all online users (excluding self)
+              state.presence.clear();
+              data.users.forEach(userId => {
+                // Don't mark self as online in presence map
+                if (userId !== state.userId) {
+                  state.presence.set(userId, true);
+                  console.log(`✅ Marked ${userId} as online`);
+                }
+              });
+              console.log(`📊 Presence map now has ${state.presence.size} online users`);
             });
           });
           

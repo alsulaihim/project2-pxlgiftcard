@@ -193,9 +193,11 @@ export class MessageHandler {
     data: DeliveryData
   ): Promise<void> => {
     try {
+      logger.info(`📬 Received delivery confirmation from ${socket.data.userId}`, data);
       const { messageId, conversationId } = data;
 
       if (!messageId || !conversationId) {
+        logger.warn('Missing messageId or conversationId in delivery data');
         return;
       }
 
@@ -210,10 +212,15 @@ export class MessageHandler {
         if (error.code === 7 || error.message?.includes('PERMISSION_DENIED')) {
           logger.warn(`⚠️ Firestore unavailable for delivery update, using fallback`);
           // For direct messages, extract members from conversationId
-          const userIds = conversationId.split('_');
-          if (userIds.length === 2) {
-            members = userIds;
+          if (conversationId.startsWith('direct_')) {
+            const parts = conversationId.replace('direct_', '').split('_');
+            if (parts.length === 2) {
+              members = parts;
+            } else {
+              members = [socket.data.userId];
+            }
           } else {
+            // For group chats, we need at least the sender
             members = [socket.data.userId];
           }
         } else {
@@ -222,7 +229,9 @@ export class MessageHandler {
       }
 
       // Broadcast delivery status to conversation members
+      logger.info(`📢 Broadcasting delivery status to members: ${members.join(', ')}`);
       members.forEach((memberId: string) => {
+        logger.debug(`📤 Emitting message:delivered to user:${memberId}`);
         this.io.to(`user:${memberId}`).emit('message:delivered', {
           messageId,
           userId: socket.data.userId,
@@ -230,7 +239,7 @@ export class MessageHandler {
         });
       });
 
-      logger.debug(`✅ Message ${messageId} delivered to ${socket.data.userId}`);
+      logger.info(`✅ Message ${messageId} marked as delivered by ${socket.data.userId}`);
 
     } catch (error) {
       logger.error('❌ Failed to handle message delivery:', error);
@@ -268,10 +277,15 @@ export class MessageHandler {
         if (error.code === 7 || error.message?.includes('PERMISSION_DENIED')) {
           logger.warn(`⚠️ Firestore unavailable for read update, using fallback`);
           // For direct messages, extract members from conversationId
-          const userIds = conversationId.split('_');
-          if (userIds.length === 2) {
-            members = userIds;
+          if (conversationId.startsWith('direct_')) {
+            const parts = conversationId.replace('direct_', '').split('_');
+            if (parts.length === 2) {
+              members = parts;
+            } else {
+              members = [socket.data.userId];
+            }
           } else {
+            // For group chats, we need at least the sender
             members = [socket.data.userId];
           }
         } else {

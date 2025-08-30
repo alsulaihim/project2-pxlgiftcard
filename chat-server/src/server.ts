@@ -9,6 +9,7 @@ import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'path';
 
 import { authenticateSocket, AuthenticatedSocket } from './middleware/auth.middleware';
 import { MessageHandler } from './handlers/message.handler';
@@ -140,6 +141,11 @@ class ChatServer {
    * Setup Express routes
    */
   private setupRoutes(): void {
+    // Serve static test files from chat-server directory
+    const staticPath = path.join(__dirname, '..', '..', 'chat-server');
+    console.log('📁 Serving static files from:', staticPath);
+    this.app.use(express.static(staticPath));
+    
     // Health check endpoint
     this.app.get('/health', (req, res) => {
       const stats = {
