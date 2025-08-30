@@ -188,6 +188,72 @@ class ChatServer {
       });
     });
 
+    // Debug endpoint to test message broadcasting
+    this.app.get('/debug/broadcast-test', (req, res) => {
+      // Get connected sockets info
+      const sockets = this.io.sockets.sockets;
+      const connectedUsers: { [key: string]: { sockets: string[], rooms: string[] } } = {};
+      
+      sockets.forEach((socket: any) => {
+        if (socket.data?.userId) {
+          const userId = socket.data.userId;
+          if (!connectedUsers[userId]) {
+            connectedUsers[userId] = { sockets: [], rooms: [] };
+          }
+          connectedUsers[userId].sockets.push(socket.id);
+          // Get rooms this socket is in
+          socket.rooms.forEach((room: string) => {
+            if (!connectedUsers[userId].rooms.includes(room)) {
+              connectedUsers[userId].rooms.push(room);
+            }
+          });
+        }
+      });
+      
+      // Test broadcast to specific conversation if users are connected
+      const userIds = Object.keys(connectedUsers);
+      let testConversationId = 'direct_NkTmPMpaTiTNw6RmhdITwCbmf6r2_Rs6ia6SIaeZFSsJTQePhF2A1x1x1';
+      
+      // If we have at least 2 users connected, create a conversation between them
+      if (userIds.length >= 2) {
+        const sortedIds = [userIds[0], userIds[1]].sort();
+        testConversationId = `direct_${sortedIds[0]}_${sortedIds[1]}`;
+      }
+      
+      const testMessage = {
+        id: `test_${Date.now()}`,
+        conversationId: testConversationId,
+        senderId: 'test-server',
+        type: 'text',
+        text: 'Test broadcast message',
+        senderText: 'Test broadcast message',
+        timestamp: new Date(),
+        delivered: [],
+        read: [],
+        sender: {
+          displayName: 'Test Server',
+          photoURL: '/default-avatar.png',
+          tier: 'system'
+        }
+      };
+      
+      // Broadcast to connected users
+      userIds.forEach(userId => {
+        this.io.to(`user:${userId}`).emit('message:new', testMessage);
+      });
+      
+      logger.info(`🧪 Debug broadcast test sent to ${userIds.length} users: ${userIds.join(', ')}`);
+      logger.info(`🧪 Test conversation ID: ${testConversationId}`);
+      
+      res.json({ 
+        message: 'Test broadcast sent',
+        connectedUsers,
+        testMessageId: testMessage.id,
+        testConversationId,
+        userCount: userIds.length
+      });
+    });
+
     logger.info('🛣️ Express routes configured');
   }
 

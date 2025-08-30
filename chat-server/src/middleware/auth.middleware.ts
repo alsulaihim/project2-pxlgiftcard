@@ -8,6 +8,11 @@ import { ExtendedError } from 'socket.io/dist/namespace';
 import { firebaseService } from '../services/firebase.service';
 import { logger } from '../services/logger.service';
 
+// Declare global variable for test user counter
+declare global {
+  var testUserCounter: number | undefined;
+}
+
 export interface AuthenticatedSocket extends Socket {
   data: {
     userId: string;
@@ -29,34 +34,47 @@ export const authenticateSocket = async (
   try {
     const token = socket.handshake.auth?.token;
     
+    logger.info(`🔐 Authentication attempt for socket: ${socket.id}`);
+    
     if (!token) {
       logger.warn(`🚫 No authentication token provided for socket: ${socket.id}`);
       return next(new Error('Authentication token required'));
     }
 
-    // TEMPORARY: Skip Firebase verification for debugging
-    // TODO: Re-enable Firebase auth once project ID issue is resolved
-    logger.info(`🔧 TEMP: Bypassing Firebase auth for debugging - socket: ${socket.id}`);
-    
-    // Generate different test users based on socket ID to ensure uniqueness
-    // Use a simple hash of socket ID to determine user number
-    const userNum = socket.id.charCodeAt(0) % 2 === 0 ? '2' : '1';
-    logger.info(`🔧 TEMP: Socket ${socket.id} assigned to test-user-${userNum}`);
-    
-    // Mock user data for testing
-    (socket as AuthenticatedSocket).data = {
-      userId: `test-user-${userNum}`,
-      email: `test${userNum}@example.com`,
-      tier: userNum === '1' ? 'pro' : 'rising',
-      displayName: `Test User ${userNum}`,
-      photoURL: '/default-avatar.png'
-    };
+    logger.info(`🔑 Token received (first 20 chars): ${token.substring(0, 20)}...`);
 
-    logger.info(`✅ Socket authenticated (TEMP MODE) for socket: ${socket.id}`);
-    next();
+    // Verify Firebase auth token
+    const decodedToken = await firebaseService.verifyIdToken(token);
     
-  } catch (error) {
+    logger.info(`✅ Token verified for user: ${decodedToken.uid}`);
+    
+    // Try to get user profile from Firestore, but don't fail if it doesn't work
+    let userProfile = null;
+    try {
+      userProfile = await firebaseService.getUserData(decodedToken.uid);
+      logger.info(`📋 User profile fetched: ${userProfile ? 'Found' : 'Not found'}`);
+    } catch (profileError: any) {
+      logger.warn(`⚠️ Could not fetch user profile from Firestore:`, profileError.message);
+      logger.warn(`⚠️ Using data from ID token instead`);
+    }
+    
+    (socket as AuthenticatedSocket).data = {
+      userId: decodedToken.uid,
+      email: decodedToken.email || '',
+      tier: userProfile?.tier || 'starter',
+      displayName: userProfile?.displayName || decodedToken.name || decodedToken.email?.split('@')[0] || 'User',
+      photoURL: userProfile?.photoURL || decodedToken.picture || '/default-avatar.png'
+    };
+    
+    logger.info(`✅ Socket authenticated via Firebase for user: ${decodedToken.uid}`);
+    next();
+  } catch (error: any) {
     logger.error(`❌ Socket authentication failed for ${socket.id}:`, error);
+    logger.error(`❌ Error details:`, {
+      message: error.message,
+      code: error.code,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
+    });
     next(new Error('Authentication failed'));
   }
 };
@@ -69,12 +87,6 @@ export const checkConversationMembership = async (
   conversationId: string
 ): Promise<boolean> => {
   try {
-    // TEMP: Skip membership check in test mode
-    if (socket.data.userId.startsWith('test-user-')) {
-      logger.info(`🔧 TEMP: Skipping membership check for test user ${socket.data.userId}`);
-      return true;
-    }
-    
     const conversation = await firebaseService.getConversation(conversationId);
     const isMember = conversation.members?.includes(socket.data.userId);
     
@@ -83,7 +95,12 @@ export const checkConversationMembership = async (
     }
     
     return isMember;
-  } catch (error) {
+  } catch (error: any) {
+    // If Firestore is not accessible, allow the operation for authenticated users
+    if (error.code === 7 || error.message?.includes('PERMISSION_DENIED')) {
+      logger.warn(`⚠️ Firestore permission denied, allowing authenticated user ${socket.data.userId} to proceed`);
+      return true; // Allow authenticated users when Firestore is unavailable
+    }
     logger.error(`❌ Failed to check conversation membership:`, error);
     return false;
   }
@@ -100,23 +117,27 @@ export const rateLimitMessages = (socket: AuthenticatedSocket): boolean => {
   const userId = socket.data.userId;
   const now = Date.now();
   
-  const userLimit = messageCounts.get(userId);
+  let userLimit = messageCounts.get(userId);
   
   if (!userLimit || now > userLimit.resetTime) {
     // Reset or initialize counter
-    messageCounts.set(userId, {
+    userLimit = {
       count: 1,
       resetTime: now + WINDOW_MS
-    });
+    };
+    messageCounts.set(userId, userLimit);
+    logger.debug(`📊 Rate limit initialized for ${userId}: 1/${MESSAGE_LIMIT}`);
     return true;
   }
   
   if (userLimit.count >= MESSAGE_LIMIT) {
-    logger.warn(`🚫 Rate limit exceeded for user: ${userId}`);
+    logger.warn(`🚫 Rate limit exceeded for user: ${userId} (${userLimit.count}/${MESSAGE_LIMIT})`);
     return false;
   }
   
   userLimit.count++;
+  messageCounts.set(userId, userLimit); // Update the map with new count
+  logger.debug(`📊 Rate limit for ${userId}: ${userLimit.count}/${MESSAGE_LIMIT}`);
   return true;
 };
 

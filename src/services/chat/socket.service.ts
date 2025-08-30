@@ -91,12 +91,11 @@ export class SocketService {
         return null;
       }
       
-      // For now, use a dummy token since server is in TEMP mode
-      // This will still work because server skips verification
-      const token = 'dummy-token-' + user.uid;
+      // Get the actual Firebase ID token
+      const token = await user.getIdToken();
       
       console.log('🔌 Connecting to Socket.io server:', socketUrl);
-      console.log('🔑 Using token:', token.substring(0, 20) + '...');
+      console.log('🔑 Using Firebase ID token:', token.substring(0, 20) + '...');
 
       // Initialize Socket.io connection with v4 best practices
       this.socket = io(socketUrl, {
@@ -164,10 +163,10 @@ export class SocketService {
     });
 
     this.socket.on('connect_error', (error: any) => {
-      console.error('🔥 Socket.io connection error:', error);
-      console.error('🔥 Error type:', error.type);
-      console.error('🔥 Error description:', error.description);
-      console.error('🔥 Error context:', error.context);
+      console.error('🔥 Socket.io connection error:', error.message || error);
+      if (error.data) {
+        console.error('🔥 Error details:', error.data);
+      }
       this.reconnectAttempts++;
       
       // Don't give up on reconnection - Socket.io v4 will handle it

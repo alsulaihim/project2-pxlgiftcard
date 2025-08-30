@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { ChatMessage } from "@/services/chat/firestore-chat.service";
 import { MessageStatus } from "./MessageStatus";
 import { MoreVertical, Edit2, Reply, Trash2, Copy, Pin, Smile, Heart, ThumbsUp, ThumbsDown, Laugh } from "lucide-react";
@@ -32,7 +32,7 @@ interface MessageBubbleProps {
 /**
  * Slack-style message bubble with Vercel dark theme
  */
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ 
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({ 
   message, 
   isOwn, 
   user,
@@ -48,19 +48,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text || '');
   
-  const quickReactions = ['👍', '❤️', '😂', '😮', '😢', '🎉'];
-  const formatTime = (timestamp: any) => {
-    if (!timestamp || typeof timestamp.toDate !== 'function') return '';
-    const date = timestamp.toDate();
+  const quickReactions = useMemo(() => ['👍', '❤️', '😂', '😮', '😢', '🎉'], []);
+  
+  const formatTime = useCallback((timestamp: any) => {
+    if (!timestamp) return '';
+    
+    // Handle different timestamp formats
+    let date: Date;
+    if (typeof timestamp.toDate === 'function') {
+      // Firestore timestamp
+      date = timestamp.toDate();
+    } else if (timestamp instanceof Date) {
+      // Regular Date object
+      date = timestamp;
+    } else if (typeof timestamp === 'string' || typeof timestamp === 'number') {
+      // String or number timestamp
+      date = new Date(timestamp);
+    } else {
+      return '';
+    }
+    
     return date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
       minute: '2-digit',
       hour12: true 
     });
-  };
+  }, []);
 
-  const messageType = (message as any).type || 'text';
-  const metadata = (message as any).metadata;
+  const messageType = useMemo(() => (message as any).type || 'text', [message]);
+  const metadata = useMemo(() => (message as any).metadata, [message]);
   
   // Show message ID when shift is held
   const [showId, setShowId] = React.useState(false);
@@ -501,3 +517,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </div>
   );
 };
+
+// Memoize the component to prevent unnecessary re-renders
+export const MessageBubble = React.memo(MessageBubbleComponent, (prevProps, nextProps) => {
+  // Custom comparison function - only re-render if these specific props change
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.text === nextProps.message.text &&
+    prevProps.message.status === nextProps.message.status &&
+    JSON.stringify(prevProps.message.reactions) === JSON.stringify(nextProps.message.reactions) &&
+    JSON.stringify(prevProps.message.delivered) === JSON.stringify(nextProps.message.delivered) &&
+    JSON.stringify(prevProps.message.read) === JSON.stringify(nextProps.message.read) &&
+    prevProps.isOwn === nextProps.isOwn &&
+    prevProps.currentUserId === nextProps.currentUserId
+  );
+});

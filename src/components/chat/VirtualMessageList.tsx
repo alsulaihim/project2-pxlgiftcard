@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable react/forbid-dom-props */
-import React, { useMemo, useRef, useEffect } from 'react';
+import React, { useMemo, useRef, useEffect, useCallback } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import { ChatMessage } from '@/services/chat/firestore-chat.service';
 import { MessageBubble } from './MessageBubble';
@@ -46,11 +46,11 @@ interface MessageItemProps {
  * Virtual scrolling message list for performance with thousands of messages
  * As specified in chat-architecture.mdc using react-window
  */
-const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
+const MessageItem = React.memo<MessageItemProps>(({ index, style, data }) => {
   const { messages, currentUserId, getUserInfo, onReply, onEdit, onDelete, onReact } = data;
   const message = messages[index];
   const isOwn = message.senderId === currentUserId;
-  const user = getUserInfo ? getUserInfo(message.senderId) : undefined;
+  const user = useMemo(() => getUserInfo ? getUserInfo(message.senderId) : undefined, [getUserInfo, message.senderId]);
 
   return (
     // Note: The style prop is required by react-window for virtual scrolling positioning
@@ -69,9 +69,9 @@ const MessageItem: React.FC<MessageItemProps> = ({ index, style, data }) => {
       />
     </div>
   );
-};
+});
 
-export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
+export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
   messages,
   currentUserId,
   height,
@@ -84,45 +84,47 @@ export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
 }) => {
   const listRef = useRef<List>(null);
   
-  // Reverse messages for proper chat order (newest at bottom)
-  const reversedMessages = useMemo(() => {
-    return [...messages].reverse();
+  // Messages are already in chronological order (oldest to newest)
+  // No need to reverse them
+  const orderedMessages = useMemo(() => {
+    return messages;
   }, [messages]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (listRef.current && reversedMessages.length > 0) {
-      listRef.current.scrollToItem(reversedMessages.length - 1, 'end');
+    if (listRef.current && orderedMessages.length > 0) {
+      listRef.current.scrollToItem(orderedMessages.length - 1, 'end');
     }
-  }, [reversedMessages.length]);
+  }, [orderedMessages.length]);
 
   // Fixed item height for consistent rendering
   const itemSize = 100;
 
   // Handle scroll to load more messages
-  const handleScroll = ({ scrollOffset }: { scrollOffset: number }) => {
+  const handleScroll = useCallback(({ scrollOffset }: { scrollOffset: number }) => {
     if (scrollOffset === 0 && onLoadMore) {
       onLoadMore();
     }
-  };
+  }, [onLoadMore]);
 
-  const itemData = {
-    messages: reversedMessages,
+  // Memoize the item data to prevent unnecessary re-renders
+  const itemData = useMemo<MessageItemData>(() => ({
+    messages: orderedMessages,
     currentUserId,
     getUserInfo,
     onReply,
     onEdit,
     onDelete,
     onReact
-  };
+  }), [orderedMessages, currentUserId, getUserInfo, onReply, onEdit, onDelete, onReact]);
 
   return (
-    <div className="flex-1 overflow-hidden pt-4">
+    <div className="w-full" style={{ height: `${height}px` }}>
       <List
         ref={listRef}
-        height={height - 16} // Adjust height to account for padding
+        height={height}
         width="100%"
-        itemCount={reversedMessages.length}
+        itemCount={orderedMessages.length}
         itemSize={itemSize}
         itemData={itemData}
         onScroll={handleScroll}
@@ -132,4 +134,4 @@ export const VirtualMessageList: React.FC<VirtualMessageListProps> = ({
       </List>
     </div>
   );
-};
+});

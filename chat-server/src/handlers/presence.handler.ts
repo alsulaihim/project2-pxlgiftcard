@@ -34,6 +34,15 @@ export class PresenceHandler {
     // Join tier-based room
     socket.join(`tier:${socket.data.tier}`);
     
+    // Send auth success with user data to the client
+    socket.emit('auth:success', {
+      userId: socket.data.userId,
+      displayName: socket.data.displayName,
+      photoURL: socket.data.photoURL,
+      tier: socket.data.tier,
+      isTestUser: socket.data.isTestUser
+    });
+    
     // Broadcast online status
     this.io.emit('presence:update', {
       userId,
@@ -76,8 +85,18 @@ export class PresenceHandler {
     data: TypingData
   ): Promise<void> => {
     try {
-      const { conversationId, typing } = data;
+      let { conversationId, typing } = data;
       const userId = socket.data.userId;
+      
+      // Normalize conversation ID
+      const normalizeId = (id: string) => {
+        if (!id.startsWith('direct_')) return id;
+        const parts = id.replace('direct_', '').split('_');
+        if (parts.length !== 2) return id;
+        return `direct_${parts.sort().join('_')}`;
+      };
+      
+      conversationId = normalizeId(conversationId);
 
       if (!conversationId) {
         return;
@@ -149,6 +168,17 @@ export class PresenceHandler {
       if (!conversationId) {
         throw new Error('Conversation ID is required');
       }
+      
+      // Normalize conversation ID
+      const normalizeId = (id: string) => {
+        if (!id.startsWith('direct_')) return id;
+        const parts = id.replace('direct_', '').split('_');
+        if (parts.length !== 2) return id;
+        return `direct_${parts.sort().join('_')}`;
+      };
+      
+      const normalizedId = normalizeId(conversationId);
+      conversationId = normalizedId;
 
       // Verify conversation membership
       const isMember = await checkConversationMembership(socket, conversationId);

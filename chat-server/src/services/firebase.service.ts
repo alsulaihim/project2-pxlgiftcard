@@ -4,6 +4,7 @@
  */
 
 import admin from 'firebase-admin';
+import * as path from 'path';
 import { logger } from './logger.service';
 
 export class FirebaseService {
@@ -12,8 +13,7 @@ export class FirebaseService {
   private auth: admin.auth.Auth | null = null;
 
   private constructor() {
-    // TEMPORARY: Skip Firebase initialization for debugging
-    logger.info('🔧 TEMP: Firebase service created without initialization');
+    this.initializeFirebase();
   }
 
   public static getInstance(): FirebaseService {
@@ -27,14 +27,30 @@ export class FirebaseService {
     try {
       // Check if Firebase is already initialized
       if (admin.apps.length === 0) {
-        // TEMPORARY: Skip Firebase initialization for debugging
-        logger.info('🔧 TEMP: Skipping Firebase initialization for debugging');
-        logger.info('🔧 TEMP: Socket.io server will run without Firebase backend');
-        return;
+        const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+        
+        if (serviceAccountPath) {
+          // Initialize with service account
+          const serviceAccount = require(path.resolve(serviceAccountPath));
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: process.env.FIREBASE_PROJECT_ID || 'pxl-perfect-1'
+          });
+          logger.info('✅ Firebase Admin SDK initialized with service account');
+        } else {
+          // Try application default credentials
+          admin.initializeApp({
+            projectId: process.env.FIREBASE_PROJECT_ID || 'pxl-perfect-1'
+          });
+          logger.info('✅ Firebase Admin SDK initialized with default credentials');
+        }
       }
+      
+      this.db = admin.firestore();
+      this.auth = admin.auth();
+      logger.info('✅ Firebase services ready');
     } catch (error) {
       logger.error('❌ Failed to initialize Firebase Admin SDK:', error);
-      // Don't throw error, just log it for debugging
       logger.info('🔧 TEMP: Continuing without Firebase for debugging');
     }
   }
@@ -112,18 +128,36 @@ export class FirebaseService {
           read: []
         });
 
-      // Update conversation's last message
+      // Extract members from conversation ID for direct messages
+      let members: string[] = [];
+      if (conversationId.startsWith('direct_')) {
+        const parts = conversationId.replace('direct_', '').split('_');
+        if (parts.length === 2) {
+          members = parts;
+        }
+      }
+
+      // Update conversation's last message (use set with merge to create if doesn't exist)
+      const conversationUpdate: any = {
+        lastMessage: {
+          text: messageData.text || messageData.senderText,
+          senderId: messageData.senderId,
+          timestamp: admin.firestore.FieldValue.serverTimestamp()
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      };
+
+      // Add members and type if this is a new conversation
+      if (members.length > 0) {
+        conversationUpdate.members = members;
+        conversationUpdate.type = 'direct';
+        conversationUpdate.createdAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+
       await this.db
         .collection('conversations')
         .doc(conversationId)
-        .update({
-          lastMessage: {
-            text: messageData.text || messageData.senderText,
-            senderId: messageData.senderId,
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
-          },
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+        .set(conversationUpdate, { merge: true });
 
       logger.debug(`💬 Message saved: ${messageRef.id} in conversation: ${conversationId}`);
       return messageRef.id;

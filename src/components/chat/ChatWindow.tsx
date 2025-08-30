@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { ChatMessage, markMessageAsRead } from "@/services/chat/firestore-chat.service";
 import { VirtualMessageList } from "./VirtualMessageList";
 import { TypingIndicator } from "./TypingIndicator";
@@ -23,7 +23,7 @@ interface ChatWindowProps {
  * Enhanced chat window with virtual scrolling, typing indicators, and presence
  * As specified in chat-architecture.mdc
  */
-export const ChatWindow: React.FC<ChatWindowProps> = ({ 
+export const ChatWindow = React.memo<ChatWindowProps>(({ 
   messages, 
   currentUserId,
   conversationId,
@@ -46,7 +46,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     const unsubscribe = presenceService.subscribeToTyping(
       conversationId,
       memberIds,
-      (typingUserIds) => {
+      useCallback((typingUserIds) => {
         const typingUsersWithInfo = typingUserIds.map(userId => {
           const userInfo = getUserInfo ? getUserInfo(userId) : {};
           return {
@@ -56,7 +56,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           };
         });
         setTypingUsers(typingUsersWithInfo);
-      }
+      }, [getUserInfo])
     );
 
     return unsubscribe;
@@ -127,6 +127,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <TypingIndicator typingUsers={typingUsers} />
     </div>
   );
-};
+});
 
 

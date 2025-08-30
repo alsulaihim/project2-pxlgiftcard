@@ -74,6 +74,7 @@ export async function createOrGetDirectConversation(currentUserId: string, other
     throw new Error('Cannot create conversation with yourself');
   }
 
+
   const [a, b] = [currentUserId, otherUserId].sort();
   const convId = `direct_${a}_${b}`;
   const convRef = doc(db, "conversations", convId);

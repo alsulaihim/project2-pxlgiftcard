@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useChatStore } from "@/stores/chatStore";
 import { ConversationList } from "@/components/chat/ConversationList";
@@ -103,6 +103,12 @@ export default function EnhancedMessagesPage() {
               setTypingUser(data.conversationId, data.userId, data.isTyping);
             }
           });
+          
+          // Listen for new messages via WebSocket
+          socketService.on('message:new', (message: any) => {
+            console.log('📨 New message received via WebSocket in Messages page:', message);
+            // The message will be handled by the store's initializeSocket handler
+          });
         } else {
           console.warn('Socket connection not available, using Firestore fallback');
           setConnectionStatus('fallback');
@@ -200,7 +206,18 @@ export default function EnhancedMessagesPage() {
   }, [conversations, user]);
 
   const activeConversation = activeConversationId ? conversations.get(activeConversationId) : null;
-  const activeMessages = activeConversationId ? messages.get(activeConversationId) || [] : [];
+  const activeMessages = useMemo(() => {
+    if (!activeConversationId) return [];
+    const msgs = messages.get(activeConversationId) || [];
+    console.log(`📊 Active messages for ${activeConversationId}:`, msgs.length);
+    // Convert Message type to ChatMessage type for compatibility
+    return msgs.map((msg: any) => ({
+      ...msg,
+      text: msg.decryptedContent || msg.content || msg.text || '',
+      readBy: msg.read || msg.readBy || [],
+      deliveredTo: msg.delivered || msg.deliveredTo || []
+    }));
+  }, [activeConversationId, messages]);
   const typingUsers = activeConversationId ? typing.get(activeConversationId) || [] : [];
 
   const handleSendMessage = async (text: string) => {
@@ -283,6 +300,79 @@ export default function EnhancedMessagesPage() {
     };
     reader.readAsDataURL(file);
   };
+
+  // Memoize callbacks to prevent re-renders - MUST be before any conditional returns
+  const getUserInfo = useCallback((userId: string) => {
+    // Check cached profiles first
+    const profile = userProfiles.get(userId);
+    if (profile) return profile;
+    
+    // Check if it's the current user
+    if (userId === user?.uid) {
+      return {
+        displayName: user?.displayName || user?.email?.split('@')[0] || 'You',
+        photoURL: user?.photoURL || '/default-avatar.png',
+        tier: platformUser?.tier?.current || 'starter'
+      };
+    }
+    
+    // Handle test users
+    if (userId === 'test-user-1') {
+      return {
+        displayName: 'Test User 1',
+        photoURL: '/default-avatar.png',
+        tier: 'pro' as const
+      };
+    }
+    
+    if (userId === 'test-user-2') {
+      return {
+        displayName: 'Test User 2',
+        photoURL: '/default-avatar.png',
+        tier: 'rising' as const
+      };
+    }
+    
+    return {
+      displayName: 'User',
+      photoURL: '/default-avatar.png',
+      tier: 'starter' as const
+    };
+  }, [userProfiles, user, platformUser]);
+
+  const handleLoadMore = useCallback(() => {
+    const oldest = activeMessages[0];
+    if (oldest && activeConversationId) {
+      loadMessages(activeConversationId, {
+        limit: 50,
+        before: oldest.id
+      });
+    }
+  }, [activeMessages, activeConversationId, loadMessages]);
+
+  const handleReply = useCallback((message: any) => {
+    setReplyingTo(message);
+  }, [setReplyingTo]);
+
+  const handleEdit = useCallback((messageId: string, newText: string) => {
+    editMessage(messageId, newText);
+  }, [editMessage]);
+
+  const handleDelete = useCallback((messageId: string) => {
+    deleteMessage(messageId);
+  }, [deleteMessage]);
+
+  const handleReact = useCallback(async (messageId: string, emoji: string) => {
+    // Find the message to check if user already reacted
+    const message = activeMessages.find(m => m.id === messageId);
+    if (message?.reactions?.[emoji]?.includes(user?.uid || '')) {
+      // User already reacted, remove it
+      await removeReaction(messageId, emoji);
+    } else {
+      // Add reaction
+      await addReaction(messageId, emoji);
+    }
+  }, [activeMessages, user, addReaction, removeReaction]);
 
   if (!user) {
     return (
@@ -600,58 +690,24 @@ export default function EnhancedMessagesPage() {
               {/* Messages Area */}
               <div className="flex-1 overflow-y-auto">
                 {activeMessages.length > 0 ? (
-                  <VirtualMessageList
-                    messages={activeMessages}
-                    currentUserId={user.uid}
-                    height={typeof window !== 'undefined' ? window.innerHeight - 180 : 500}
-                    getUserInfo={(userId) => {
-                      const profile = userProfiles.get(userId);
-                      if (profile) return profile;
-                      
-                      if (userId === user.uid) {
-                        return {
-                          displayName: user.displayName || user.email?.split('@')[0] || 'You',
-                          photoURL: user.photoURL || '/default-avatar.png',
-                          tier: platformUser?.tier?.current || 'starter'
-                        };
-                      }
-                      
-                      return {
-                        displayName: 'User',
-                        photoURL: '/default-avatar.png',
-                        tier: 'starter' as const
-                      };
-                    }}
-                    onLoadMore={() => {
-                      const oldest = activeMessages[0];
-                      if (oldest && activeConversationId) {
-                        loadMessages(activeConversationId, {
-                          limit: 50,
-                          before: oldest.id
-                        });
-                      }
-                    }}
-                    onReply={(message) => {
-                      setReplyingTo(message);
-                    }}
-                    onEdit={(messageId, newText) => {
-                      editMessage(messageId, newText);
-                    }}
-                    onDelete={(messageId) => {
-                      deleteMessage(messageId);
-                    }}
-                    onReact={async (messageId, emoji) => {
-                      // Find the message to check if user already reacted
-                      const message = activeMessages.find(m => m.id === messageId);
-                      if (message?.reactions?.[emoji]?.includes(user.uid)) {
-                        // User already reacted, remove it
-                        await removeReaction(messageId, emoji);
-                      } else {
-                        // User hasn't reacted, add it
-                        await addReaction(messageId, emoji);
-                      }
-                    }}
-                  />
+                  <div className="h-full">
+                    <div className="p-4">
+                      <div className="text-sm text-gray-500 mb-2">
+                        Showing {activeMessages.length} messages
+                      </div>
+                    </div>
+                    <VirtualMessageList
+                      messages={activeMessages}
+                      currentUserId={user?.uid || userId || 'test-user-1'}
+                      height={400}
+                      getUserInfo={getUserInfo}
+                      onLoadMore={handleLoadMore}
+                      onReply={handleReply}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onReact={handleReact}
+                    />
+                  </div>
                 ) : (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">

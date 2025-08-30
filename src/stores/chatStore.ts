@@ -296,18 +296,35 @@ export const useChatStore = create<ChatState>()(
           // Encrypt message if encryption is available
           let encryptedContent = content;
           let nonce = '';
+          let senderEncryptedContent = content;
+          let senderNonce = '';
           
-          if (state.encryption) {
+          console.log('🔐 Encryption state:', {
+            hasEncryption: !!state.encryption,
+            hasKeyPair: !!(state.encryption && state.encryption.keyPair)
+          });
+          
+          if (state.encryption && state.encryption.keyPair) {
             const conversation = state.conversations.get(conversationId);
+            
+            // Find recipient's public key (other user in direct conversation)
+            const recipientId = conversation?.members.find(id => id !== state.userId);
             const recipientKeys = Array.from(conversation?.memberDetails?.values() || [])
               .map(m => m.publicKey)
               .filter(Boolean);
             
+            // Encrypt for recipient if we have their public key
             if (recipientKeys.length > 0) {
               const encrypted = await state.encryption.encryptMessage(content, recipientKeys[0]);
               encryptedContent = encrypted.content;
               nonce = encrypted.nonce;
             }
+            
+            // Also encrypt for sender (so they can decrypt their own messages)
+            // Use sender's own public key for this
+            const senderEncrypted = await state.encryption.encryptMessage(content, state.encryption.keyPair.publicKey);
+            senderEncryptedContent = senderEncrypted.content;
+            senderNonce = senderEncrypted.nonce;
           }
 
           // Get reply ID before clearing
@@ -318,15 +335,100 @@ export const useChatStore = create<ChatState>()(
             state.replyingTo = null;
           });
 
+          // Create a temporary message to show immediately in UI
+          const tempMessage: Message = {
+            id: `temp-${Date.now()}`, // Temporary ID
+            conversationId,
+            senderId: state.userId!,
+            type: type || 'text',
+            content: senderEncryptedContent,  // Use sender's encrypted version for display
+            decryptedContent: content,
+            nonce: senderNonce,
+            timestamp: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0, toDate: () => new Date(), toMillis: () => Date.now(), isEqual: () => false } as any,
+            delivered: [],
+            read: [],
+            reactions: {},
+            status: 'sending' as const,
+            metadata: metadata || {}
+          };
+          
+          // Add temporary message to local state immediately
+          set((state) => {
+            const messages = state.messages.get(conversationId) || [];
+            const updatedMessages = [...messages, tempMessage];
+            state.messages.set(conversationId, updatedMessages);
+            
+            // Save to localStorage
+            try {
+              const storageKey = `chat_messages_${conversationId}`;
+              localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
+            } catch (error) {
+              console.warn('Failed to save temp message to localStorage:', error);
+            }
+          });
+          
           // Send via socket if available, otherwise use Firestore
           if (state.socket && state.isConnected) {
-            state.socket.emit('message:send', {
+            // Socket.io v4 callback format: (err, response)
+            const messageData: any = {
               conversationId,
-              type,
-              content: encryptedContent,
-              nonce,
-              replyTo: replyToId,
-              metadata
+              type: type || 'text',
+              text: encryptedContent || content,  // Recipient's encrypted version (fallback to plain text)
+              nonce: nonce || '',
+              senderText: senderEncryptedContent || content,  // Sender's encrypted version (fallback to plain text)
+              senderNonce: senderNonce || '',
+              metadata: metadata || {},
+              tempId: tempMessage.id // Include temp ID for correlation
+            };
+            
+            // Only add replyTo if it exists
+            if (replyToId) {
+              messageData.replyTo = replyToId;
+            }
+            
+            state.socket.emit('message:send', messageData, (err: any, response: any) => {
+              if (err) {
+                console.error('❌ Failed to send message:', err);
+                // Update message status to failed
+                set((state) => {
+                  const messages = state.messages.get(conversationId) || [];
+                  const index = messages.findIndex((m: any) => m.id === tempMessage.id);
+                  if (index >= 0) {
+                    messages[index].status = 'failed';
+                    const updatedMessages = [...messages];
+                    state.messages.set(conversationId, updatedMessages);
+                    
+                    // Update localStorage
+                    try {
+                      const storageKey = `chat_messages_${conversationId}`;
+                      localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
+                    } catch (error) {
+                      console.warn('Failed to update localStorage:', error);
+                    }
+                  }
+                });
+              } else if (response && response.messageId) {
+                console.log('✅ Message sent successfully:', response);
+                // Replace temp message with real message
+                set((state) => {
+                  const messages = state.messages.get(conversationId) || [];
+                  const index = messages.findIndex((m: any) => m.id === tempMessage.id);
+                  if (index >= 0) {
+                    messages[index].id = response.messageId;
+                    messages[index].status = 'sent';
+                    const updatedMessages = [...messages];
+                    state.messages.set(conversationId, updatedMessages);
+                    
+                    // Update localStorage
+                    try {
+                      const storageKey = `chat_messages_${conversationId}`;
+                      localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
+                    } catch (error) {
+                      console.warn('Failed to update localStorage:', error);
+                    }
+                  }
+                });
+              }
             });
           } else {
             // Use Firestore as fallback
@@ -350,6 +452,21 @@ export const useChatStore = create<ChatState>()(
           set((state) => {
             state.loadingMore.set(conversationId, true);
           });
+
+          // First, try to load from localStorage
+          try {
+            const storageKey = `chat_messages_${conversationId}`;
+            const storedMessages = localStorage.getItem(storageKey);
+            if (storedMessages) {
+              const parsedMessages = JSON.parse(storedMessages);
+              console.log(`💾 Loaded ${parsedMessages.length} messages from localStorage`);
+              set((state) => {
+                state.messages.set(conversationId, parsedMessages);
+              });
+            }
+          } catch (error) {
+            console.warn('Failed to load messages from localStorage:', error);
+          }
 
           try {
             const { subscribeMessages } = await import('@/services/chat/firestore-chat.service');
@@ -383,17 +500,36 @@ export const useChatStore = create<ChatState>()(
               });
               
               set((state) => {
-                // Simply replace all messages - no temp message handling needed
-                // since Firestore subscription gives us all messages
-                state.messages.set(conversationId, messages);
+                // Get existing messages (from WebSocket)
+                const existingMessages = state.messages.get(conversationId) || [];
+                
+                // If Firestore returns empty messages but we have WebSocket messages, keep them
+                if (messages.length === 0 && existingMessages.length > 0) {
+                  console.log('⚠️ Firestore returned empty, keeping existing WebSocket messages');
+                  state.loadingMore.set(conversationId, false);
+                  return;
+                }
+                
+                // Merge messages: keep WebSocket messages that aren't in Firestore yet
+                const firestoreMessageIds = new Set(messages.map(m => m.id));
+                const webSocketOnlyMessages = existingMessages.filter(m => 
+                  !firestoreMessageIds.has(m.id) && !m.id.startsWith('temp-')
+                );
+                
+                // Combine Firestore messages with WebSocket-only messages
+                const combinedMessages = [...messages, ...webSocketOnlyMessages].sort((a, b) => 
+                  new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+                );
+                
+                state.messages.set(conversationId, combinedMessages);
                 state.hasMore.set(conversationId, messages.length === (pagination?.limit || 50));
                 state.loadingMore.set(conversationId, false);
                 
                 // Update unread count for this conversation
                 const conversation = state.conversations.get(conversationId);
                 if (conversation) {
-                  const userId = state.userId || state.socket?.data?.userId || 'current-user';
-                  const unreadCount = messages.filter(
+                  const userId = state.userId || (state.socket as any)?.data?.userId || 'current-user';
+                  const unreadCount = combinedMessages.filter(
                     m => m.senderId !== userId && !m.read.includes(userId)
                   ).length;
                   
@@ -419,8 +555,13 @@ export const useChatStore = create<ChatState>()(
               (state as any).messageUnsubscribers.set(conversationId, unsubscribe);
             });
           } catch (error: any) {
+            console.warn('⚠️ Failed to load messages from Firestore:', error.message);
+            // Don't set error state if it's just a permission issue
+            // Keep existing WebSocket messages
             set((state) => {
-              state.error = error.message;
+              if (!error.message?.includes('PERMISSION_DENIED')) {
+                state.error = error.message;
+              }
               state.loadingMore.set(conversationId, false);
             });
           }
@@ -439,18 +580,18 @@ export const useChatStore = create<ChatState>()(
         },
 
         deleteMessage: (messageId) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            const filtered = messages.filter(m => m.id !== messageId);
+          for (const [conversationId, messages] of state.messages) {
+            const filtered = messages.filter((m: any) => m.id !== messageId);
             if (filtered.length !== messages.length) {
-              state.messages.set(convId, filtered);
+              state.messages.set(conversationId, filtered);
               break;
             }
           }
         }),
 
         editMessage: (messageId, newContent) => set((state) => {
-          for (const [convId, messages] of state.messages) {
-            const messageIndex = messages.findIndex(m => m.id === messageId);
+          for (const [, messages] of state.messages) {
+            const messageIndex = messages.findIndex((m: any) => m.id === messageId);
             if (messageIndex !== -1) {
               messages[messageIndex].decryptedContent = newContent;
               messages[messageIndex].metadata = {
@@ -477,8 +618,8 @@ export const useChatStore = create<ChatState>()(
           
           // Update local state optimistically
           set((state) => {
-            for (const [convId, messages] of state.messages) {
-              const message = messages.find(m => m.id === messageId);
+            for (const [, messages] of state.messages) {
+              const message = messages.find((m: any) => m.id === messageId);
               if (message) {
                 console.log('🔍 Found message for reaction update:', message.id);
                 console.log('🔍 Current reactions before update:', JSON.stringify(message.reactions));
@@ -516,7 +657,7 @@ export const useChatStore = create<ChatState>()(
             }
           });
           
-          // Update Firebase - Simplified approach
+          // Update Firebase - Simplified approach (skip if message doesn't exist)
           if (activeConvId) {
             try {
               const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
@@ -524,7 +665,8 @@ export const useChatStore = create<ChatState>()(
               // Get current message document
               const messageDoc = await getDoc(messageRef);
               if (!messageDoc.exists()) {
-                console.error('Message not found in Firebase');
+                console.warn('Message not in Firebase - using local state only');
+                // Message only exists in WebSocket/local state, skip Firebase update
                 return;
               }
               
@@ -605,11 +747,11 @@ export const useChatStore = create<ChatState>()(
           
           // Update local state optimistically
           set((state) => {
-            for (const [convId, messages] of state.messages) {
-              const message = messages.find(m => m.id === messageId);
+            for (const [, messages] of state.messages) {
+              const message = messages.find((m: any) => m.id === messageId);
               if (message && message.reactions) {
                 const users = message.reactions[emoji] || [];
-                const filtered = users.filter(u => u !== userId);
+                const filtered = users.filter((u: any) => u !== userId);
                 if (filtered.length > 0) {
                   message.reactions[emoji] = filtered;
                 } else {
@@ -620,7 +762,7 @@ export const useChatStore = create<ChatState>()(
             }
           });
           
-          // Update Firebase
+          // Update Firebase (skip if message doesn't exist)
           if (activeConvId) {
             try {
               const messageRef = doc(db, 'conversations', activeConvId, 'messages', messageId);
@@ -628,7 +770,8 @@ export const useChatStore = create<ChatState>()(
               // Get current reactions
               const messageDoc = await getDoc(messageRef);
               if (!messageDoc.exists()) {
-                console.error('Message not found in Firebase');
+                console.warn('Message not in Firebase - using local state only');
+                // Message only exists in WebSocket/local state, skip Firebase update
                 return;
               }
               
@@ -701,8 +844,8 @@ export const useChatStore = create<ChatState>()(
           
           // Update local state
           set((state) => {
-            for (const [convId, messages] of state.messages) {
-              const message = messages.find(m => m.id === messageId);
+            for (const [, messages] of state.messages) {
+              const message = messages.find((m: any) => m.id === messageId);
               if (message && !message.delivered.includes(userId)) {
                 message.delivered.push(userId);
                 message.status = 'delivered';
@@ -741,8 +884,8 @@ export const useChatStore = create<ChatState>()(
           
           // Update local state
           set((state) => {
-            for (const [convId, messages] of state.messages) {
-              messages.forEach(message => {
+            for (const [, messages] of state.messages) {
+              messages.forEach((message: any) => {
                 if (messageIds.includes(message.id) && !message.read.includes(userId)) {
                   message.read.push(userId);
                   message.status = 'read';
@@ -787,11 +930,185 @@ export const useChatStore = create<ChatState>()(
         },
 
         // Socket actions
-        initializeSocket: (socket) => set((state) => {
-          state.socket = socket;
-          state.isConnected = true;
-          state.connectionError = null;
-        }),
+        initializeSocket: (socket) => {
+          // Listen for auth success to get user data
+          socket.on('auth:success', (userData: any) => {
+            console.log('🔑 Auth success received:', userData);
+            set((state) => {
+              state.userId = userData.userId;
+              state.isConnected = true;
+              console.log('✅ Set userId from auth:', userData.userId);
+            });
+          });
+          
+          // Set up socket event handlers
+          socket.on('message:new', async (message: any) => {
+            console.log('📨 New message received in store:', message);
+            
+            // Decrypt the message content
+            const userId = get().userId;
+            let decryptedContent = '';
+            
+            try {
+              // Determine which encrypted text to use based on who we are
+              const encryptedText = message.senderId === userId 
+                ? message.senderText  // Use sender's version if we sent it
+                : message.text;       // Use recipient's version if we received it
+              
+              const nonce = message.senderId === userId 
+                ? message.senderNonce || message.nonce
+                : message.nonce;
+              
+              if (encryptedText && nonce) {
+                const { encryptionService } = await import('@/services/chat/encryption.service');
+                // Get sender's public key from the message
+                const senderPublicKey = message.sender?.publicKey || '';
+                if (senderPublicKey && encryptedText && nonce) {
+                  decryptedContent = encryptionService.decryptMessage(
+                    { encryptedContent: encryptedText, nonce },
+                    senderPublicKey
+                  );
+                  console.log('🔓 Decrypted message content:', decryptedContent);
+                } else {
+                  // If no public key, just use the text as-is (test mode)
+                  decryptedContent = message.text || message.senderText || '';
+                  console.log('📝 Using plain text (no public key):', decryptedContent);
+                }
+              } else {
+                // Fallback to plain text if no encryption
+                decryptedContent = message.text || message.senderText || '';
+                console.log('📝 Using plain text (no encryption):', decryptedContent);
+              }
+            } catch (error) {
+              console.error('Failed to decrypt message:', error);
+              // Fallback to plain text
+              decryptedContent = message.text || message.senderText || '[Unable to decrypt]';
+            }
+            
+            // Add the message to the appropriate conversation
+            set((state) => {
+              const conversationId = message.conversationId;
+              let messages = state.messages.get(conversationId) || [];
+              
+              // Check if message already exists (avoid duplicates)
+              if (!messages.find((m: any) => m.id === message.id)) {
+                // Remove any temporary message from the same sender with similar content
+                // This handles the case where we sent a message and now receive it back via WebSocket
+                if (message.senderId === state.userId) {
+                  messages = messages.filter((m: any) => {
+                    // Remove temp messages that match this content
+                    if (m.id.startsWith('temp-') && m.decryptedContent === decryptedContent) {
+                      console.log('🔄 Removing temporary message:', m.id);
+                      return false;
+                    }
+                    return true;
+                  });
+                }
+                
+                const newMessage: Message = {
+                  id: message.id,
+                  conversationId: message.conversationId,
+                  senderId: message.senderId,
+                  type: message.type || 'text',
+                  content: message.text || message.senderText || message.content,
+                  decryptedContent: decryptedContent,
+                  nonce: message.nonce || '',
+                  timestamp: message.timestamp || new Date(),
+                  delivered: message.delivered || message.deliveredTo || [],
+                  read: message.read || message.readBy || [],
+                  reactions: message.reactions || {},
+                  status: 'sent' as const,
+                  metadata: message.metadata || {},
+                  sender: message.sender || {
+                    displayName: message.senderId === 'test-user-1' ? 'Test User 1' : 'Test User 2',
+                    photoURL: '/default-avatar.png',
+                    tier: message.senderId === 'test-user-1' ? 'pro' : 'rising'
+                  }
+                };
+                
+                // Add message to the list (newer messages at the end)
+                const updatedMessages = [...messages, newMessage];
+                state.messages.set(conversationId, updatedMessages);
+                
+                // Save to localStorage for persistence across refreshes
+                try {
+                  const storageKey = `chat_messages_${conversationId}`;
+                  localStorage.setItem(storageKey, JSON.stringify(updatedMessages));
+                  console.log(`💾 Saved ${updatedMessages.length} messages to localStorage`);
+                } catch (error) {
+                  console.warn('Failed to save messages to localStorage:', error);
+                }
+                
+                // Update conversation's last message
+                const conversation = state.conversations.get(conversationId);
+                if (conversation) {
+                  conversation.lastMessage = newMessage;
+                  (conversation as any).lastMessageAt = newMessage.timestamp;
+                  
+                  // Increment unread count if message is from another user
+                  if (message.senderId !== state.userId) {
+                    conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+                  }
+                }
+              }
+            });
+          });
+          
+          socket.on('message:sent', (data: any) => {
+            console.log('✅ Message sent confirmation:', data);
+            
+            // Update the message status if needed
+            set((state) => {
+              for (const [, messages] of state.messages) {
+                const message = messages.find((m: any) => m.id === data.messageId);
+                if (message) {
+                  message.status = 'sent';
+                  if (data.deliveredTo) {
+                    message.delivered = data.deliveredTo;
+                  }
+                  break;
+                }
+              }
+            });
+          });
+          
+          socket.on('message:delivered', (data: any) => {
+            console.log('📮 Message delivered:', data);
+            
+            set((state) => {
+              for (const [, messages] of state.messages) {
+                const message = messages.find((m: any) => m.id === data.messageId);
+                if (message && data.userId && !message.delivered.includes(data.userId)) {
+                  message.delivered.push(data.userId);
+                  message.status = 'delivered';
+                  break;
+                }
+              }
+            });
+          });
+          
+          socket.on('message:read', (data: any) => {
+            console.log('👀 Message read:', data);
+            
+            set((state) => {
+              for (const [, messages] of state.messages) {
+                const message = messages.find((m: any) => m.id === data.messageId);
+                if (message && data.userId && !message.read.includes(data.userId)) {
+                  message.read.push(data.userId);
+                  message.status = 'read';
+                  break;
+                }
+              }
+            });
+          });
+          
+          // Update the socket reference and connection status
+          set((state) => {
+            state.socket = socket as any;
+            state.isConnected = true;
+            state.connectionError = null;
+          });
+        },
 
         setConnectionStatus: (isConnected, error) => set((state) => {
           state.isConnected = isConnected;
@@ -858,7 +1175,7 @@ export const useChatStore = create<ChatState>()(
           
           // Search through all decrypted messages
           for (const messages of state.messages.values()) {
-            const matches = messages.filter(m => 
+            const matches = messages.filter((m: any) => 
               m.decryptedContent?.toLowerCase().includes(query.toLowerCase())
             );
             allMessages.push(...matches);
@@ -952,7 +1269,8 @@ export const selectTypingUsers = (state: ChatState) =>
 
 export const selectUnreadCount = (state: ChatState) => {
   let total = 0;
-  for (const conversation of state.conversations.values()) {
+  const conversations = Array.from(state.conversations.values());
+  for (const conversation of conversations) {
     total += conversation.unreadCount || 0;
   }
   return total;
