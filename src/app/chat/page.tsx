@@ -7,6 +7,7 @@ import { Send, Paperclip } from "lucide-react";
 import { collection, addDoc, query, orderBy, onSnapshot, Timestamp, updateDoc, doc } from "firebase/firestore";
 import { useAuth } from "@/contexts/auth-context";
 import { db } from "@/lib/firebase-config";
+import { authManager } from "@/lib/firebase-auth-manager";
 import { generateAIResponse, shouldCreateTicket, extractTicketInfo } from "@/lib/openai-service";
 
 // Utility: safe error details without using 'any'
@@ -64,7 +65,7 @@ const suggestedQuestions = [
 ];
 
 export default function ChatPage() {
-  const { user, platformUser } = useAuth();
+  const { user, platformUser, loading: authLoading } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -89,6 +90,16 @@ export default function ChatPage() {
   const initializeSession = async (): Promise<ChatSession | null> => {
     try {
       console.log("🔍 Initializing chat session...");
+      
+      // Ensure auth is ready before any Firestore operations
+      const authUser = await authManager.waitForAuth();
+      console.log("🔐 Auth state ready:", !!authUser);
+      
+      if (authUser) {
+        await authManager.ensureFreshToken();
+        console.log("🔐 Token refreshed");
+      }
+      
       console.log("🔍 User authenticated:", !!user);
       console.log("🔍 User UID:", user?.uid);
       console.log("🔍 Platform user:", !!platformUser);
@@ -172,13 +183,22 @@ export default function ChatPage() {
     return () => unsubscribe();
   }, [session]);
 
-  // Initialize session on component mount if user is authenticated
+  // Initialize session on component mount
   useEffect(() => {
-    if (user && platformUser && !session) {
+    // Don't initialize while auth is still loading
+    if (authLoading) {
+      console.log('🕑 Waiting for auth to load...');
+      return;
+    }
+    
+    // Initialize session regardless of auth state
+    // Guest users can also use chat support
+    if (!session) {
+      console.log('🎯 Initializing chat session (auth loaded)');
       initializeSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, platformUser, session]);
+  }, [session, authLoading]);
 
   // Send message to OpenAI and get response
   const getAIResponse = async (userMessage: string): Promise<string> => {

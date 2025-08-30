@@ -25,7 +25,7 @@ import { db } from "@/lib/firebase-config";
 import { authManager } from "@/lib/firebase-auth-manager";
 
 export default function EnhancedMessagesPage() {
-  const { user, platformUser, loading: authLoading } = useAuth();
+  const { user, platformUser } = useAuth();
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
@@ -91,16 +91,7 @@ export default function EnhancedMessagesPage() {
 
   // Initialize chat system
   useEffect(() => {
-    // Wait for auth to be determined
-    if (authLoading) {
-      console.log('🕑 Auth still loading...');
-      return;
-    }
-    
-    if (!user) {
-      console.log('⚠️ No user authenticated, cannot initialize chat');
-      return;
-    }
+    if (!user) return;
 
     const initializeChat = async () => {
       try {
@@ -525,46 +516,10 @@ export default function EnhancedMessagesPage() {
     }
   }, [activeMessages, user, addReaction, removeReaction]);
 
-  // Show loading while auth is being determined
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Show login prompt if not authenticated
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="text-center p-8 bg-white rounded-lg shadow-lg max-w-md">
-          <h2 className="text-2xl font-bold mb-4">Authentication Required</h2>
-          <p className="text-gray-600 mb-6">You need to be logged in to access messages.</p>
-          <div className="space-y-3">
-            <a
-              href="/login"
-              className="block w-full px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 transition"
-            >
-              Go to Login
-            </a>
-            <a
-              href="/quick-login"
-              className="block w-full px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-            >
-              Quick Login (Test)
-            </a>
-            <a
-              href="/setup-test-user"
-              className="block w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
-            >
-              Setup Test User
-            </a>
-          </div>
-        </div>
+      <div className="flex items-center justify-center h-screen bg-black">
+        <div className="text-gray-400">Please sign in to access messages</div>
       </div>
     );
   }
