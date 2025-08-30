@@ -1,5 +1,6 @@
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Github, Twitter, Mail } from "lucide-react";
 
 /**
@@ -79,9 +80,13 @@ export function Footer() {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between space-y-4 md:space-y-0">
             {/* Company Info */}
             <div className="flex items-center space-x-2">
-              <div className="flex h-6 w-6 items-center justify-center rounded bg-blue-500">
-                <span className="text-xs font-bold text-white">PXL</span>
-              </div>
+              <Image 
+                src="/logo.svg" 
+                alt="PXL Logo" 
+                width={24} 
+                height={24} 
+                className="h-6 w-6"
+              />
               <span className="text-body-small text-gray-400">
                 © {currentYear} GiftCard + PXL Platform. All rights reserved.
               </span>
