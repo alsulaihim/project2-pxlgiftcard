@@ -172,6 +172,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Artwork Collection - For centralized artwork repository
+    match /artwork/{artworkId} {
+      // Allow authenticated users to read artwork (for gallery selection)
+      allow read: if isAuthenticated();
+      
+      // Allow authenticated users to create and update artwork
+      // In production, should restrict to admin only
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
+    }
+    
     // Chat Sessions Collection - for live chat support
     match /chat-sessions/{sessionId} {
       // Allow anyone to create a new chat session (guests and authenticated users)
