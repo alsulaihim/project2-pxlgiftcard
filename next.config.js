@@ -14,6 +14,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'via.placeholder.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'pxl-perfect-1.firebasestorage.app',
+      },
     ],
   },
   // Security headers
