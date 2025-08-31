@@ -63,6 +63,38 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
     
+    // Product Artwork - Admin only upload, public read
+    match /products/{productId}/artwork_{denomination}_{timestamp}.{ext} {
+      // Only allow admins to upload product artwork
+      allow write: if request.auth != null
+        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid))
+        && request.resource.size < 10 * 1024 * 1024 // Max 10MB
+        && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Allow public read access to product artwork (for marketplace display)
+      allow read: if true;
+      
+      // Only allow admins to delete product artwork
+      allow delete: if request.auth != null
+        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid));
+    }
+    
+    // Product Artwork - Alternative path pattern for flexibility
+    match /products/{productId}/{allPaths=**} {
+      // Only allow admins to upload
+      allow write: if request.auth != null
+        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid))
+        && request.resource.size < 10 * 1024 * 1024 // Max 10MB
+        && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Allow public read access
+      allow read: if true;
+      
+      // Only allow admins to delete
+      allow delete: if request.auth != null
+        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid));
+    }
+    
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;

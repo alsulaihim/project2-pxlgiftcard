@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase-config";
+import { db, storage } from "@/lib/firebase-config";
 import { 
   collection, 
   doc, 
@@ -16,6 +16,7 @@ import {
   orderBy,
   writeBatch
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { 
   Search, 
   Upload, 
@@ -29,8 +30,12 @@ import {
   AlertCircle,
   X,
   CreditCard,
-  Hash
+  Hash,
+  Image as ImageIcon,
+  FileImage
 } from "lucide-react";
+import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
+import Image from "next/image";
 
 interface ProductSerial {
   code: string;
@@ -43,6 +48,7 @@ interface ProductDenomination {
   value: number;
   stock: number;
   serials: ProductSerial[];
+  artworkUrl?: string; // Denomination-specific artwork
 }
 
 interface Product {
@@ -52,6 +58,7 @@ interface Product {
   category: string;
   description: string;
   logo: string;
+  defaultArtworkUrl?: string; // Default artwork for all denominations
   denominations: ProductDenomination[];
   supplierId: string;
   supplierName: string;
@@ -68,12 +75,17 @@ export default function ProductsPage() {
   const { user, platformUser, loading: authLoading, isAdmin } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const artworkInputRef = useRef<HTMLInputElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isArtworkModalOpen, setIsArtworkModalOpen] = useState(false);
+  const [selectedDenomination, setSelectedDenomination] = useState<number | 'default'>('default');
+  const [artworkPreview, setArtworkPreview] = useState<string | null>(null);
+  const [uploadingArtwork, setUploadingArtwork] = useState(false);
 
   // Check admin access
   useEffect(() => {
@@ -284,6 +296,91 @@ export default function ProductsPage() {
     }
   };
 
+  const handleArtworkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedProduct) return;
+
+    const validation = validateImageFile(file);
+    if (validation !== true) {
+      alert(validation);
+      return;
+    }
+
+    setUploadingArtwork(true);
+    try {
+      // Optimize image
+      const { blob, dataUrl } = await optimizeImage(file, {
+        maxWidth: ARTWORK_DIMENSIONS.CARD.width,
+        maxHeight: ARTWORK_DIMENSIONS.CARD.height,
+        quality: 0.9,
+        format: 'webp'
+      });
+
+      // Upload to Firebase Storage
+      const filename = generateArtworkFilename(
+        selectedProduct.id, 
+        selectedDenomination, 
+        file.name
+      );
+      const storageRef = ref(storage, filename);
+      await uploadBytes(storageRef, blob);
+      const downloadUrl = await getDownloadURL(storageRef);
+
+      // Update product in Firestore
+      if (selectedDenomination === 'default') {
+        // Update default artwork
+        await updateDoc(doc(db, 'products', selectedProduct.id), {
+          defaultArtworkUrl: downloadUrl,
+          updatedAt: Timestamp.now()
+        });
+        
+        // Update local state
+        setProducts(products.map(p => 
+          p.id === selectedProduct.id 
+            ? { ...p, defaultArtworkUrl: downloadUrl }
+            : p
+        ));
+      } else {
+        // Update denomination-specific artwork
+        const updatedDenominations = selectedProduct.denominations.map(d => 
+          d.value === selectedDenomination
+            ? { ...d, artworkUrl: downloadUrl }
+            : d
+        );
+        
+        await updateDoc(doc(db, 'products', selectedProduct.id), {
+          denominations: updatedDenominations,
+          updatedAt: Timestamp.now()
+        });
+        
+        // Update local state
+        setProducts(products.map(p => 
+          p.id === selectedProduct.id 
+            ? { ...p, denominations: updatedDenominations }
+            : p
+        ));
+      }
+
+      setArtworkPreview(null);
+      setIsArtworkModalOpen(false);
+      alert('Artwork uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading artwork:', error);
+      alert('Failed to upload artwork');
+    } finally {
+      setUploadingArtwork(false);
+      if (artworkInputRef.current) {
+        artworkInputRef.current.value = '';
+      }
+    }
+  };
+
+  const openArtworkModal = (product: Product, denomination: number | 'default' = 'default') => {
+    setSelectedProduct(product);
+    setSelectedDenomination(denomination);
+    setIsArtworkModalOpen(true);
+  };
+
   const filteredProducts = products.filter(product =>
     product.brand.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -372,6 +469,14 @@ export default function ProductsPage() {
               </div>
               <div className="flex space-x-2">
                 <button
+                  onClick={() => openArtworkModal(product)}
+                  className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-colors"
+                  aria-label="Upload artwork"
+                  title="Upload artwork"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                </button>
+                <button
                   onClick={() => {
                     setSelectedProduct(product);
                     setIsModalOpen(true);
@@ -432,12 +537,24 @@ export default function ProductsPage() {
               <p className="text-xs text-gray-500 mb-2">Available Denominations:</p>
               <div className="flex flex-wrap gap-2">
                 {product.denominations.map((denom, idx) => (
-                  <div key={idx} className="bg-gray-800 px-2 py-1 rounded text-xs">
+                  <div 
+                    key={idx} 
+                    className="bg-gray-800 px-2 py-1 rounded text-xs flex items-center gap-1"
+                  >
                     <span className="text-white">${denom.value}</span>
-                    <span className="text-gray-400 ml-1">({denom.stock})</span>
+                    <span className="text-gray-400">({denom.stock})</span>
+                    {(denom.artworkUrl || product.defaultArtworkUrl) && (
+                      <ImageIcon className="h-3 w-3 text-green-400" title="Has artwork" />
+                    )}
                   </div>
                 ))}
               </div>
+              {product.defaultArtworkUrl && (
+                <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
+                  <ImageIcon className="h-3 w-3" />
+                  Default artwork uploaded
+                </p>
+              )}
             </div>
           </div>
         ))}
@@ -447,6 +564,166 @@ export default function ProductsPage() {
         <div className="text-center py-12">
           <Package className="h-12 w-12 text-gray-600 mx-auto mb-4" />
           <p className="text-gray-400">No products found</p>
+        </div>
+      )}
+
+      {/* Artwork Upload Modal */}
+      {isArtworkModalOpen && selectedProduct && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-800">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">Upload Artwork</h2>
+                  <p className="text-gray-400 mt-1">
+                    {selectedProduct.brand} - {selectedProduct.name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsArtworkModalOpen(false);
+                    setArtworkPreview(null);
+                    setSelectedDenomination('default');
+                  }}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Denomination Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Select Denomination
+                </label>
+                <select
+                  value={selectedDenomination}
+                  onChange={(e) => setSelectedDenomination(
+                    e.target.value === 'default' ? 'default' : Number(e.target.value)
+                  )}
+                  className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="default">Default (All Denominations)</option>
+                  {selectedProduct.denominations.map((denom) => (
+                    <option key={denom.value} value={denom.value}>
+                      ${denom.value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Current Artwork Preview */}
+              {(selectedDenomination === 'default' ? selectedProduct.defaultArtworkUrl : 
+                selectedProduct.denominations.find(d => d.value === selectedDenomination)?.artworkUrl) && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                    Current Artwork
+                  </label>
+                  <div className="relative w-full h-48 bg-gray-800 rounded-lg overflow-hidden">
+                    <Image
+                      src={selectedDenomination === 'default' ? selectedProduct.defaultArtworkUrl! : 
+                        selectedProduct.denominations.find(d => d.value === selectedDenomination)?.artworkUrl!}
+                      alt="Current artwork"
+                      fill
+                      className="object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Image Requirements */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="text-sm font-medium text-white mb-2">Image Requirements</h3>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>• Recommended dimensions: {ARTWORK_DIMENSIONS.CARD.width} x {ARTWORK_DIMENSIONS.CARD.height}px (3:2 ratio)</li>
+                  <li>• Maximum file size: 10MB</li>
+                  <li>• Supported formats: JPEG, PNG, WebP, GIF</li>
+                  <li>• Images will be automatically optimized for web display</li>
+                </ul>
+              </div>
+
+              {/* Upload Area */}
+              <div>
+                <input
+                  ref={artworkInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const validation = validateImageFile(file);
+                      if (validation === true) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setArtworkPreview(ev.target?.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      } else {
+                        alert(validation);
+                        e.target.value = '';
+                      }
+                    }
+                  }}
+                  className="hidden"
+                />
+                
+                <div
+                  onClick={() => artworkInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center cursor-pointer hover:border-gray-600 transition-colors"
+                >
+                  {artworkPreview ? (
+                    <div>
+                      <div className="relative w-full h-48 mb-4">
+                        <Image
+                          src={artworkPreview}
+                          alt="Preview"
+                          fill
+                          className="object-contain"
+                        />
+                      </div>
+                      <p className="text-sm text-gray-400">Click to select a different image</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <FileImage className="h-12 w-12 text-gray-600 mx-auto mb-4" />
+                      <p className="text-white mb-2">Click to upload artwork</p>
+                      <p className="text-sm text-gray-400">or drag and drop your image here</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => {
+                    setIsArtworkModalOpen(false);
+                    setArtworkPreview(null);
+                    setSelectedDenomination('default');
+                  }}
+                  className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => artworkInputRef.current?.files?.[0] && handleArtworkUpload({ target: artworkInputRef.current } as any)}
+                  disabled={!artworkPreview || uploadingArtwork}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {uploadingArtwork ? (
+                    <span className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      Uploading...
+                    </span>
+                  ) : (
+                    'Upload Artwork'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
