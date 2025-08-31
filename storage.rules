@@ -63,36 +63,19 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
     
-    // Product Artwork - Admin only upload, public read
-    match /products/{productId}/artwork_{denomination}_{timestamp}.{ext} {
-      // Only allow admins to upload product artwork
-      allow write: if request.auth != null
-        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid))
-        && request.resource.size < 10 * 1024 * 1024 // Max 10MB
-        && request.resource.contentType.matches('image/.*'); // Only images
-      
-      // Allow public read access to product artwork (for marketplace display)
-      allow read: if true;
-      
-      // Only allow admins to delete product artwork
-      allow delete: if request.auth != null
-        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid));
-    }
-    
-    // Product Artwork - Alternative path pattern for flexibility
+    // Product Artwork - Simplified for development (TODO: Add proper admin check in production)
     match /products/{productId}/{allPaths=**} {
-      // Only allow admins to upload
+      // Allow authenticated users to upload product artwork
+      // In production, should check for admin role
       allow write: if request.auth != null
-        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid))
         && request.resource.size < 10 * 1024 * 1024 // Max 10MB
         && request.resource.contentType.matches('image/.*'); // Only images
       
-      // Allow public read access
+      // Allow public read access for marketplace display
       allow read: if true;
       
-      // Only allow admins to delete
-      allow delete: if request.auth != null
-        && exists(/databases/(default)/documents/admin-users/$(request.auth.uid));
+      // Allow authenticated users to delete
+      allow delete: if request.auth != null;
     }
     
     // Deny all other access
