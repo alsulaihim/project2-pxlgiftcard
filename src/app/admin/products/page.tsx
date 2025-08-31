@@ -97,6 +97,7 @@ export default function ProductsPage() {
     category: '',
     description: '',
     logo: '',
+    defaultArtworkUrl: '',
     supplierId: '',
     supplierName: '',
     commission: 10,
@@ -474,6 +475,7 @@ export default function ProductsPage() {
       category: '',
       description: '',
       logo: '',
+      defaultArtworkUrl: '',
       supplierId: '',
       supplierName: '',
       commission: 10,
@@ -494,6 +496,7 @@ export default function ProductsPage() {
         category: product.category,
         description: product.description,
         logo: product.logo,
+        defaultArtworkUrl: product.defaultArtworkUrl || '',
         supplierId: product.supplierId,
         supplierName: product.supplierName,
         commission: product.commission,
@@ -795,6 +798,57 @@ export default function ProductsPage() {
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
                   placeholder="https://example.com/logo.png"
                 />
+              </div>
+
+              {/* Default Artwork */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Default Artwork</label>
+                <div className="space-y-2">
+                  {/* Current Artwork Preview */}
+                  {formData.defaultArtworkUrl && (
+                    <div className="relative w-full h-32 bg-gray-800 rounded-lg overflow-hidden">
+                      <Image
+                        src={formData.defaultArtworkUrl}
+                        alt="Default artwork"
+                        fill
+                        className="object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, defaultArtworkUrl: '' })}
+                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Selection Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowArtworkGallery(true);
+                        setSelectedArtworkForProduct(formData.defaultArtworkUrl);
+                      }}
+                      className="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                      Select from Gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // This will open the artwork upload modal after the product is saved
+                        alert('Save the product first, then upload artwork from the product card');
+                      }}
+                      className="flex-1 px-3 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload New
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1147,11 +1201,18 @@ export default function ProductsPage() {
         isOpen={showArtworkGallery}
         onClose={() => setShowArtworkGallery(false)}
         onSelect={(artwork) => {
-          setSelectedArtworkForProduct(artwork.url);
-          setArtworkPreview(null); // Clear file upload preview
+          // Check if we're in the product form or artwork upload modal
+          if (isModalOpen) {
+            // We're in the product creation/edit form
+            setFormData({ ...formData, defaultArtworkUrl: artwork.url });
+          } else {
+            // We're in the artwork upload modal
+            setSelectedArtworkForProduct(artwork.url);
+            setArtworkPreview(null); // Clear file upload preview
+          }
           setShowArtworkGallery(false);
         }}
-        selectedArtworkUrl={selectedArtworkForProduct || undefined}
+        selectedArtworkUrl={formData.defaultArtworkUrl || selectedArtworkForProduct || undefined}
       />
     </div>
   );
