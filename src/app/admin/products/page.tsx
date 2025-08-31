@@ -33,7 +33,10 @@ import {
   Hash,
   Image as ImageIcon,
   FileImage,
-  ImagePlus
+  ImagePlus,
+  Grid,
+  List,
+  Palette
 } from "lucide-react";
 import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 import Image from "next/image";
@@ -91,6 +94,7 @@ export default function ProductsPage() {
   const [uploadingArtwork, setUploadingArtwork] = useState(false);
   const [showArtworkGallery, setShowArtworkGallery] = useState(false);
   const [selectedArtworkForProduct, setSelectedArtworkForProduct] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [formData, setFormData] = useState({
     brand: '',
     name: '',
@@ -545,13 +549,41 @@ export default function ProductsPage() {
             className="hidden"
             aria-label="CSV file upload"
           />
+          
+          {/* View Mode Toggle */}
+          <div className="flex bg-gray-800 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded ${viewMode === 'grid' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+              title="Grid view"
+            >
+              <Grid className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded ${viewMode === 'list' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+              title="List view"
+            >
+              <List className="h-4 w-4" />
+            </button>
+          </div>
+          
+          <button
+            onClick={() => router.push('/admin/artwork')}
+            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            title="Manage artwork repository"
+          >
+            <Palette className="h-4 w-4 mr-2" />
+            Artwork
+          </button>
+          
           <button
             onClick={downloadCSVTemplate}
             className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             title="Download CSV template with sample data"
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
-            Download Template
+            Template
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -559,7 +591,7 @@ export default function ProductsPage() {
             className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
           >
             <Upload className="h-4 w-4 mr-2" />
-            {isUploading ? 'Uploading...' : 'Import CSV'}
+            {isUploading ? 'Uploading...' : 'Import'}
           </button>
           <button
             onClick={() => openProductModal()}
@@ -583,127 +615,212 @@ export default function ProductsPage() {
         />
       </div>
 
-      {/* Products Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredProducts.map((product) => (
-          <div key={product.id} className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
-            {/* Product Artwork Display */}
-            {(product.defaultArtworkUrl || product.denominations.some(d => d.artworkUrl)) && (
-              <div className="relative h-48 bg-gray-800">
-                <Image
-                  src={product.defaultArtworkUrl || product.denominations.find(d => d.artworkUrl)?.artworkUrl || ''}
-                  alt={`${product.brand} ${product.name}`}
-                  fill
-                  className="object-cover"
-                />
-                {product.featured && (
-                  <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-semibold">
-                    Featured
-                  </div>
-                )}
-              </div>
-            )}
-            
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div 
-                  className="w-16 h-16 rounded-lg flex items-center justify-center text-2xl font-bold"
-                  style={{ backgroundColor: product.bgColor }}
-                >
-                  {product.brand.substring(0, 2).toUpperCase()}
+      {/* Products Display */}
+      {viewMode === 'grid' ? (
+        // Compact Grid View
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-gray-600 transition-all">
+              {/* Compact Artwork Display */}
+              {(product.defaultArtworkUrl || product.denominations.some(d => d.artworkUrl)) && (
+                <div className="relative h-32 bg-gray-800">
+                  <Image
+                    src={product.defaultArtworkUrl || product.denominations.find(d => d.artworkUrl)?.artworkUrl || ''}
+                    alt={`${product.brand} ${product.name}`}
+                    fill
+                    className="object-cover"
+                  />
+                  {product.featured && (
+                    <div className="absolute top-1 right-1 bg-yellow-500 text-black px-1.5 py-0.5 rounded text-xs font-semibold">
+                      Featured
+                    </div>
+                  )}
                 </div>
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => openArtworkModal(product)}
-                  className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Upload artwork"
-                  title="Upload artwork"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => openProductModal(product)}
-                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Edit product"
-                >
-                  <Edit2 className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => handleDeleteProduct(product.id)}
-                  className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors"
-                  aria-label="Delete product"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <h3 className="text-lg font-semibold text-white mb-1">{product.brand}</h3>
-            <p className="text-sm text-gray-400 mb-4">{product.name}</p>
-
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Category:</span>
-                <span className="text-white">{product.category}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Supplier:</span>
-                <span className="text-white">{product.supplierName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Commission:</span>
-                <span className="text-white">{product.commission}%</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Denominations:</span>
-                <span className="text-white">{product.denominations.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Total Stock:</span>
-                <span className="text-white">{getTotalStock(product)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Status:</span>
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                  product.status === 'active' ? 'bg-green-900 text-green-300' :
-                  product.status === 'inactive' ? 'bg-gray-700 text-gray-300' :
-                  'bg-red-900 text-red-300'
-                }`}>
-                  {product.status}
-                </span>
-              </div>
-            </div>
-
-            {/* Denomination Details */}
-            <div className="mt-4 pt-4 border-t border-gray-800">
-              <p className="text-xs text-gray-500 mb-2">Available Denominations:</p>
-              <div className="flex flex-wrap gap-2">
-                {product.denominations.map((denom, idx) => (
+              )}
+              
+              <div className="p-3">
+                <div className="flex justify-between items-start mb-2">
                   <div 
-                    key={idx} 
-                    className="bg-gray-800 px-2 py-1 rounded text-xs flex items-center gap-1"
+                    className="w-10 h-10 rounded flex items-center justify-center text-sm font-bold"
+                    style={{ backgroundColor: product.bgColor }}
                   >
-                    <span className="text-white">${denom.value}</span>
-                    <span className="text-gray-400">({denom.stock})</span>
-                    {(denom.artworkUrl || product.defaultArtworkUrl) && (
-                      <span title="Has artwork">
-                        <ImageIcon className="h-3 w-3 text-green-400" />
+                    {product.brand.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div className="flex space-x-1">
+                    <button
+                      onClick={() => openArtworkModal(product)}
+                      className="p-1 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded transition-colors"
+                      aria-label="Upload artwork"
+                      title="Upload artwork"
+                    >
+                      <ImageIcon className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => openProductModal(product)}
+                      className="p-1 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors"
+                      aria-label="Edit product"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(product.id)}
+                      className="p-1 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded transition-colors"
+                      aria-label="Delete product"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <h3 className="text-sm font-semibold text-white truncate">{product.brand}</h3>
+                <p className="text-xs text-gray-400 truncate mb-2">{product.name}</p>
+
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Stock:</span>
+                    <span className="text-white">{getTotalStock(product)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Commission:</span>
+                    <span className="text-white">{product.commission}%</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-500">Status:</span>
+                    <span className={`px-1.5 py-0.5 rounded text-xs ${
+                      product.status === 'active' ? 'bg-green-900 text-green-300' :
+                      product.status === 'inactive' ? 'bg-gray-700 text-gray-300' :
+                      'bg-red-900 text-red-300'
+                    }`}>
+                      {product.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Compact Denomination Display */}
+                <div className="mt-2 pt-2 border-t border-gray-800">
+                  <div className="flex flex-wrap gap-1">
+                    {product.denominations.slice(0, 3).map((denom, idx) => (
+                      <span 
+                        key={idx} 
+                        className="bg-gray-800 px-1.5 py-0.5 rounded text-xs"
+                      >
+                        ${denom.value}
                       </span>
+                    ))}
+                    {product.denominations.length > 3 && (
+                      <span className="text-xs text-gray-500">+{product.denominations.length - 3}</span>
                     )}
                   </div>
-                ))}
+                </div>
               </div>
-              {product.defaultArtworkUrl && (
-                <p className="text-xs text-green-400 mt-2 flex items-center gap-1">
-                  <ImageIcon className="h-3 w-3" />
-                  Default artwork uploaded
-                </p>
-              )}
             </div>
+          ))}
+        </div>
+      ) : (
+        // List View
+        <div className="space-y-2">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="bg-gray-900 rounded-lg border border-gray-800 hover:border-gray-600 transition-all p-4">
+              <div className="flex items-center gap-4">
+                {/* Thumbnail */}
+                {product.defaultArtworkUrl ? (
+                  <div className="relative w-20 h-20 bg-gray-800 rounded overflow-hidden flex-shrink-0">
+                    <Image
+                      src={product.defaultArtworkUrl}
+                      alt={`${product.brand} ${product.name}`}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div 
+                    className="w-20 h-20 rounded flex items-center justify-center text-lg font-bold flex-shrink-0"
+                    style={{ backgroundColor: product.bgColor }}
+                  >
+                    {product.brand.substring(0, 2).toUpperCase()}
+                  </div>
+                )}
+                
+                {/* Product Info */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500">Brand</p>
+                    <p className="text-sm font-semibold text-white">{product.brand}</p>
+                    <p className="text-xs text-gray-400">{product.name}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-gray-500">Category</p>
+                    <p className="text-sm text-white">{product.category || 'N/A'}</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-gray-500">Stock / Commission</p>
+                    <p className="text-sm text-white">{getTotalStock(product)} / {product.commission}%</p>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-gray-500">Denominations</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {product.denominations.slice(0, 4).map((denom, idx) => (
+                        <span key={idx} className="bg-gray-800 px-1.5 py-0.5 rounded text-xs">
+                          ${denom.value}
+                        </span>
+                      ))}
+                      {product.denominations.length > 4 && (
+                        <span className="text-xs text-gray-500">+{product.denominations.length - 4}</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-gray-500">Status</p>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 rounded text-xs ${
+                        product.status === 'active' ? 'bg-green-900 text-green-300' :
+                        product.status === 'inactive' ? 'bg-gray-700 text-gray-300' :
+                        'bg-red-900 text-red-300'
+                      }`}>
+                        {product.status}
+                      </span>
+                      {product.featured && (
+                        <span className="bg-yellow-900 text-yellow-300 px-2 py-1 rounded text-xs">
+                          Featured
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openArtworkModal(product)}
+                    className="p-2 text-gray-400 hover:text-blue-400 hover:bg-gray-800 rounded-lg transition-colors"
+                    title="Upload artwork"
+                  >
+                    <ImageIcon className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => openProductModal(product)}
+                    className="p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+                    title="Edit product"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteProduct(product.id)}
+                    className="p-2 text-gray-400 hover:text-red-400 hover:bg-gray-800 rounded-lg transition-colors"
+                    title="Delete product"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {filteredProducts.length === 0 && (
         <div className="text-center py-12">
