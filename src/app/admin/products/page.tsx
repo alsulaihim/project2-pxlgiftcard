@@ -64,6 +64,7 @@ interface Product {
   supplierName: string;
   commission: number; // percentage
   status: 'active' | 'inactive' | 'out_of_stock';
+  featured: boolean; // Show on homepage
   popularity: number;
   totalSold: number;
   bgColor: string;
@@ -97,6 +98,7 @@ export default function ProductsPage() {
     commission: 10,
     bgColor: '#000000',
     status: 'active' as const,
+    featured: false,
     denominations: [{ value: 25, stock: 0, serials: [] }] as ProductDenomination[]
   });
 
@@ -443,6 +445,7 @@ export default function ProductsPage() {
       commission: 10,
       bgColor: '#000000',
       status: 'active',
+      featured: false,
       denominations: [{ value: 25, stock: 0, serials: [] }]
     });
     setSelectedProduct(null);
@@ -462,6 +465,7 @@ export default function ProductsPage() {
         commission: product.commission,
         bgColor: product.bgColor,
         status: product.status,
+        featured: product.featured || false,
         denominations: product.denominations
       });
     } else {
@@ -545,14 +549,32 @@ export default function ProductsPage() {
       {/* Products Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredProducts.map((product) => (
-          <div key={product.id} className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-            <div className="flex justify-between items-start mb-4">
-              <div 
-                className="w-16 h-16 rounded-lg flex items-center justify-center text-2xl font-bold"
-                style={{ backgroundColor: product.bgColor }}
-              >
-                {product.brand.substring(0, 2).toUpperCase()}
+          <div key={product.id} className="bg-gray-900 rounded-xl overflow-hidden border border-gray-800">
+            {/* Product Artwork Display */}
+            {(product.defaultArtworkUrl || product.denominations.some(d => d.artworkUrl)) && (
+              <div className="relative h-48 bg-gray-800">
+                <Image
+                  src={product.defaultArtworkUrl || product.denominations.find(d => d.artworkUrl)?.artworkUrl || ''}
+                  alt={`${product.brand} ${product.name}`}
+                  fill
+                  className="object-cover"
+                />
+                {product.featured && (
+                  <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-semibold">
+                    Featured
+                  </div>
+                )}
               </div>
+            )}
+            
+            <div className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div 
+                  className="w-16 h-16 rounded-lg flex items-center justify-center text-2xl font-bold"
+                  style={{ backgroundColor: product.bgColor }}
+                >
+                  {product.brand.substring(0, 2).toUpperCase()}
+                </div>
               <div className="flex space-x-2">
                 <button
                   onClick={() => openArtworkModal(product)}
@@ -640,6 +662,7 @@ export default function ProductsPage() {
                   Default artwork uploaded
                 </p>
               )}
+            </div>
             </div>
           </div>
         ))}
@@ -792,18 +815,36 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              {/* Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="out_of_stock">Out of Stock</option>
-                </select>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Status */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="out_of_stock">Out of Stock</option>
+                  </select>
+                </div>
+
+                {/* Featured */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Featured Product</label>
+                  <div className="flex items-center h-10">
+                    <input
+                      type="checkbox"
+                      checked={formData.featured}
+                      onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                    <label className="ml-2 text-sm text-gray-400">
+                      Show on homepage
+                    </label>
+                  </div>
+                </div>
               </div>
 
               {/* Denominations */}
