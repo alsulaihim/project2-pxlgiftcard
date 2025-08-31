@@ -5,10 +5,9 @@ import { db, storage } from "@/lib/firebase-config";
 import { collection, addDoc, deleteDoc, doc, getDocs, query, orderBy, Timestamp, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Plus, Trash2, Edit2, Image as ImageIcon, Search, Grid, List, X, Check, Upload } from "lucide-react";
 import Image from "next/image";
-import { optimizeArtworkImage } from "@/lib/image-optimizer";
+import { optimizeImage, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 
 interface Artwork {
   id: string;
@@ -96,7 +95,12 @@ export default function ArtworkRepositoryPage() {
     setUploading(true);
     try {
       // Optimize the image
-      const optimizedBlob = await optimizeArtworkImage(uploadForm.file, "CARD");
+      const { blob: optimizedBlob } = await optimizeImage(uploadForm.file, {
+        maxWidth: ARTWORK_DIMENSIONS.CARD.width,
+        maxHeight: ARTWORK_DIMENSIONS.CARD.height,
+        quality: 0.9,
+        format: 'webp'
+      });
       
       // Create storage reference
       const timestamp = Date.now();
@@ -398,8 +402,8 @@ export default function ArtworkRepositoryPage() {
             <div className="space-y-4">
               {/* File Upload */}
               <div>
-                <Label>Image File</Label>
-                <div className="mt-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Image File</label>
+                <div>
                   <label className="flex items-center justify-center w-full h-32 border-2 border-dashed border-[#262626] rounded-lg cursor-pointer hover:border-[#333333] transition-colors">
                     <div className="text-center">
                       {uploadForm.file ? (
@@ -426,7 +430,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Name */}
               <div>
-                <Label>Name</Label>
+                <label className="block text-sm font-medium text-gray-300">Name</label>
                 <input
                   value={uploadForm.name}
                   onChange={(e) => setUploadForm({ ...uploadForm, name: e.target.value })}
@@ -437,7 +441,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Category */}
               <div>
-                <Label>Category</Label>
+                <label className="block text-sm font-medium text-gray-300">Category</label>
                 <select
                   value={uploadForm.category}
                   onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
@@ -452,7 +456,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Tags */}
               <div>
-                <Label>Tags (comma-separated)</Label>
+                <label className="block text-sm font-medium text-gray-300">Tags (comma-separated)</label>
                 <input
                   value={uploadForm.tags}
                   onChange={(e) => setUploadForm({ ...uploadForm, tags: e.target.value })}
@@ -511,7 +515,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Name */}
               <div>
-                <Label>Name</Label>
+                <label className="block text-sm font-medium text-gray-300">Name</label>
                 <input
                   value={editingArtwork.name}
                   onChange={(e) => setEditingArtwork({ ...editingArtwork, name: e.target.value })}
@@ -521,7 +525,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Category */}
               <div>
-                <Label>Category</Label>
+                <label className="block text-sm font-medium text-gray-300">Category</label>
                 <select
                   value={editingArtwork.category}
                   onChange={(e) => setEditingArtwork({ ...editingArtwork, category: e.target.value })}
@@ -535,7 +539,7 @@ export default function ArtworkRepositoryPage() {
 
               {/* Tags */}
               <div>
-                <Label>Tags</Label>
+                <label className="block text-sm font-medium text-gray-300">Tags</label>
                 <input
                   value={editingArtwork.tags.join(", ")}
                   onChange={(e) => setEditingArtwork({
