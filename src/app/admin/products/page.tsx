@@ -544,7 +544,9 @@ export default function ProductsPage() {
                     <span className="text-white">${denom.value}</span>
                     <span className="text-gray-400">({denom.stock})</span>
                     {(denom.artworkUrl || product.defaultArtworkUrl) && (
-                      <ImageIcon className="h-3 w-3 text-green-400" title="Has artwork" />
+                      <span title="Has artwork">
+                        <ImageIcon className="h-3 w-3 text-green-400" />
+                      </span>
                     )}
                   </div>
                 ))}
