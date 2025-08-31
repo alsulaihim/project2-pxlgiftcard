@@ -32,10 +32,12 @@ import {
   CreditCard,
   Hash,
   Image as ImageIcon,
-  FileImage
+  FileImage,
+  ImagePlus
 } from "lucide-react";
 import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 import Image from "next/image";
+import { ArtworkGalleryModal } from "@/components/admin/artwork-gallery-modal";
 
 interface ProductSerial {
   code: string;
@@ -87,6 +89,8 @@ export default function ProductsPage() {
   const [selectedDenomination, setSelectedDenomination] = useState<number | 'default'>('default');
   const [artworkPreview, setArtworkPreview] = useState<string | null>(null);
   const [uploadingArtwork, setUploadingArtwork] = useState(false);
+  const [showArtworkGallery, setShowArtworkGallery] = useState(false);
+  const [selectedArtworkForProduct, setSelectedArtworkForProduct] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     brand: '',
     name: '',
@@ -311,35 +315,64 @@ export default function ProductsPage() {
     }
   };
 
-  const handleArtworkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !selectedProduct) return;
-
-    const validation = validateImageFile(file);
-    if (validation !== true) {
-      alert(validation);
-      return;
-    }
+  const handleArtworkUpload = async () => {
+    if (!selectedProduct || (!artworkPreview && !selectedArtworkForProduct)) return;
 
     setUploadingArtwork(true);
     try {
-      // Optimize image
-      const { blob, dataUrl } = await optimizeImage(file, {
-        maxWidth: ARTWORK_DIMENSIONS.CARD.width,
-        maxHeight: ARTWORK_DIMENSIONS.CARD.height,
-        quality: 0.9,
-        format: 'webp'
-      });
+      let downloadUrl: string;
+      
+      // Check if using gallery selection or new upload
+      if (selectedArtworkForProduct) {
+        // Using artwork from gallery
+        downloadUrl = selectedArtworkForProduct;
+      } else if (artworkPreview) {
+        // Uploading new artwork
+        const file = artworkInputRef.current?.files?.[0];
+        if (!file) {
+          alert('Please select an image');
+          return;
+        }
 
-      // Upload to Firebase Storage
-      const filename = generateArtworkFilename(
-        selectedProduct.id, 
-        selectedDenomination, 
-        file.name
-      );
-      const storageRef = ref(storage, filename);
-      await uploadBytes(storageRef, blob);
-      const downloadUrl = await getDownloadURL(storageRef);
+        const validation = validateImageFile(file);
+        if (validation !== true) {
+          alert(validation);
+          return;
+        }
+
+        // Optimize image
+        const { blob, dataUrl } = await optimizeImage(file, {
+          maxWidth: ARTWORK_DIMENSIONS.CARD.width,
+          maxHeight: ARTWORK_DIMENSIONS.CARD.height,
+          quality: 0.9,
+          format: 'webp'
+        });
+
+        // Upload to Firebase Storage
+        const filename = generateArtworkFilename(
+          selectedProduct.id, 
+          selectedDenomination, 
+          file.name
+        );
+        const storageRef = ref(storage, filename);
+        await uploadBytes(storageRef, blob);
+        downloadUrl = await getDownloadURL(storageRef);
+        
+        // Also add to artwork repository for future use
+        await addDoc(collection(db, 'artwork'), {
+          name: `${selectedProduct.brand} - ${selectedProduct.name}`,
+          url: downloadUrl,
+          category: selectedProduct.category || 'Other',
+          tags: [selectedProduct.brand.toLowerCase(), selectedProduct.name.toLowerCase()],
+          dimensions: ARTWORK_DIMENSIONS.CARD,
+          fileSize: blob.size,
+          uploadedAt: Timestamp.now(),
+          usageCount: 1
+        });
+      } else {
+        alert('Please select or upload an artwork');
+        return;
+      }
 
       // Update product in Firestore
       if (selectedDenomination === 'default') {
@@ -377,8 +410,9 @@ export default function ProductsPage() {
       }
 
       setArtworkPreview(null);
+      setSelectedArtworkForProduct(null);
       setIsArtworkModalOpen(false);
-      alert('Artwork uploaded successfully!');
+      alert('Artwork updated successfully!');
     } catch (error) {
       console.error('Error uploading artwork:', error);
       alert('Failed to upload artwork');
@@ -992,8 +1026,38 @@ export default function ProductsPage() {
                 </ul>
               </div>
 
-              {/* Upload Area */}
-              <div>
+              {/* Artwork Selection Options */}
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-300 mb-3">
+                  Select Artwork
+                </label>
+                
+                {/* Option Buttons */}
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Select from Gallery */}
+                  <button
+                    type="button"
+                    onClick={() => setShowArtworkGallery(true)}
+                    className="flex flex-col items-center justify-center p-6 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-gray-600 transition-colors"
+                  >
+                    <ImagePlus className="h-8 w-8 text-blue-400 mb-2" />
+                    <span className="text-white font-medium">Choose from Gallery</span>
+                    <span className="text-xs text-gray-400 mt-1">Select existing artwork</span>
+                  </button>
+                  
+                  {/* Upload New */}
+                  <button
+                    type="button"
+                    onClick={() => artworkInputRef.current?.click()}
+                    className="flex flex-col items-center justify-center p-6 bg-gray-800 border border-gray-700 rounded-lg hover:bg-gray-700 hover:border-gray-600 transition-colors"
+                  >
+                    <Upload className="h-8 w-8 text-green-400 mb-2" />
+                    <span className="text-white font-medium">Upload New</span>
+                    <span className="text-xs text-gray-400 mt-1">Add new artwork</span>
+                  </button>
+                </div>
+                
+                {/* Hidden File Input */}
                 <input
                   ref={artworkInputRef}
                   type="file"
@@ -1006,6 +1070,7 @@ export default function ProductsPage() {
                         const reader = new FileReader();
                         reader.onload = (ev) => {
                           setArtworkPreview(ev.target?.result as string);
+                          setSelectedArtworkForProduct(null); // Clear gallery selection
                         };
                         reader.readAsDataURL(file);
                       } else {
@@ -1017,30 +1082,32 @@ export default function ProductsPage() {
                   className="hidden"
                 />
                 
-                <div
-                  onClick={() => artworkInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center cursor-pointer hover:border-gray-600 transition-colors"
-                >
-                  {artworkPreview ? (
-                    <div>
-                      <div className="relative w-full h-48 mb-4">
-                        <Image
-                          src={artworkPreview}
-                          alt="Preview"
-                          fill
-                          className="object-contain"
-                        />
-                      </div>
-                      <p className="text-sm text-gray-400">Click to select a different image</p>
+                {/* Preview Area */}
+                {(artworkPreview || selectedArtworkForProduct) && (
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-3">
+                      Selected Artwork
+                    </label>
+                    <div className="relative w-full h-48 bg-gray-800 rounded-lg overflow-hidden">
+                      <Image
+                        src={artworkPreview || selectedArtworkForProduct || ''}
+                        alt="Selected artwork"
+                        fill
+                        className="object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setArtworkPreview(null);
+                          setSelectedArtworkForProduct(null);
+                        }}
+                        className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
-                  ) : (
-                    <div>
-                      <FileImage className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                      <p className="text-white mb-2">Click to upload artwork</p>
-                      <p className="text-sm text-gray-400">or drag and drop your image here</p>
-                    </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -1056,8 +1123,8 @@ export default function ProductsPage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => artworkInputRef.current?.files?.[0] && handleArtworkUpload({ target: artworkInputRef.current } as any)}
-                  disabled={!artworkPreview || uploadingArtwork}
+                  onClick={handleArtworkUpload}
+                  disabled={(!artworkPreview && !selectedArtworkForProduct) || uploadingArtwork}
                   className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {uploadingArtwork ? (
@@ -1066,7 +1133,7 @@ export default function ProductsPage() {
                       Uploading...
                     </span>
                   ) : (
-                    'Upload Artwork'
+                    'Save Artwork'
                   )}
                 </button>
               </div>
@@ -1074,6 +1141,18 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+
+      {/* Artwork Gallery Modal */}
+      <ArtworkGalleryModal
+        isOpen={showArtworkGallery}
+        onClose={() => setShowArtworkGallery(false)}
+        onSelect={(artwork) => {
+          setSelectedArtworkForProduct(artwork.url);
+          setArtworkPreview(null); // Clear file upload preview
+          setShowArtworkGallery(false);
+        }}
+        selectedArtworkUrl={selectedArtworkForProduct || undefined}
+      />
     </div>
   );
 }

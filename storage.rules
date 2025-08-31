@@ -78,6 +78,21 @@ service firebase.storage {
       allow delete: if request.auth != null;
     }
     
+    // Artwork Repository - Centralized artwork storage
+    match /artwork-repository/{allPaths=**} {
+      // Allow authenticated users to upload artwork to repository
+      // In production, should check for admin role
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024 // Max 10MB
+        && request.resource.contentType.matches('image/.*'); // Only images
+      
+      // Allow public read access for gallery and product display
+      allow read: if true;
+      
+      // Allow authenticated users to delete
+      allow delete: if request.auth != null;
+    }
+    
     // Deny all other access
     match /{allPaths=**} {
       allow read, write: if false;
