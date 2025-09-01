@@ -22,11 +22,14 @@ interface Product {
   category: string;
   description: string;
   logo: string;
+  logo_url?: string;
   defaultArtworkUrl?: string;
+  artwork_url?: string;
   denominations: ProductDenomination[];
   featured: boolean;
   status: 'active' | 'inactive' | 'out_of_stock';
   bgColor: string;
+  bg_color?: string;
   createdAt: Timestamp;
 }
 
@@ -84,7 +87,7 @@ export function FeaturedGiftcards() {
       },
       tierDiscount: 0,
       cashback: 0,
-      imageUrl: product.defaultArtworkUrl || product.logo,
+      imageUrl: product.artwork_url || product.defaultArtworkUrl || product.logo_url || product.logo,
     };
     
     dispatch(cartActions.addItem(cartItem));
@@ -97,13 +100,15 @@ export function FeaturedGiftcards() {
 
   // Get the artwork URL for the product
   const getProductArtwork = (product: Product) => {
-    // First try default artwork
+    // First try artwork_url (from generated artwork)
+    if (product.artwork_url) return product.artwork_url;
+    // Then try default artwork
     if (product.defaultArtworkUrl) return product.defaultArtworkUrl;
     // Then try first denomination with artwork
     const denomWithArtwork = product.denominations.find(d => d.artworkUrl);
     if (denomWithArtwork?.artworkUrl) return denomWithArtwork.artworkUrl;
     // Fall back to logo or placeholder
-    return product.logo || null;
+    return product.logo_url || product.logo || null;
   };
 
   // Get the first available denomination for pricing
@@ -170,21 +175,27 @@ export function FeaturedGiftcards() {
                 className="group relative overflow-hidden rounded-xl bg-[#111111] border border-[#262626] transition-all hover:bg-[#1a1a1a] hover:border-[#333333] hover:shadow-xl"
               >
                 {/* Product Artwork */}
-                {artwork && (
-                  <Link href={artwork} target="_blank" rel="noopener noreferrer">
-                    <div className="relative h-40 bg-gray-900 overflow-hidden">
-                      <Image
-                        src={artwork}
-                        alt={`${product.brand} ${product.name}`}
-                        fill
-                        className="object-cover hover:scale-105 transition-transform duration-300"
-                      />
-                      {/* Featured Badge */}
-                      <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-semibold">
-                        Featured
-                      </div>
+                {artwork ? (
+                  <div className="relative h-40 bg-gray-900 overflow-hidden">
+                    <Image
+                      src={artwork}
+                      alt={`${product.brand} ${product.name}`}
+                      fill
+                      className="object-cover hover:scale-105 transition-transform duration-300"
+                    />
+                    {/* Featured Badge */}
+                    <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-semibold">
+                      Featured
                     </div>
-                  </Link>
+                  </div>
+                ) : (
+                  <div className="relative h-40 bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                    <span className="text-4xl font-bold text-gray-700">{product.brand.charAt(0)}</span>
+                    {/* Featured Badge */}
+                    <div className="absolute top-2 right-2 bg-yellow-500 text-black px-2 py-1 rounded text-xs font-semibold">
+                      Featured
+                    </div>
+                  </div>
                 )}
 
                 {/* Brand Bar */}
@@ -192,7 +203,7 @@ export function FeaturedGiftcards() {
                   <div className="flex items-center gap-2">
                     <div 
                       className="flex h-6 w-6 items-center justify-center rounded text-white font-semibold text-xs"
-                      style={{ backgroundColor: product.bgColor }}
+                      style={{ backgroundColor: product.bg_color || product.bgColor || '#333' }}
                       aria-label={`${product.brand} badge`}
                     >
                       {product.brand.substring(0, 2).toUpperCase()}

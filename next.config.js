@@ -22,6 +22,14 @@ const nextConfig = {
         protocol: 'https',
         hostname: 'pxl-perfect-1.firebasestorage.app',
       },
+      {
+        protocol: 'https',
+        hostname: '*.firebasestorage.app',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.logo.dev',
+      },
     ],
   },
   // Security headers

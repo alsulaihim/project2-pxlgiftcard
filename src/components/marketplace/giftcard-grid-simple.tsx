@@ -17,6 +17,8 @@ interface Product {
     serials?: Array<{ status: string; }>;
   }>;
   defaultArtworkUrl?: string;
+  artwork_url?: string;
+  logo_url?: string;
   status: string;
   featured?: boolean;
   description?: string;
@@ -108,7 +110,7 @@ export function GiftcardGridSimple() {
       popularity: product.totalSold || 0,
       bgColor: bgColor,
       description: product.description || `Get ${product.brand} gift cards with instant delivery`,
-      artworkUrl: product.defaultArtworkUrl
+      artworkUrl: product.artwork_url || product.defaultArtworkUrl || ''
     };
   });
 

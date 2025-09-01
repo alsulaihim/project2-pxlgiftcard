@@ -28,7 +28,7 @@ export default function CheckoutForm() {
   const router = useRouter();
   const { state, dispatch } = useCart();
   const { user, platformUser, refreshUserData } = useAuth();
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pxl' | 'stripe' | 'paypal'>('pxl');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pxl' | 'stripe' | 'paypal' | 'myfatoorah'>('pxl');
   const [isProcessing, setIsProcessing] = useState(false);
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -250,6 +250,71 @@ export default function CheckoutForm() {
     }
   };
 
+  // Handle MyFatoorah Payment
+  const handleMyFatoorahPayment = async () => {
+    if (!user) {
+      setErrors(['Please sign in to complete your purchase']);
+      return;
+    }
+
+    setIsProcessing(true);
+    setErrors([]);
+
+    try {
+      // Prepare customer info
+      const customerName = platformUser?.profile?.firstName && platformUser?.profile?.lastName
+        ? `${platformUser.profile.firstName} ${platformUser.profile.lastName}`
+        : platformUser?.displayName || user.email?.split('@')[0] || 'Customer';
+      
+      const customerEmail = user.email || 'customer@example.com';
+      const customerMobile = platformUser?.profile?.phone || '';
+
+      // Prepare items for MyFatoorah
+      const items = state.items.map(item => ({
+        name: `${item.brand} - ${item.productName}`,
+        quantity: item.quantity,
+        price: item.denomination
+      }));
+
+      // Call MyFatoorah API to initiate payment
+      const response = await fetch('/api/payment/initiate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount: state.totals.usd,
+          customerName,
+          customerEmail,
+          customerMobile: customerMobile.replace(/[^0-9]/g, '').slice(-8), // Last 8 digits
+          items,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.paymentUrl) {
+        // Store order info in session storage for callback
+        sessionStorage.setItem('pendingOrder', JSON.stringify({
+          items: state.items,
+          totals: state.totals,
+          orderId: data.orderId,
+          invoiceId: data.invoiceId
+        }));
+
+        // Redirect to MyFatoorah payment page
+        window.location.href = data.paymentUrl;
+      } else {
+        setErrors([data.error || 'Failed to initiate payment']);
+        setIsProcessing(false);
+      }
+    } catch (error) {
+      console.error('MyFatoorah payment error:', error);
+      setErrors(['Failed to process payment. Please try again.']);
+      setIsProcessing(false);
+    }
+  };
+
   // BUG FIX: Show loading state during hydration to prevent flash
   if (!state.isHydrated) {
     return (
@@ -445,6 +510,39 @@ export default function CheckoutForm() {
                 </div>
               </div>
             </div>
+
+            {/* MyFatoorah Payment */}
+            <div 
+              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                selectedPaymentMethod === 'myfatoorah' 
+                  ? 'border-blue-500 bg-blue-500/10' 
+                  : 'border-gray-700 hover:border-gray-600'
+              }`}
+              onClick={() => setSelectedPaymentMethod('myfatoorah')}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className="w-5 h-5 bg-green-600 rounded flex items-center justify-center">
+                    <span className="text-xs font-bold text-white">MF</span>
+                  </div>
+                  <div>
+                    <p className="font-medium text-white">MyFatoorah</p>
+                    <p className="text-sm text-gray-400">Cards, Apple Pay, Google Pay & more</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-white">${formatBalance(state.totals.usd)}</p>
+                  <div className="flex items-center justify-end space-x-1 mt-1">
+                    <span className="text-xs text-gray-400">🇰🇼</span>
+                    <span className="text-xs text-gray-400">🇸🇦</span>
+                    <span className="text-xs text-gray-400">🇦🇪</span>
+                    <span className="text-xs text-gray-400">🇧🇭</span>
+                    <span className="text-xs text-gray-400">🇴🇲</span>
+                    <span className="text-xs text-gray-400">🇶🇦</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Payment Forms */}
@@ -491,6 +589,32 @@ export default function CheckoutForm() {
                   </div>
                 )}
               </Button>
+            </div>
+          )}
+
+          {selectedPaymentMethod === 'myfatoorah' && (
+            <div className="mt-6">
+              <Button
+                onClick={handleMyFatoorahPayment}
+                disabled={isProcessing}
+                className="w-full bg-green-600 hover:bg-green-700 text-white"
+                size="lg"
+              >
+                {isProcessing ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Redirecting to MyFatoorah...</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-2">
+                    <Lock className="h-4 w-4" />
+                    <span>Pay ${formatBalance(state.totals.usd)} with MyFatoorah</span>
+                  </div>
+                )}
+              </Button>
+              <p className="text-xs text-gray-400 text-center mt-2">
+                You'll be redirected to MyFatoorah secure payment page
+              </p>
             </div>
           )}
 

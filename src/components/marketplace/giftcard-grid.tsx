@@ -21,6 +21,8 @@ interface Product {
     serials: Array<{ status: string; }>;
   }>;
   defaultArtworkUrl?: string;
+  artwork_url?: string;
+  logo_url?: string;
   status: string;
   featured?: boolean;
   description?: string;
@@ -55,7 +57,11 @@ export function GiftcardGrid() {
       snapshot.forEach((doc) => {
         const data = doc.data() as Product;
         console.log(`Checking product: ${data.brand} - ${data.name}`);
-        console.log('Product data:', data);
+        console.log('Product data:', {
+          brand: data.brand,
+          artwork_url: data.artwork_url,
+          hasArtwork: !!data.artwork_url
+        });
         
         // Check if denominations exist and have serials
         if (!data.denominations || data.denominations.length === 0) {
@@ -183,10 +189,21 @@ export function GiftcardGrid() {
     const bgColor = brandColors[product.brand] || 'bg-gray-700';
     const logo = product.brand.charAt(0).toUpperCase();
     
+    const artworkUrl = product.artwork_url || product.defaultArtworkUrl;
+    
+    // Debug: Log the mapping
+    if (product.brand === 'Target' || product.brand === 'Amazon') {
+      console.log(`Mapping ${product.brand}:`, {
+        input_artwork_url: product.artwork_url,
+        output_artworkUrl: artworkUrl,
+        will_pass: !!artworkUrl
+      });
+    }
+    
     return {
       id: product.id,
       brand: product.brand,
-      logo: logo,
+      logo: product.logo_url || logo,
       category: product.category || 'retail',
       denominations: availableDenoms,
       selectedDenomination: minDenom,
@@ -198,7 +215,7 @@ export function GiftcardGrid() {
       popularity: product.totalSold || 0,
       bgColor: bgColor,
       description: product.description || `Get ${product.brand} gift cards with instant delivery`,
-      artworkUrl: product.defaultArtworkUrl
+      artworkUrl: artworkUrl
     };
   });
 

@@ -36,6 +36,17 @@ interface GiftcardCardProps {
 export function GiftcardCard({ giftcard }: GiftcardCardProps) {
   const [selectedDenomination, setSelectedDenomination] = React.useState(giftcard.selectedDenomination);
   const { dispatch } = useCart();
+  
+  // Debug: Log what we're receiving
+  React.useEffect(() => {
+    console.log(`GiftcardCard ${giftcard.brand}:`, {
+      fullGiftcard: giftcard,
+      artworkUrl: giftcard.artworkUrl,
+      hasArtwork: !!giftcard.artworkUrl,
+      typeOfArtwork: typeof giftcard.artworkUrl
+    });
+  }, [giftcard]);
+  
 
   // Calculate prices based on selected denomination
   const basePrice = selectedDenomination;
@@ -72,14 +83,39 @@ export function GiftcardCard({ giftcard }: GiftcardCardProps) {
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-gray-800 bg-gray-950 transition-all hover:border-gray-700 hover:bg-gray-900">
+      {/* Artwork Background */}
+      <div className="relative h-32 overflow-hidden bg-gray-800">
+        {giftcard.artworkUrl ? (
+          <img 
+            src={giftcard.artworkUrl} 
+            alt={`${giftcard.brand} Gift Card`}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={(e) => {
+              console.error(`Failed to load artwork for ${giftcard.brand}:`, giftcard.artworkUrl);
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-800">
+            <span className="text-white text-3xl font-bold opacity-50">
+              {giftcard.brand.substring(0, 2).toUpperCase()}
+            </span>
+          </div>
+        )}
+      </div>
+      
       {/* Card Header */}
       <div className="p-4">
         {/* Brand Logo and Stock Status */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center space-x-3">
             {/* Brand Logo */}
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-800 border border-gray-700 text-white font-bold text-lg">
-              {giftcard.logo || giftcard.brand.charAt(0)}
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-800 border border-gray-700 overflow-hidden">
+              {giftcard.logo && giftcard.logo.startsWith('http') ? (
+                <img src={giftcard.logo} alt={giftcard.brand} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white font-bold text-lg">{giftcard.brand.charAt(0)}</span>
+              )}
             </div>
             
             {/* Brand Info */}
@@ -234,8 +270,6 @@ export function GiftcardCard({ giftcard }: GiftcardCardProps) {
         </div>
       </div>
 
-      {/* Hover Overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-blue-500/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100 pointer-events-none" />
     </div>
   );
 }
