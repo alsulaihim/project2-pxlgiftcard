@@ -21,11 +21,15 @@ import {
   Calendar,
   CreditCard,
   Coins,
-  ExternalLink
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  Copy
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase-config';
 import { collection, query, where, orderBy, limit, onSnapshot, Timestamp } from 'firebase/firestore';
+import GiftCardReveal from '@/components/ecommerce/gift-card-reveal';
 
 type OrderStatus = 'completed' | 'processing' | 'failed' | 'refunded';
 
@@ -33,12 +37,13 @@ interface Order {
   id: string;
   userId: string;
   items: Array<{
-    giftcardId: string;
+    productId: string;
     brand: string;
     productName: string;
     denomination: number;
     quantity: number;
-    code?: string;
+    codes?: string[];
+    serials?: string[];
   }>;
   payment: {
     method: 'pxl' | 'stripe' | 'paypal';
@@ -53,6 +58,10 @@ interface Order {
   };
   status: OrderStatus;
   createdAt: Timestamp;
+  reservations?: Array<{
+    productId: string;
+    serials: string[];
+  }>;
 }
 
 /**
@@ -228,71 +237,73 @@ export function OrderHistory() {
                 </div>
               </div>
 
-              {/* Order Items */}
-              <div className="space-y-3 mb-4">
-                {order.items.map((item, itemIndex) => (
-                  <div key={`${order.id}-item-${itemIndex}`} className="flex items-center justify-between p-3 bg-gray-900 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-12 h-12 bg-gray-800 rounded-lg flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-400">
-                          {item.brand.charAt(0)}
-                        </span>
-                      </div>
-                      <div>
-                        <p className="font-medium text-white">{item.productName}</p>
-                        <p className="text-sm text-gray-400">
-                          ${item.denomination} × {item.quantity}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      {order.status === 'completed' && item.code ? (
-                        <>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => router.push(`/order-confirmation/${order.id}`)}
-                            className="border-gray-700 text-gray-300 hover:bg-gray-800"
-                          >
-                            <ExternalLink className="h-4 w-4 mr-1" />
-                            View Order
-                          </Button>
-                          <Button
-                            size="sm"
-                            onClick={() => handleDownloadGiftcard(order.id, item.giftcardId)}
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </Button>
-                        </>
-                      ) : (
-                        <span className="text-sm text-gray-500">
-                          {order.status === 'processing' ? 'Processing...' : 'Not available'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
+              {/* Order Summary */}
+              <div className="border-t border-gray-800 pt-4 mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-400">Items:</span>
+                  <span className="text-sm text-white">
+                    {order.items.reduce((sum, item) => sum + item.quantity, 0)} gift cards
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedOrder(selectedOrder === order.id ? null : order.id)}
+                  className="flex items-center space-x-2 text-blue-400 hover:text-blue-300 transition-colors text-sm"
+                >
+                  {selectedOrder === order.id ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      <span>Hide Gift Cards</span>
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      <span>View Gift Cards</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              {/* Expanded Order Details */}
-              {selectedOrder === order.id && (
-                <div className="border-t border-gray-800 pt-4 space-y-3">
-                  <h4 className="font-medium text-white mb-2">Gift Card Codes</h4>
-                  {order.items.map((item, codeIndex) => (
-                    item.code && (
-                      <div key={`${order.id}-code-${codeIndex}`} className="bg-gray-900 rounded-lg p-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-400">{item.productName}</span>
-                          <code className="bg-gray-800 px-2 py-1 rounded text-sm font-mono text-green-400">
-                            {item.code}
-                          </code>
-                        </div>
+              {/* Expanded Order Details - Gift Cards */}
+              {selectedOrder === order.id && order.status === 'completed' && (
+                <div className="space-y-3">
+                  {order.items.map((item, itemIndex) => {
+                    // If item has multiple codes, show each separately
+                    if (item.codes && item.codes.length > 0) {
+                      return item.codes.map((code, codeIndex) => (
+                        <GiftCardReveal
+                          key={`${order.id}-${itemIndex}-${codeIndex}`}
+                          brand={item.brand}
+                          productName={item.productName}
+                          denomination={item.denomination}
+                          code={code}
+                          serialNumber={item.serials?.[codeIndex]}
+                          orderId={order.id}
+                          index={codeIndex}
+                        />
+                      ));
+                    }
+                    
+                    // Fallback if no codes (shouldn't happen for completed orders)
+                    return (
+                      <div key={`${order.id}-${itemIndex}`} className="bg-gray-900 rounded-lg p-4">
+                        <p className="text-sm text-gray-500">
+                          {item.productName} - No codes available
+                        </p>
                       </div>
-                    )
-                  ))}
+                    );
+                  })}
+                  
+                  {/* View Full Order Button */}
+                  <div className="pt-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => router.push(`/order-confirmation/${order.id}`)}
+                      className="w-full border-gray-700 text-gray-300 hover:bg-gray-800"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Full Order Details
+                    </Button>
+                  </div>
                 </div>
               )}
 

@@ -68,14 +68,16 @@ interface Product {
   description: string;
   logo: string;
   defaultArtworkUrl?: string; // Default artwork for all denominations
+  artwork?: string; // Artwork identifier for mapping
   denominations: ProductDenomination[];
   supplierId: string;
   supplierName: string;
   commission: number; // percentage
   status: 'active' | 'inactive' | 'out_of_stock';
-  featured: boolean; // Show on homepage
+  featured?: boolean; // Show on homepage
   popularity: number;
   totalSold: number;
+  totalStock?: number; // Total available stock
   bgColor: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -110,7 +112,7 @@ export default function ProductsPage() {
     supplierName: '',
     commission: 10,
     bgColor: '#000000',
-    status: 'active' as const,
+    status: 'active' as 'active' | 'inactive' | 'out_of_stock',
     featured: false,
     denominations: [{ value: 25, stock: 0, serials: [] }] as ProductDenomination[]
   });
@@ -271,6 +273,52 @@ export default function ProductsPage() {
     document.body.removeChild(link);
   };
 
+  // Function to expand serial range (e.g., "AMZN10XXX001-AMZN10XXX015")
+  const expandSerialRange = (rangeStr: string): string[] => {
+    const [start, end] = rangeStr.split('-');
+    if (!start || !end) return [rangeStr]; // Single serial
+    
+    const startMatch = start.match(/(\d+)$/);
+    const endMatch = end.match(/(\d+)$/);
+    
+    if (!startMatch || !endMatch) return [rangeStr];
+    
+    const prefix = start.substring(0, startMatch.index!);
+    const startNum = parseInt(startMatch[1]);
+    const endNum = parseInt(endMatch[1]);
+    const numDigits = startMatch[1].length;
+    
+    const serials = [];
+    for (let i = startNum; i <= endNum; i++) {
+      const paddedNum = i.toString().padStart(numDigits, '0');
+      serials.push(prefix + paddedNum);
+    }
+    
+    return serials;
+  };
+
+  // Parse denomination string format: "value:quantity:serialRange|..."
+  const parseDenominations = (denomStr: string) => {
+    const denominations: ProductDenomination[] = [];
+    const denomParts = denomStr.replace(/"/g, '').split('|');
+    
+    for (const part of denomParts) {
+      const [value, quantity, serialRange] = part.split(':');
+      const serials = expandSerialRange(serialRange);
+      
+      denominations.push({
+        value: parseInt(value),
+        stock: parseInt(quantity),
+        serials: serials.map(code => ({
+          code,
+          status: 'available' as const
+        }))
+      });
+    }
+    
+    return denominations;
+  };
+
   const handleCSVUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -278,140 +326,115 @@ export default function ProductsPage() {
     setIsUploading(true);
     try {
       const text = await file.text();
-      const lines = text.split('\n');
+      const lines = text.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        alert('CSV file is empty or invalid');
+        setIsUploading(false);
+        return;
+      }
+
       const headers = lines[0].split(',').map(h => h.trim());
       
-      const importResults = [];
+      console.log(`Processing ${lines.length - 1} products from CSV...`);
+      let successCount = 0;
+      let skipCount = 0;
+      let errorCount = 0;
       
-      // Skip comment lines and find header row
-      let headerIndex = 0;
-      for (let i = 0; i < lines.length; i++) {
-        if (!lines[i].startsWith('#') && lines[i].includes('brand')) {
-          headerIndex = i;
-          break;
-        }
-      }
-      
-      // Prepare products for batch artwork matching
-      const productsToMatch: Array<{ name: string; brand: string; category?: string; rowIndex: number }> = [];
-      
-      for (let i = headerIndex + 1; i < lines.length; i++) {
-        if (lines[i].startsWith('#')) continue; // Skip comment lines
-        const values = lines[i].split(',').map(v => v.trim());
-        if (values.length < 12 || !values[0]) continue; // Skip empty rows
+      // Process each product (skip header row)
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
         
-        const artworkMode = values[12] || 'auto';
-        if (artworkMode === 'auto') {
-          productsToMatch.push({
-            brand: values[0],
-            name: values[1],
-            category: values[2],
-            rowIndex: i
-          });
-        }
-      }
-      
-      // Batch match artwork for all auto-mode products
-      console.log(`Matching artwork for ${productsToMatch.length} products...`);
-      const artworkMap = await batchMatchArtwork(productsToMatch);
-      
-      // Process each product
-      for (let i = headerIndex + 1; i < lines.length; i++) {
-        if (lines[i].startsWith('#')) continue; // Skip comment lines
-        const values = lines[i].split(',').map(v => v.trim());
-        if (values.length < 12 || !values[0]) continue; // Skip empty rows
-
-        const brand = values[0];
-        const name = values[1];
+        // Parse CSV line (handles quotes in denominations field)
+        const values: string[] = [];
+        let current = '';
+        let inQuotes = false;
         
-        // Parse denominations
-        const denominationValues = values[8] ? values[8].split(';').map(d => parseInt(d.trim())) : [];
-        
-        // Parse serials and group by denomination
-        const serialsData = values[9] ? values[9].split(';') : [];
-        const denominationsMap = new Map<number, string[]>();
-        
-        serialsData.forEach(serialEntry => {
-          const [code, denomStr] = serialEntry.split(':');
-          const denom = parseInt(denomStr);
-          if (!denominationsMap.has(denom)) {
-            denominationsMap.set(denom, []);
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          if (char === '"') {
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            values.push(current.trim());
+            current = '';
+          } else {
+            current += char;
           }
-          denominationsMap.get(denom)?.push(code.trim());
-        });
+        }
+        values.push(current.trim()); // Add last value
         
-        // Check if product exists
-        const existingProducts = await getDocs(
-          query(
-            collection(db, 'products'),
-            where('brand', '==', brand),
-            where('name', '==', name)
-          )
-        );
+        if (values.length < 10) {
+          console.warn(`Skipping row ${i + 1}: insufficient columns`);
+          continue;
+        }
         
-        let productId: string;
+        try {
+          const brand = values[0];
+          const name = values[1];
+          const description = values[2];
+          const category = values[3];
+          const featured = values[4] === 'true';
+          const status = values[5];
+          const artwork = values[6];
+          const denominationsStr = values[7];
+          const totalSold = parseInt(values[8]) || 0;
+          const createdAt = values[9] ? Timestamp.fromDate(new Date(values[9])) : Timestamp.now();
         
-        if (existingProducts.empty) {
-          // Create new product with initial denominations (no serials yet)
-          const denominations: ProductDenomination[] = denominationValues.map(value => ({
-            value,
-            stock: 0,
-            serials: []
-          }));
-
-          // Determine artwork URL
-          let artworkUrl = '';
-          const artworkMode = values[12] || 'auto';
+          // Check if product exists
+          const existingProducts = await getDocs(
+            query(
+              collection(db, 'products'),
+              where('brand', '==', brand),
+              where('name', '==', name)
+            )
+          );
           
-          if (artworkMode === 'manual' && values[13]) {
-            artworkUrl = values[13];
-            console.log(`Using manual artwork for ${brand}: ${artworkUrl}`);
-          } else if (artworkMode === 'auto') {
-            const mapKey = `${brand}_${name}`;
-            artworkUrl = artworkMap.get(mapKey) || '';
-            if (artworkUrl) {
-              console.log(`Auto-matched artwork for ${brand}: ${artworkUrl}`);
-            } else {
-              console.log(`No artwork found for ${brand}, will use default`);
-            }
+          if (!existingProducts.empty) {
+            console.log(`Product ${brand} - ${name} already exists, skipping...`);
+            skipCount++;
+            continue;
           }
           
+          // Parse denominations with serials
+          const denominations = parseDenominations(denominationsStr);
+          
+          // Calculate total stock
+          const totalStock = denominations.reduce((sum, d) => sum + d.stock, 0);
+          
+          // Create product document
           const productData: Omit<Product, 'id'> = {
-            brand: values[0],
-            name: values[1],
-            category: values[2],
-            description: values[3],
-            logo: values[4],
-            defaultArtworkUrl: artworkUrl, // Add artwork URL
-            supplierId: values[5],
-            supplierName: values[6],
-            commission: parseFloat(values[7]) || 10,
+            brand,
+            name,
+            description,
+            category,
+            featured,
+            status: (totalStock > 0 ? status : 'out_of_stock') as 'active' | 'out_of_stock' | 'inactive',
+            defaultArtworkUrl: '', // Will be set later if artwork mapping exists
+            artwork, // Store artwork identifier for later mapping
             denominations,
-            bgColor: values[10] || '#000000',
-            status: 'inactive', // Start as inactive until serials are added
-            popularity: 0,
-            totalSold: 0,
-            createdAt: Timestamp.now(),
-            updatedAt: Timestamp.now()
+            totalSold,
+            totalStock,
+            popularity: totalSold, // Use totalSold as initial popularity
+            createdAt,
+            updatedAt: Timestamp.now(),
+            
+            // Additional fields with defaults
+            supplierId: 'default',
+            supplierName: 'Default Supplier',
+            commission: 10,
+            bgColor: '#000000',
+            logo: '' // Can be updated later
           };
-
-          const docRef = await addDoc(collection(db, 'products'), productData);
-          productId = docRef.id;
-        } else {
-          productId = existingProducts.docs[0].id;
-        }
-        
-        // Add serials using the inventory service
-        for (const [denom, serials] of denominationsMap.entries()) {
-          if (serials.length > 0) {
-            const result = await addSerialCodes(productId, denom, serials);
-            importResults.push({
-              product: `${brand} - ${name}`,
-              denomination: denom,
-              added: result.added,
-              duplicates: result.duplicates
-            });
-          }
+          
+          // Add to Firestore
+          await addDoc(collection(db, 'products'), productData);
+          console.log(`Created product: ${brand} - ${name}`);
+          successCount++;
+          
+        } catch (error) {
+          console.error(`Error processing row ${i + 1}:`, error);
+          errorCount++;
         }
       }
       
@@ -424,16 +447,9 @@ export default function ProductsPage() {
       setProducts(productsData);
       
       // Show import results
-      let resultMessage = 'CSV import completed!\n\n';
-      importResults.forEach(result => {
-        resultMessage += `${result.product} ($${result.denomination}): ${result.added} codes added`;
-        if (result.duplicates.length > 0) {
-          resultMessage += ` (${result.duplicates.length} duplicates skipped)`;
-        }
-        resultMessage += '\n';
-      });
-      
-      alert(resultMessage);
+      const message = `CSV Import Complete!\n\n✅ Successfully imported: ${successCount} products\n⚠️ Skipped (already exists): ${skipCount} products\n❌ Failed: ${errorCount} products\n\nTotal processed: ${lines.length - 1} rows`;
+      console.log(message);
+      alert(message);
     } catch (error) {
       console.error('Error importing CSV:', error);
       alert('Error importing CSV. Please check the file format.');
@@ -585,7 +601,7 @@ export default function ProductsPage() {
         name: formData.name,
         category: formData.category,
         description: formData.description,
-        logoUrl: formData.logo,
+        logo: formData.logo,
         defaultArtworkUrl: formData.defaultArtworkUrl,
         supplierId: formData.supplierId,
         supplierName: formData.supplierName,
@@ -647,7 +663,7 @@ export default function ProductsPage() {
         // Refresh the product to get updated data
         const productDoc = await getDoc(doc(db, 'products', productId));
         if (productDoc.exists()) {
-          const updatedProduct = { ...productDoc.data(), id: productId };
+          const updatedProduct = { ...productDoc.data(), id: productId } as Product;
           setProducts(products.map(p => 
             p.id === productId ? updatedProduct : p
           ));
@@ -764,53 +780,53 @@ export default function ProductsPage() {
           
           <button
             onClick={() => router.push('/admin/inventory')}
-            className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors whitespace-nowrap"
             title="View inventory dashboard"
           >
             <Package className="h-4 w-4 mr-2" />
-            Inventory
+            <span className="text-sm">Inventory</span>
           </button>
           
           <button
             onClick={() => router.push('/admin/artwork')}
-            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
             title="Manage artwork repository"
           >
             <Palette className="h-4 w-4 mr-2" />
-            Artwork
+            <span className="text-sm">Artwork</span>
           </button>
           
           <button
             onClick={() => router.push('/admin/csv-builder')}
-            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors whitespace-nowrap"
             title="Build CSV with guided interface"
           >
             <FileSpreadsheet className="h-4 w-4 mr-2" />
-            CSV Builder
+            <span className="text-sm">Builder</span>
           </button>
           
           <button
             onClick={downloadCSVTemplate}
-            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
             title="Download CSV template with sample data"
           >
             <Download className="h-4 w-4 mr-2" />
-            Template
+            <span className="text-sm">Template</span>
           </button>
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+            className="flex items-center px-4 py-2 bg-gray-800 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 whitespace-nowrap"
           >
             <Upload className="h-4 w-4 mr-2" />
-            {isUploading ? 'Uploading...' : 'Import'}
+            <span className="text-sm">{isUploading ? 'Uploading...' : 'Import'}</span>
           </button>
           <button
             onClick={() => openProductModal()}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
           >
             <Plus className="h-4 w-4 mr-2" />
-            Add Product
+            <span className="text-sm">Add</span>
           </button>
         </div>
       </div>
