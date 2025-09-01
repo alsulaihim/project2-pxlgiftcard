@@ -2,210 +2,238 @@
 
 import * as React from "react";
 import { GiftcardCard } from "./giftcard-card";
+import { db } from '@/lib/firebase-config';
+import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
 
 /**
  * Main giftcard grid displaying all available giftcards
  * Includes pagination and responsive layout
  */
-export function GiftcardGrid() {
-  // Mock giftcard data - in real app this would come from API/database
-  const giftcards = [
-    {
-      id: "amazon-25",
-      brand: "Amazon",
-      logo: "A",
-      category: "retail",
-      denominations: [10, 15, 25, 50, 100, 250],
-      selectedDenomination: 25,
-      usdPrice: 25.00,
-      pxlPrice: 2475,
-      tierDiscount: 5,
-      cashback: 3,
-      inStock: true,
-      popularity: 95,
-      bgColor: "bg-orange-500",
-      description: "Shop everything on Amazon with instant digital delivery"
-    },
-    {
-      id: "apple-50",
-      brand: "Apple",
-      logo: "",
-      category: "retail",
-      denominations: [10, 25, 50, 100],
-      selectedDenomination: 50,
-      usdPrice: 50.00,
-      pxlPrice: 4900,
-      tierDiscount: 8,
-      cashback: 3,
-      inStock: true,
-      popularity: 92,
-      bgColor: "bg-gray-800",
-      description: "Perfect for App Store, iTunes, and Apple services"
-    },
-    {
-      id: "netflix-15",
-      brand: "Netflix",
-      logo: "N",
-      category: "entertainment",
-      denominations: [15, 30, 50],
-      selectedDenomination: 15,
-      usdPrice: 15.00,
-      pxlPrice: 1470,
-      tierDiscount: 3,
-      cashback: 2,
-      inStock: true,
-      popularity: 88,
-      bgColor: "bg-red-600",
-      description: "Stream unlimited movies and TV shows"
-    },
-    {
-      id: "spotify-10",
-      brand: "Spotify",
-      logo: "♪",
-      category: "entertainment",
-      denominations: [10, 30, 60],
-      selectedDenomination: 10,
-      usdPrice: 10.00,
-      pxlPrice: 980,
-      tierDiscount: 2,
-      cashback: 1,
-      inStock: true,
-      popularity: 85,
-      bgColor: "bg-green-500",
-      description: "Premium music streaming service"
-    },
-    {
-      id: "google-play-25",
-      brand: "Google Play",
-      logo: "G",
-      category: "gaming",
-      denominations: [10, 25, 50, 100],
-      selectedDenomination: 25,
-      usdPrice: 25.00,
-      pxlPrice: 2450,
-      tierDiscount: 4,
-      cashback: 2,
-      inStock: true,
-      popularity: 82,
-      bgColor: "bg-blue-600",
-      description: "Apps, games, movies, and more on Google Play"
-    },
-    {
-      id: "steam-20",
-      brand: "Steam",
-      logo: "S",
-      category: "gaming",
-      denominations: [5, 10, 20, 50, 100],
-      selectedDenomination: 20,
-      usdPrice: 20.00,
-      pxlPrice: 1960,
-      tierDiscount: 3,
-      cashback: 2,
-      inStock: true,
-      popularity: 90,
-      bgColor: "bg-slate-700",
-      description: "The ultimate gaming platform"
-    },
-    {
-      id: "starbucks-15",
-      brand: "Starbucks",
-      logo: "☕",
-      category: "dining",
-      denominations: [5, 10, 15, 25, 50],
-      selectedDenomination: 15,
-      usdPrice: 15.00,
-      pxlPrice: 1470,
-      tierDiscount: 2,
-      cashback: 1,
-      inStock: true,
-      popularity: 78,
-      bgColor: "bg-green-700",
-      description: "Your favorite coffee and treats"
-    },
-    {
-      id: "target-50",
-      brand: "Target",
-      logo: "🎯",
-      category: "retail",
-      denominations: [10, 25, 50, 100],
-      selectedDenomination: 50,
-      usdPrice: 50.00,
-      pxlPrice: 4900,
-      tierDiscount: 6,
-      cashback: 3,
-      inStock: true,
-      popularity: 75,
-      bgColor: "bg-red-500",
-      description: "Everything you need, all in one place"
-    },
-    {
-      id: "uber-25",
-      brand: "Uber",
-      logo: "U",
-      category: "travel",
-      denominations: [15, 25, 50, 100],
-      selectedDenomination: 25,
-      usdPrice: 25.00,
-      pxlPrice: 2450,
-      tierDiscount: 4,
-      cashback: 2,
-      inStock: true,
-      popularity: 80,
-      bgColor: "bg-black",
-      description: "Rides and food delivery made easy"
-    },
-    {
-      id: "airbnb-100",
-      brand: "Airbnb",
-      logo: "🏠",
-      category: "travel",
-      denominations: [25, 50, 100, 200],
-      selectedDenomination: 100,
-      usdPrice: 100.00,
-      pxlPrice: 9800,
-      tierDiscount: 10,
-      cashback: 5,
-      inStock: true,
-      popularity: 85,
-      bgColor: "bg-pink-500",
-      description: "Unique stays and experiences worldwide"
-    },
-    {
-      id: "xbox-25",
-      brand: "Xbox",
-      logo: "X",
-      category: "gaming",
-      denominations: [10, 25, 50, 100],
-      selectedDenomination: 25,
-      usdPrice: 25.00,
-      pxlPrice: 2450,
-      tierDiscount: 4,
-      cashback: 2,
-      inStock: true,
-      popularity: 87,
-      bgColor: "bg-green-600",
-      description: "Games, add-ons, and Xbox Live Gold"
-    },
-    {
-      id: "disney-plus-30",
-      brand: "Disney+",
-      logo: "D+",
-      category: "entertainment",
-      denominations: [25, 50, 100],
-      selectedDenomination: 30,
-      usdPrice: 30.00,
-      pxlPrice: 2940,
-      tierDiscount: 3,
-      cashback: 2,
-      inStock: true,
-      popularity: 83,
-      bgColor: "bg-blue-700",
-      description: "Disney, Pixar, Marvel, Star Wars & more"
-    }
-  ];
+interface Product {
+  id: string;
+  brand: string;
+  name: string;
+  category: string;
+  denominations: Array<{
+    value: number;
+    stock: number;
+    serials: Array<{ status: string; }>;
+  }>;
+  defaultArtworkUrl?: string;
+  status: string;
+  featured?: boolean;
+  description?: string;
+  totalSold?: number;
+  createdAt: any;
+}
 
-  // Sort by popularity (most popular first)
-  const sortedGiftcards = [...giftcards].sort((a, b) => b.popularity - a.popularity);
+export function GiftcardGrid() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('featured');
+
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      
+      // Query only active products
+      const productsQuery = query(
+        collection(db, 'products'),
+        where('status', '==', 'active')
+      );
+      
+      const snapshot = await getDocs(productsQuery);
+      console.log(`Found ${snapshot.size} active products`);
+      
+      const fetchedProducts: Product[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data() as Product;
+        console.log(`Checking product: ${data.brand} - ${data.name}`);
+        console.log('Product data:', data);
+        
+        // Check if denominations exist and have serials
+        if (!data.denominations || data.denominations.length === 0) {
+          console.log(`  - No denominations found`);
+          return;
+        }
+        
+        // Only include products that have at least one denomination with stock
+        const hasStock = data.denominations?.some(denom => {
+          // Check if serials array exists
+          if (!denom.serials || !Array.isArray(denom.serials)) {
+            console.log(`  - Denomination $${denom.value} has no serials array`);
+            return false;
+          }
+          
+          // Check if there are available serials
+          const availableCount = denom.serials.filter(
+            (serial: any) => serial.status === 'available'
+          ).length;
+          
+          console.log(`  - Denomination $${denom.value}: ${availableCount} available out of ${denom.serials.length} total`);
+          return availableCount > 0;
+        });
+        
+        if (hasStock) {
+          console.log(`  ✓ Product has stock, adding to list`);
+          fetchedProducts.push({
+            id: doc.id,
+            ...data
+          });
+        } else {
+          console.log(`  ✗ Product has no available stock`);
+        }
+      });
+      
+      console.log(`Total products with stock: ${fetchedProducts.length}`);
+      
+      // Sort products
+      const sortedProducts = sortProducts(fetchedProducts, sortBy);
+      setProducts(sortedProducts);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const sortProducts = (products: Product[], sortType: string) => {
+    const sorted = [...products];
+    
+    switch (sortType) {
+      case 'featured':
+        return sorted.sort((a, b) => {
+          if (a.featured && !b.featured) return -1;
+          if (!a.featured && b.featured) return 1;
+          return (b.totalSold || 0) - (a.totalSold || 0);
+        });
+      case 'popular':
+        return sorted.sort((a, b) => (b.totalSold || 0) - (a.totalSold || 0));
+      case 'newest':
+        return sorted.sort((a, b) => {
+          const aTime = a.createdAt?.toMillis() || 0;
+          const bTime = b.createdAt?.toMillis() || 0;
+          return bTime - aTime;
+        });
+      case 'brand':
+        return sorted.sort((a, b) => a.brand.localeCompare(b.brand));
+      case 'price-low':
+        return sorted.sort((a, b) => {
+          const aMin = Math.min(...a.denominations.map(d => d.value));
+          const bMin = Math.min(...b.denominations.map(d => d.value));
+          return aMin - bMin;
+        });
+      case 'price-high':
+        return sorted.sort((a, b) => {
+          const aMax = Math.max(...a.denominations.map(d => d.value));
+          const bMax = Math.max(...b.denominations.map(d => d.value));
+          return bMax - aMax;
+        });
+      default:
+        return sorted;
+    }
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newSortBy = e.target.value;
+    setSortBy(newSortBy);
+    const sortedProducts = sortProducts(products, newSortBy);
+    setProducts(sortedProducts);
+  };
+
+  // Convert products to giftcard format for the card component
+  const giftcards = products.map(product => {
+    // Get available denominations with stock
+    const availableDenoms = product.denominations
+      .filter(denom => {
+        const availableCount = denom.serials?.filter(
+          (serial: any) => serial.status === 'available'
+        ).length || 0;
+        return availableCount > 0;
+      })
+      .map(d => d.value)
+      .sort((a, b) => a - b);
+    
+    const minDenom = availableDenoms[0] || 25;
+    
+    // Generate a consistent color based on brand
+    const brandColors: { [key: string]: string } = {
+      'Amazon': 'bg-orange-500',
+      'Apple': 'bg-gray-800',
+      'Netflix': 'bg-red-600',
+      'Spotify': 'bg-green-500',
+      'Google': 'bg-blue-600',
+      'Steam': 'bg-slate-700',
+      'Starbucks': 'bg-green-700',
+      'Target': 'bg-red-500',
+      'Uber': 'bg-black',
+      'Airbnb': 'bg-pink-500',
+      'Xbox': 'bg-green-600',
+      'Disney': 'bg-blue-700',
+      'PlayStation': 'bg-blue-800',
+      'Nintendo': 'bg-red-500'
+    };
+    
+    const bgColor = brandColors[product.brand] || 'bg-gray-700';
+    const logo = product.brand.charAt(0).toUpperCase();
+    
+    return {
+      id: product.id,
+      brand: product.brand,
+      logo: logo,
+      category: product.category || 'retail',
+      denominations: availableDenoms,
+      selectedDenomination: minDenom,
+      usdPrice: minDenom,
+      pxlPrice: Math.floor(minDenom * 98), // 2% discount for PXL
+      tierDiscount: product.featured ? 5 : 2,
+      cashback: product.featured ? 3 : 1,
+      inStock: true,
+      popularity: product.totalSold || 0,
+      bgColor: bgColor,
+      description: product.description || `Get ${product.brand} gift cards with instant delivery`,
+      artworkUrl: product.defaultArtworkUrl
+    };
+  });
+
+  if (loading) {
+    return (
+      <section className="py-8">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="bg-gray-800 rounded-xl h-64"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) {
+    return (
+      <section className="py-8">
+        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+          <div className="text-center py-12">
+            <h2 className="text-xl font-semibold text-white mb-2">
+              No Products Available
+            </h2>
+            <p className="text-gray-400">
+              Please check back later for available gift cards.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="py-8">
@@ -214,10 +242,10 @@ export function GiftcardGrid() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 className="text-xl font-semibold text-white">
-              All Gift Cards
+              Available Gift Cards
             </h2>
             <p className="text-sm text-gray-400 mt-1">
-              {giftcards.length} cards available
+              {giftcards.length} cards in stock
             </p>
           </div>
           
@@ -225,14 +253,17 @@ export function GiftcardGrid() {
           <div className="flex items-center space-x-4">
             <label className="text-sm text-gray-400">Sort by:</label>
             <select 
+              value={sortBy}
+              onChange={handleSortChange}
               className="rounded-lg border border-gray-700 bg-gray-900 py-1.5 px-3 pr-10 text-sm text-white focus:border-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-600 appearance-none bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdodD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxwYXRoIGQ9Ik0xIDFMNiA2TDExIDEiIHN0cm9rZT0iIzlDQTNBRiIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+')] bg-no-repeat bg-[position:calc(100%-16px)_center]"
               aria-label="Sort gift cards"
               title="Sort gift cards"
             >
-              <option value="popularity">Most Popular</option>
+              <option value="featured">Featured</option>
+              <option value="popular">Most Popular</option>
+              <option value="newest">Newest</option>
               <option value="price-low">Price: Low to High</option>
               <option value="price-high">Price: High to Low</option>
-              <option value="discount">Best Discount</option>
               <option value="brand">Brand A-Z</option>
             </select>
           </div>
@@ -240,18 +271,21 @@ export function GiftcardGrid() {
 
         {/* Giftcard Grid */}
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {sortedGiftcards.map((giftcard) => (
+          {giftcards.map((giftcard) => (
             <GiftcardCard key={giftcard.id} giftcard={giftcard} />
           ))}
         </div>
 
-        {/* Load More / Pagination */}
+        {/* Refresh Button */}
         <div className="mt-12 text-center">
-          <button className="rounded-lg border border-gray-700 bg-gray-900 px-6 py-3 text-white hover:bg-gray-800 hover:border-gray-600 transition-colors">
-            Load More Cards
+          <button 
+            onClick={fetchProducts}
+            className="rounded-lg border border-gray-700 bg-gray-900 px-6 py-3 text-white hover:bg-gray-800 hover:border-gray-600 transition-colors"
+          >
+            Refresh Products
           </button>
           <p className="text-sm text-gray-400 mt-2">
-            Showing 12 of 156 gift cards
+            Showing {giftcards.length} available gift cards
           </p>
         </div>
       </div>

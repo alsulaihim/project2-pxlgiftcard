@@ -5,7 +5,8 @@ import { db, storage } from "@/lib/firebase-config";
 import { collection, addDoc, deleteDoc, doc, getDocs, query, orderBy, Timestamp, updateDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Edit2, Image as ImageIcon, Search, Grid, List, X, Check, Upload } from "lucide-react";
+import { Plus, Trash2, Edit2, Image as ImageIcon, Search, Grid, List, X, Check, Upload, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { optimizeImage, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 
@@ -39,6 +40,7 @@ const ARTWORK_CATEGORIES = [
 ];
 
 export default function ArtworkRepositoryPage() {
+  const router = useRouter();
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -247,6 +249,15 @@ export default function ArtworkRepositoryPage() {
               <List className="h-4 w-4" />
             </Button>
           </div>
+
+          {/* Mapping Config Button */}
+          <Button 
+            onClick={() => router.push('/admin/artwork-mapping')} 
+            className="bg-purple-600 hover:bg-purple-700"
+          >
+            <Settings className="h-4 w-4 mr-2" />
+            Mapping Config
+          </Button>
 
           {/* Upload Button */}
           <Button onClick={() => setShowUploadModal(true)} className="bg-blue-600 hover:bg-blue-700">

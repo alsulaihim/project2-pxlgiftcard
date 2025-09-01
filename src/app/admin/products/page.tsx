@@ -14,7 +14,9 @@ import {
   Timestamp,
   query,
   orderBy,
-  writeBatch
+  writeBatch,
+  getDoc,
+  where
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { 
@@ -41,6 +43,8 @@ import {
 import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 import Image from "next/image";
 import { ArtworkGalleryModal } from "@/components/admin/artwork-gallery-modal";
+import { addSerialCodes } from "@/lib/inventory-service";
+import { matchArtworkForProduct, batchMatchArtwork } from "@/lib/artwork-matcher";
 
 interface ProductSerial {
   code: string;
@@ -155,7 +159,9 @@ export default function ProductsPage() {
       'denominations',
       'serials',
       'bg_color',
-      'status'
+      'status',
+      'artwork_mode', // New: auto, manual, or specific URL
+      'artwork_url' // New: optional, used when artwork_mode is manual
     ];
     
     const sampleData = [
@@ -171,7 +177,9 @@ export default function ProductsPage() {
         '25;50;100;200', // Multiple denominations separated by semicolon
         'AMZ25001:25;AMZ25002:25;AMZ50001:50;AMZ50002:50;AMZ100001:100', // Format: serial:denomination
         '#FF9900',
-        'active'
+        'active',
+        'auto', // Will auto-match based on brand "Amazon"
+        '' // Leave empty for auto mode
       ],
       [
         'iTunes',
@@ -185,7 +193,9 @@ export default function ProductsPage() {
         '15;25;50;100',
         'ITU15001:15;ITU15002:15;ITU25001:25;ITU50001:50',
         '#FC3C44',
-        'active'
+        'active',
+        'auto', // Will auto-match based on brand "iTunes" and category "Entertainment"
+        ''
       ],
       [
         'Steam',
@@ -199,12 +209,52 @@ export default function ProductsPage() {
         '20;50;100',
         'STM20001:20;STM20002:20;STM50001:50;STM100001:100',
         '#171A21',
-        'active'
+        'active',
+        'manual', // Use specific URL provided
+        'https://example.com/custom-steam-artwork.jpg' // Custom artwork URL
+      ],
+      [
+        'Starbucks',
+        'Starbucks Card',
+        'Dining',
+        'Coffee and treats at Starbucks',
+        'https://example.com/starbucks-logo.png',
+        'supplier_003',
+        'Blackhawk Network',
+        '8',
+        '10;25;50',
+        'SBX10001:10;SBX25001:25;SBX50001:50',
+        '#00704A',
+        'active',
+        'auto', // Will match based on "Starbucks" and "Dining" category
+        ''
       ]
     ];
     
-    // Combine headers and sample data
+    // Add instructions as comments
+    const instructions = [
+      '# CSV Import Instructions:',
+      '# artwork_mode options:',
+      '#   - auto: System will automatically match artwork based on brand/name/category',
+      '#   - manual: Use the URL provided in artwork_url column',
+      '#   - leave empty: No artwork will be assigned',
+      '# ',
+      '# The auto mode uses intelligent matching:',
+      '#   1. Exact brand match from artwork repository',
+      '#   2. Category-based matching (gaming, entertainment, shopping, etc.)',
+      '#   3. Tag-based fuzzy matching',
+      '#   4. Default/generic artwork as fallback',
+      '# ',
+      '# Tips for best results:',
+      '#   - Upload brand-specific artwork to the repository first',
+      '#   - Use consistent naming (e.g., "Amazon" not "AMZN")',
+      '#   - Set appropriate categories for better matching',
+      '# '
+    ];
+    
+    // Combine instructions, headers and sample data
     const csvContent = [
+      ...instructions,
       headers.join(','),
       ...sampleData.map(row => row.join(','))
     ].join('\n');
@@ -231,18 +281,55 @@ export default function ProductsPage() {
       const lines = text.split('\n');
       const headers = lines[0].split(',').map(h => h.trim());
       
-      const batch = writeBatch(db);
+      const importResults = [];
       
-      for (let i = 1; i < lines.length; i++) {
+      // Skip comment lines and find header row
+      let headerIndex = 0;
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].startsWith('#') && lines[i].includes('brand')) {
+          headerIndex = i;
+          break;
+        }
+      }
+      
+      // Prepare products for batch artwork matching
+      const productsToMatch: Array<{ name: string; brand: string; category?: string; rowIndex: number }> = [];
+      
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        if (lines[i].startsWith('#')) continue; // Skip comment lines
+        const values = lines[i].split(',').map(v => v.trim());
+        if (values.length < 12 || !values[0]) continue; // Skip empty rows
+        
+        const artworkMode = values[12] || 'auto';
+        if (artworkMode === 'auto') {
+          productsToMatch.push({
+            brand: values[0],
+            name: values[1],
+            category: values[2],
+            rowIndex: i
+          });
+        }
+      }
+      
+      // Batch match artwork for all auto-mode products
+      console.log(`Matching artwork for ${productsToMatch.length} products...`);
+      const artworkMap = await batchMatchArtwork(productsToMatch);
+      
+      // Process each product
+      for (let i = headerIndex + 1; i < lines.length; i++) {
+        if (lines[i].startsWith('#')) continue; // Skip comment lines
         const values = lines[i].split(',').map(v => v.trim());
         if (values.length < 12 || !values[0]) continue; // Skip empty rows
 
+        const brand = values[0];
+        const name = values[1];
+        
         // Parse denominations
         const denominationValues = values[8] ? values[8].split(';').map(d => parseInt(d.trim())) : [];
         
         // Parse serials and group by denomination
         const serialsData = values[9] ? values[9].split(';') : [];
-        const denominationsMap = new Map<number, ProductSerial[]>();
+        const denominationsMap = new Map<number, string[]>();
         
         serialsData.forEach(serialEntry => {
           const [code, denomStr] = serialEntry.split(':');
@@ -250,43 +337,83 @@ export default function ProductsPage() {
           if (!denominationsMap.has(denom)) {
             denominationsMap.set(denom, []);
           }
-          denominationsMap.get(denom)?.push({
-            code: code.trim(),
-            status: 'available' as const
-          });
+          denominationsMap.get(denom)?.push(code.trim());
         });
         
-        // Build denominations array with serials
-        const denominations: ProductDenomination[] = denominationValues.map(value => ({
-          value,
-          stock: denominationsMap.get(value)?.length || 0,
-          serials: denominationsMap.get(value) || []
-        }));
+        // Check if product exists
+        const existingProducts = await getDocs(
+          query(
+            collection(db, 'products'),
+            where('brand', '==', brand),
+            where('name', '==', name)
+          )
+        );
+        
+        let productId: string;
+        
+        if (existingProducts.empty) {
+          // Create new product with initial denominations (no serials yet)
+          const denominations: ProductDenomination[] = denominationValues.map(value => ({
+            value,
+            stock: 0,
+            serials: []
+          }));
 
-        const productData: Omit<Product, 'id'> = {
-          brand: values[0],
-          name: values[1],
-          category: values[2],
-          description: values[3],
-          logo: values[4],
-          supplierId: values[5],
-          supplierName: values[6],
-          commission: parseFloat(values[7]) || 10,
-          denominations,
-          bgColor: values[10] || '#000000',
-          status: (values[11] === 'active' || values[11] === 'inactive' || values[11] === 'out_of_stock') 
-            ? values[11] : 'active',
-          popularity: 0,
-          totalSold: 0,
-          createdAt: Timestamp.now(),
-          updatedAt: Timestamp.now()
-        };
+          // Determine artwork URL
+          let artworkUrl = '';
+          const artworkMode = values[12] || 'auto';
+          
+          if (artworkMode === 'manual' && values[13]) {
+            artworkUrl = values[13];
+            console.log(`Using manual artwork for ${brand}: ${artworkUrl}`);
+          } else if (artworkMode === 'auto') {
+            const mapKey = `${brand}_${name}`;
+            artworkUrl = artworkMap.get(mapKey) || '';
+            if (artworkUrl) {
+              console.log(`Auto-matched artwork for ${brand}: ${artworkUrl}`);
+            } else {
+              console.log(`No artwork found for ${brand}, will use default`);
+            }
+          }
+          
+          const productData: Omit<Product, 'id'> = {
+            brand: values[0],
+            name: values[1],
+            category: values[2],
+            description: values[3],
+            logo: values[4],
+            defaultArtworkUrl: artworkUrl, // Add artwork URL
+            supplierId: values[5],
+            supplierName: values[6],
+            commission: parseFloat(values[7]) || 10,
+            denominations,
+            bgColor: values[10] || '#000000',
+            status: 'inactive', // Start as inactive until serials are added
+            popularity: 0,
+            totalSold: 0,
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+          };
 
-        const docRef = doc(collection(db, 'products'));
-        batch.set(docRef, productData);
+          const docRef = await addDoc(collection(db, 'products'), productData);
+          productId = docRef.id;
+        } else {
+          productId = existingProducts.docs[0].id;
+        }
+        
+        // Add serials using the inventory service
+        for (const [denom, serials] of denominationsMap.entries()) {
+          if (serials.length > 0) {
+            const result = await addSerialCodes(productId, denom, serials);
+            importResults.push({
+              product: `${brand} - ${name}`,
+              denomination: denom,
+              added: result.added,
+              duplicates: result.duplicates
+            });
+          }
+        }
       }
-      
-      await batch.commit();
       
       // Refresh products list
       const snapshot = await getDocs(collection(db, 'products'));
@@ -296,7 +423,17 @@ export default function ProductsPage() {
       } as Product));
       setProducts(productsData);
       
-      alert('CSV import completed successfully!');
+      // Show import results
+      let resultMessage = 'CSV import completed!\n\n';
+      importResults.forEach(result => {
+        resultMessage += `${result.product} ($${result.denomination}): ${result.added} codes added`;
+        if (result.duplicates.length > 0) {
+          resultMessage += ` (${result.duplicates.length} duplicates skipped)`;
+        }
+        resultMessage += '\n';
+      });
+      
+      alert(resultMessage);
     } catch (error) {
       console.error('Error importing CSV:', error);
       alert('Error importing CSV. Please check the file format.');
@@ -442,8 +579,20 @@ export default function ProductsPage() {
         return;
       }
 
+      // Prepare product data - keep existing serials, don't override them
       const productData = {
-        ...formData,
+        brand: formData.brand,
+        name: formData.name,
+        category: formData.category,
+        description: formData.description,
+        logoUrl: formData.logo,
+        defaultArtworkUrl: formData.defaultArtworkUrl,
+        supplierId: formData.supplierId,
+        supplierName: formData.supplierName,
+        commission: formData.commission,
+        bgColor: formData.bgColor,
+        status: formData.status,
+        featured: formData.featured,
         popularity: selectedProduct?.popularity || 0,
         totalSold: selectedProduct?.totalSold || 0,
         createdAt: selectedProduct?.createdAt || Timestamp.now(),
@@ -451,24 +600,69 @@ export default function ProductsPage() {
       };
 
       if (selectedProduct) {
-        // Update existing product
+        // Update existing product - DO NOT touch denominations/serials
         await updateDoc(doc(db, 'products', selectedProduct.id), productData);
+        
+        // Update local state
         setProducts(products.map(p => 
-          p.id === selectedProduct.id ? { ...productData, id: selectedProduct.id } : p
+          p.id === selectedProduct.id 
+            ? { ...p, ...productData, denominations: p.denominations, id: selectedProduct.id } 
+            : p
         ));
+        
+        alert('Product updated successfully! Note: Serial codes are managed separately.');
       } else {
-        // Create new product
-        const docRef = await addDoc(collection(db, 'products'), productData);
-        const newProduct = { ...productData, id: docRef.id };
+        // Create new product with denominations structure
+        const newProductData = {
+          ...productData,
+          denominations: formData.denominations.map((d: ProductDenomination) => ({
+            value: d.value,
+            stock: 0,
+            serials: [],
+            artworkUrl: d.artworkUrl || ''
+          }))
+        };
+        
+        const docRef = await addDoc(collection(db, 'products'), newProductData);
+        const newProduct = { ...newProductData, id: docRef.id };
         setProducts([...products, newProduct]);
+        
+        alert('Product created successfully! Now add serial codes to activate inventory.');
       }
 
       setIsModalOpen(false);
       resetForm();
-      alert('Product saved successfully!');
     } catch (error) {
       console.error('Error saving product:', error);
       alert('Failed to save product');
+    }
+  };
+
+  // Separate function to handle adding serial codes
+  const handleAddSerialCodes = async (productId: string, denomination: number, serialCodes: string[]) => {
+    try {
+      const result = await addSerialCodes(productId, denomination, serialCodes);
+      
+      if (result.success) {
+        // Refresh the product to get updated data
+        const productDoc = await getDoc(doc(db, 'products', productId));
+        if (productDoc.exists()) {
+          const updatedProduct = { ...productDoc.data(), id: productId };
+          setProducts(products.map(p => 
+            p.id === productId ? updatedProduct : p
+          ));
+        }
+        
+        alert(`Successfully added ${result.added} serial codes. Duplicates: ${result.duplicates.length}`);
+        return true;
+      } else {
+        alert(`Failed to add serial codes: ${result.error}`);
+        return false;
+      }
+    } catch (error) {
+      console.error('Error adding serial codes:', error);
+      alert('Failed to add serial codes');
+      return false;
     }
   };
 
@@ -569,6 +763,15 @@ export default function ProductsPage() {
           </div>
           
           <button
+            onClick={() => router.push('/admin/inventory')}
+            className="flex items-center px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors"
+            title="View inventory dashboard"
+          >
+            <Package className="h-4 w-4 mr-2" />
+            Inventory
+          </button>
+          
+          <button
             onClick={() => router.push('/admin/artwork')}
             className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
             title="Manage artwork repository"
@@ -578,11 +781,20 @@ export default function ProductsPage() {
           </button>
           
           <button
+            onClick={() => router.push('/admin/csv-builder')}
+            className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+            title="Build CSV with guided interface"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            CSV Builder
+          </button>
+          
+          <button
             onClick={downloadCSVTemplate}
             className="flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             title="Download CSV template with sample data"
           >
-            <FileSpreadsheet className="h-4 w-4 mr-2" />
+            <Download className="h-4 w-4 mr-2" />
             Template
           </button>
           <button
@@ -1054,32 +1266,124 @@ export default function ProductsPage() {
 
               {/* Denominations */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Denominations</label>
-                <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Denominations & Serial Codes</label>
+                <div className="space-y-4">
                   {formData.denominations.map((denom, idx) => (
-                    <div key={idx} className="flex items-center space-x-2">
-                      <input
-                        type="number"
-                        value={denom.value}
-                        onChange={(e) => {
-                          const newDenoms = [...formData.denominations];
-                          newDenoms[idx] = { ...denom, value: parseInt(e.target.value) || 0 };
-                          setFormData({ ...formData, denominations: newDenoms });
-                        }}
-                        className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
-                        placeholder="Value"
-                      />
-                      <button
-                        onClick={() => {
-                          setFormData({
-                            ...formData,
-                            denominations: formData.denominations.filter((_, i) => i !== idx)
-                          });
-                        }}
-                        className="p-2 text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                    <div key={idx} className="border border-gray-700 rounded-lg p-4 space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400">Value ($)</label>
+                          <input
+                            type="number"
+                            value={denom.value}
+                            onChange={(e) => {
+                              const newDenoms = [...formData.denominations];
+                              newDenoms[idx] = { ...denom, value: parseInt(e.target.value) || 0 };
+                              setFormData({ ...formData, denominations: newDenoms });
+                            }}
+                            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500"
+                            placeholder="Denomination value"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-400">Current Stock</label>
+                          <input
+                            type="text"
+                            value={`${denom.serials?.filter((s: any) => s.status === 'available').length || 0} available`}
+                            disabled
+                            className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-gray-400"
+                          />
+                        </div>
+                        <button
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              denominations: formData.denominations.filter((_, i) => i !== idx)
+                            });
+                          }}
+                          className="p-2 text-red-400 hover:text-red-300 mt-4"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      
+                      {/* Serial Codes Section */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <label className="text-xs text-gray-400">Serial Codes Management</label>
+                          <span className="text-xs text-gray-500">
+                            {denom.serials?.length || 0} total, 
+                            {denom.serials?.filter((s: any) => s.status === 'available').length || 0} available
+                          </span>
+                        </div>
+                        {selectedProduct ? (
+                          <>
+                            <textarea
+                              id={`serials-${denom.value}`}
+                              placeholder="Enter new serial codes to add, one per line"
+                              className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-mono focus:ring-2 focus:ring-blue-500"
+                              rows={3}
+                            />
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const textarea = document.getElementById(`serials-${denom.value}`) as HTMLTextAreaElement;
+                                const codes = textarea.value.split('\n').filter(code => code.trim()).map(c => c.trim());
+                                
+                                if (codes.length === 0) {
+                                  alert('Please enter at least one serial code');
+                                  return;
+                                }
+                                
+                                const result = await handleAddSerialCodes(selectedProduct.id, denom.value, codes);
+                                if (result) {
+                                  textarea.value = ''; // Clear on success
+                                  // Refresh form data with updated product
+                                  const updatedProduct = products.find(p => p.id === selectedProduct.id);
+                                  if (updatedProduct) {
+                                    setFormData({
+                                      ...formData,
+                                      denominations: updatedProduct.denominations
+                                    });
+                                  }
+                                }
+                              }}
+                              className="w-full px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg transition-colors"
+                            >
+                              Add Serial Codes to Inventory
+                            </button>
+                          </>
+                        ) : (
+                          <div className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg">
+                            <p className="text-xs text-gray-500 italic">
+                              Save the product first, then you can add serial codes
+                            </p>
+                          </div>
+                        )}
+                        {denom.serials && denom.serials.length > 0 && (
+                          <div className="text-xs text-gray-500">
+                            <details>
+                              <summary className="cursor-pointer hover:text-gray-400">
+                                View current serials ({denom.serials.length})
+                              </summary>
+                              <div className="mt-2 max-h-32 overflow-y-auto bg-gray-900 p-2 rounded">
+                                {denom.serials.map((serial: any, sIdx: number) => (
+                                  <div key={sIdx} className="flex justify-between py-1">
+                                    <span className="font-mono">{serial.code}</span>
+                                    <span className={`px-2 py-0.5 rounded text-xs ${
+                                      serial.status === 'available' ? 'bg-green-900 text-green-300' :
+                                      serial.status === 'reserved' ? 'bg-yellow-900 text-yellow-300' :
+                                      'bg-gray-700 text-gray-300'
+                                    }`}>
+                                      {serial.status}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </details>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                   <button

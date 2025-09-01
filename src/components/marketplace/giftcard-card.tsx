@@ -22,6 +22,7 @@ interface GiftcardData {
   popularity: number;
   bgColor: string;
   description: string;
+  artworkUrl?: string;
 }
 
 interface GiftcardCardProps {

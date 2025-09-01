@@ -22,6 +22,7 @@ import { formatBalance } from '@/lib/validation';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase-config';
 import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { createOrder, processOrderPayment } from '@/lib/order-service';
 
 export default function CheckoutForm() {
   const router = useRouter();
@@ -49,36 +50,52 @@ export default function CheckoutForm() {
   // Payment success handler
   const handlePaymentSuccess = async (paymentDetails: any) => {
     try {
-      // Create order in Firestore
+      // Ensure user is authenticated
+      if (!user?.uid) {
+        throw new Error('User must be authenticated to place an order');
+      }
+
+      // Create order with inventory reservation
       const orderData = {
-        userId: user?.uid,
+        userId: user.uid,
         items: state.items.map(item => ({
-          giftcardId: item.giftcardId,
+          productId: item.giftcardId, // Using giftcardId as productId
           brand: item.brand,
           productName: item.productName,
           denomination: item.denomination,
-          quantity: item.quantity,
-          code: `${item.brand.toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`,
-          pin: Math.random().toString().substr(2, 4)
+          quantity: item.quantity
         })),
         payment: {
           method: selectedPaymentMethod,
           amount: selectedPaymentMethod === 'pxl' ? state.totals.pxl : state.totals.usd,
-          currency: selectedPaymentMethod === 'pxl' ? 'PXL' : 'USD',
-          externalId: paymentDetails.id || paymentDetails.paymentIntentId || paymentDetails.orderId
+          currency: selectedPaymentMethod === 'pxl' ? 'PXL' : 'USD'
         },
         totals: {
           subtotal: state.totals.usd,
           discount: state.totals.savings,
           cashback: selectedPaymentMethod === 'pxl' ? state.totals.cashback : 0,
           total: selectedPaymentMethod === 'pxl' ? state.totals.pxl : state.totals.usd
-        },
-        status: 'completed',
-        createdAt: serverTimestamp()
+        }
       };
 
-      const docRef = await addDoc(collection(db, 'orders'), orderData);
-      setOrderId(docRef.id);
+      // Create order with inventory reservation
+      console.log('Creating order with data:', orderData);
+      const orderResult = await createOrder(orderData);
+      
+      if (!orderResult.success) {
+        console.error('Order creation failed:', orderResult.error);
+        throw new Error(orderResult.error || 'Failed to create order');
+      }
+      
+      const orderId = orderResult.orderId!;
+      setOrderId(orderId);
+      
+      // Process payment and confirm inventory
+      const paymentResult = await processOrderPayment(orderId, paymentDetails);
+      
+      if (!paymentResult.success) {
+        throw new Error(paymentResult.error || 'Failed to process payment');
+      }
       
       setPaymentResult(paymentDetails);
       setSuccess(true);
@@ -89,11 +106,11 @@ export default function CheckoutForm() {
       // Clear cart after successful payment
       dispatch(cartActions.clearCart());
       
-      console.log('Payment successful, order created:', docRef.id);
+      console.log('Payment successful, order created:', orderId);
       
       // Redirect to order confirmation page
       setTimeout(() => {
-        router.push(`/order-confirmation/${docRef.id}`);
+        router.push(`/order-confirmation/${orderId}`);
       }, 2000);
     } catch (error) {
       console.error('Error creating order:', error);

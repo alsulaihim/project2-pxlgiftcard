@@ -12,7 +12,8 @@ import {
   Shield,
   BarChart3,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Boxes
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
@@ -163,6 +164,13 @@ export default function AdminDashboardPage() {
       icon: Package,
       description: "Manage giftcard suppliers and inventory",
       color: "text-purple-400"
+    },
+    {
+      title: "Inventory Management",
+      href: "/admin/inventory",
+      icon: Boxes,
+      description: "Track stock levels, serials, and inventory alerts",
+      color: "text-orange-400"
     },
     {
       title: "Security & Compliance",

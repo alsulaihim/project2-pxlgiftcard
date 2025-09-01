@@ -41,13 +41,19 @@ interface ChatSession {
   lastMessageAt: Timestamp;
 }
 
-const tierGreetings = {
-  starter: "Hi, I’m Sara. 👋 How can I help you with giftcards or PXL today?",
-  rising: "Hello Rising member, I’m Sara! 🌟 Great to see you. How can I help today?",
-  pro: "Welcome back, Pro member! I’m Sara 💎 I’ve got you—what would you like to do next?",
-  pixlbeast: "Hi Pixlbeast! I’m Sara 🦁 Your perks are ready—how can I make things easier today?",
-  pixlionaire: "Hello, esteemed Pixlionaire! I’m Sara 👑 Consider me your VIP concierge. What can I arrange for you?",
-  guest: "Hi! I’m Sara. 👋 Welcome to the PXL Giftcard Platform. How can I help today?"
+const getTierGreeting = (tier: string, userName?: string) => {
+  const name = userName ? ` ${userName}` : "";
+  
+  const greetings = {
+    starter: `Hi${name}, I'm Sara. 👋 How can I help you with giftcards or PXL today?`,
+    rising: `Hello${name}, Rising member! I'm Sara 🌟 Great to see you. How can I help today?`,
+    pro: `Welcome back${name}, Pro member! I'm Sara 💎 I've got you—what would you like to do next?`,
+    pixlbeast: `Hi ${userName || "Pixlbeast"}! I'm Sara 🦁 Your perks are ready—how can I make things easier today?`,
+    pixlionaire: `Hello${name}, esteemed Pixlionaire! I'm Sara 👑 Consider me your VIP concierge. What can I arrange for you?`,
+    guest: "Hi! I'm Sara. 👋 Welcome to the PXL Giftcard Platform. How can I help today?"
+  };
+  
+  return greetings[tier as keyof typeof greetings] || greetings.guest;
 };
 
 const suggestedQuestions = [
@@ -130,12 +136,10 @@ export default function ChatPage() {
       const newSession = { id: docRef.id, ...sessionData } as ChatSession;
       setSession(newSession);
 
-      // Send initial greeting
-      // BUG FIX: 2025-01-27 - Ensure safe indexing by narrowing to known keys
-      const userTierKey = (sessionData.userTier && ["starter","rising","pro","pixlbeast","pixlionaire","guest"].includes(sessionData.userTier))
-        ? (sessionData.userTier as keyof typeof tierGreetings)
-        : "guest";
-      const greeting = tierGreetings[userTierKey];
+      // Send initial greeting with user's username
+      const userTier = sessionData.userTier || "guest";
+      const username = platformUser?.username;
+      const greeting = getTierGreeting(userTier, username);
       const greetingMessage: Partial<Message> = {
         content: greeting,
         sender: "agent",
@@ -198,7 +202,7 @@ export default function ChatPage() {
       initializeSession();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, authLoading]);
+  }, [session, authLoading, platformUser]);
 
   // Send message to OpenAI and get response
   const getAIResponse = async (userMessage: string): Promise<string> => {

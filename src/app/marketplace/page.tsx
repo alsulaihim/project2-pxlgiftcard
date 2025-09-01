@@ -5,7 +5,8 @@
 
 import { MarketplaceHeader } from "@/components/marketplace/marketplace-header";
 import { SearchAndFilters } from "@/components/marketplace/search-and-filters";
-import { GiftcardGrid } from "@/components/marketplace/giftcard-grid";
+// import { GiftcardGrid } from "@/components/marketplace/giftcard-grid";
+import { GiftcardGridSimple as GiftcardGrid } from "@/components/marketplace/giftcard-grid-simple"; // Temporary for debugging
 
 /**
  * Marketplace page for browsing and purchasing giftcards

@@ -217,7 +217,7 @@ export function Navigation() {
 
                 {/* User Dropdown Menu */}
                 {isUserMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-64 bg-gray-900 border border-gray-800 rounded-lg shadow-lg py-2">
+                  <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-gray-900 border border-gray-800 rounded-lg shadow-lg py-2 z-50">
                     <div className="px-4 py-3 border-b border-gray-800">
                       <div className="flex items-center space-x-3">
                         <UserAvatar user={platformUser} size={40} />
@@ -319,9 +319,17 @@ export function Navigation() {
         </div>
       </div>
 
-      {/* Mobile Menu - Vercel style */}
+      {/* Mobile Menu Overlay */}
       {isMenuOpen && (
-        <div className="lg:hidden border-t border-gray-900 bg-black/95 backdrop-blur-xl">
+        <>
+          {/* Backdrop */}
+          <div 
+            className="lg:hidden fixed inset-0 bg-black/50 z-30 top-[64px]"
+            onClick={() => setIsMenuOpen(false)}
+          />
+          
+          {/* Mobile Menu - Vercel style - Floating */}
+          <div className="lg:hidden fixed top-[64px] left-0 right-0 z-40 border-t border-gray-900 bg-black/95 backdrop-blur-xl max-h-[calc(100vh-64px)] overflow-y-auto shadow-2xl">
           <div className="mx-auto max-w-7xl px-6 py-6">
             {/* PXL Balance Display for mobile - logged-in users */}
             {user && platformUser && (
@@ -394,6 +402,7 @@ export function Navigation() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* Click outside to close user menu */}

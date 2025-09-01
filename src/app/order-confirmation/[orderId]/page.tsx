@@ -9,25 +9,27 @@ import {
   Download,
   Home,
   ShoppingBag,
-  AlertCircle
+  AlertCircle,
+  Package
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { db } from '@/lib/firebase-config';
 import { doc, getDoc } from 'firebase/firestore';
 import { formatPXL, formatUSD } from '@/lib/pxl-currency';
+import GiftCardReveal from '@/components/ecommerce/gift-card-reveal';
 
 interface OrderData {
   id: string;
   userId: string;
   items: Array<{
-    giftcardId: string;
+    productId: string;
     brand: string;
     productName: string;
     denomination: number;
     quantity: number;
-    code?: string;
-    pin?: string;
+    serials?: string[];
+    codes?: string[];
   }>;
   payment: {
     method: 'pxl' | 'stripe' | 'paypal';
@@ -42,6 +44,10 @@ interface OrderData {
   };
   status: 'completed' | 'processing' | 'failed';
   createdAt: any;
+  reservations?: Array<{
+    productId: string;
+    serials: string[];
+  }>;
 }
 
 export default function OrderConfirmationPage() {
@@ -50,7 +56,6 @@ export default function OrderConfirmationPage() {
   const { user } = useAuth();
   const [order, setOrder] = useState<OrderData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
     const loadOrder = async () => {
@@ -75,31 +80,6 @@ export default function OrderConfirmationPage() {
     loadOrder();
   }, [user, params.orderId]);
 
-  const copyToClipboard = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-    }
-  };
-
-  const shareGiftcard = async (item: any) => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${item.brand} Gift Card`,
-          text: `I have a $${item.denomination} ${item.brand} gift card! Code: ${item.code}`,
-        });
-      } catch (error) {
-        console.error('Error sharing:', error);
-      }
-    } else {
-      // Fallback to copy
-      copyToClipboard(item.code || '');
-    }
-  };
 
   if (loading) {
     return (
@@ -126,7 +106,7 @@ export default function OrderConfirmationPage() {
 
   return (
     <div className="min-h-screen bg-black">
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <main className="container mx-auto px-4 py-8 max-w-3xl">
         {/* Success Header */}
         <div className="text-center mb-8">
           <CheckCircle className="h-20 w-20 text-green-500 mx-auto mb-4" />
@@ -140,63 +120,53 @@ export default function OrderConfirmationPage() {
         </div>
 
         {/* Gift Cards */}
-        <div className="space-y-4 mb-8">
-          <h2 className="text-xl font-semibold text-white mb-4">Your Gift Cards</h2>
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-6">
+            <Package className="h-5 w-5 text-purple-400" />
+            <h2 className="text-xl font-semibold text-white">Your Gift Cards</h2>
+          </div>
           
-          {order.items.map((item, index) => (
-            <div key={index} className="bg-gray-950 border border-gray-800 rounded-xl p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">{item.brand}</h3>
-                  <p className="text-gray-400">{item.productName}</p>
-                  <p className="text-sm text-gray-500">Value: ${item.denomination}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-400">Quantity</p>
-                  <p className="text-lg font-semibold text-white">{item.quantity}</p>
-                </div>
-              </div>
-
-              {item.code && (
-                <div className="bg-gray-900 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-400">Gift Card Code</span>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => copyToClipboard(item.code || '')}
-                        className="text-gray-400 hover:text-white transition-colors"
-                        title="Copy code"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => shareGiftcard(item)}
-                        className="text-gray-400 hover:text-white transition-colors"
-                        title="Share"
-                      >
-                        <Share2 className="h-4 w-4" />
-                      </button>
+          <div className="space-y-4">
+            {order.items.map((item, itemIndex) => {
+              // If item has multiple serials/codes, show each separately
+              if (item.codes && item.codes.length > 0) {
+                return item.codes.map((code, codeIndex) => (
+                  <GiftCardReveal
+                    key={`${itemIndex}-${codeIndex}`}
+                    brand={item.brand}
+                    productName={item.productName}
+                    denomination={item.denomination}
+                    code={code}
+                    serialNumber={item.serials?.[codeIndex]}
+                    orderId={order.id}
+                    index={codeIndex}
+                  />
+                ));
+              }
+              
+              // Fallback for items without codes (shouldn't happen for completed orders)
+              return (
+                <div key={itemIndex} className="bg-gray-950 border border-gray-800 rounded-xl p-6">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">{item.brand}</h3>
+                      <p className="text-gray-400">{item.productName}</p>
+                      <p className="text-sm text-gray-500">Value: ${item.denomination}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-400">Quantity</p>
+                      <p className="text-lg font-semibold text-white">{item.quantity}</p>
                     </div>
                   </div>
-                  <div className="font-mono text-lg text-white bg-gray-800 rounded px-3 py-2 text-center">
-                    {item.code}
+                  <div className="mt-4 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                    <p className="text-sm text-yellow-400">
+                      Processing... Your gift card codes will appear here shortly.
+                    </p>
                   </div>
-                  {copiedCode === item.code && (
-                    <p className="text-xs text-green-400 mt-2 text-center">Copied!</p>
-                  )}
-                  
-                  {item.pin && (
-                    <div className="mt-3">
-                      <span className="text-sm text-gray-400">PIN</span>
-                      <div className="font-mono text-lg text-white bg-gray-800 rounded px-3 py-2 text-center mt-1">
-                        {item.pin}
-                      </div>
-                    </div>
-                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              );
+            })}
+          </div>
         </div>
 
         {/* Order Summary */}

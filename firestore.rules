@@ -147,12 +147,21 @@ service cloud.firestore {
     
     // Orders Collection
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && 
-        resource.data.userId == request.auth.uid;
+      // Allow users to read their own orders, admins can read all
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        isAdmin()
+      );
+      // Allow authenticated users to create orders
       allow create: if isAuthenticated() && 
         request.resource.data.userId == request.auth.uid;
-      allow update: if false; // Orders should not be updated by users
-      allow delete: if false; // Orders should not be deleted by users
+      // Allow system updates for payment processing and status changes
+      // In production, these should be done via Cloud Functions
+      allow update: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow delete: if false; // Orders should not be deleted
     }
     
     // Suppliers Collection - Admin only
@@ -161,15 +170,20 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
-    // Products Collection - Public read, admin write
+    // Products Collection - Public read, controlled write
     match /products/{productId} {
       // Anyone can read products (for marketplace display)
       allow read: if true;
       
-      // Only admins can create, update, or delete products
+      // Only admins can create or delete products
       allow create: if isAdmin();
-      allow update: if isAdmin();
       allow delete: if isAdmin();
+      
+      // Allow updates for:
+      // 1. Admins (full access)
+      // 2. Authenticated users for inventory operations
+      // Note: In production, use Cloud Functions for inventory operations
+      allow update: if isAdmin() || isAuthenticated();
     }
     
     // Artwork Collection - For centralized artwork repository
@@ -209,6 +223,14 @@ service cloud.firestore {
         // No updates or deletes allowed for messages
         allow update, delete: if false;
       }
+    }
+    
+    // Inventory Logs Collection - Authenticated users can write, admins can read
+    match /inventory-logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated();
+      allow update: if false;
+      allow delete: if false;
     }
     
     // Support Tickets Collection - user-owned with messages subcollection
