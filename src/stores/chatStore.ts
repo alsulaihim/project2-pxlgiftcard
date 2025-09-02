@@ -113,7 +113,7 @@ export interface ChatState {
   loadingMore: Map<string, boolean>; // conversationId -> loading
   
   // Actions - Conversations
-  setActiveConversation: (id: string | null) => void;
+  setActiveConversation: (id: string | null) => Promise<void>;
   loadConversations: () => Promise<void>;
   createConversation: (members: string[], type: 'direct' | 'group', groupInfo?: any) => Promise<string>;
   deleteConversation: (id: string) => Promise<void>;
@@ -192,21 +192,60 @@ export const useChatStore = create<ChatState>()(
         loadingMore: new Map(),
 
         // Conversation actions
-        setActiveConversation: (id) => set((state) => {
-          // Leave previous conversation room if exists
-          const previousId = state.activeConversationId;
-          const socketService = (window as any).socketService;
+        setActiveConversation: async (id) => {
+          set((state) => {
+            // Leave previous conversation room if exists
+            const previousId = state.activeConversationId;
+            const socketService = (window as any).socketService;
+            
+            if (socketService && previousId && previousId !== id) {
+              socketService.leaveConversation(previousId);
+            }
+            
+            state.activeConversationId = id;
+          });
           
-          if (socketService && previousId && previousId !== id) {
-            socketService.leaveConversation(previousId);
+          // Ensure member public keys are loaded for this conversation
+          if (id) {
+            const conversation = get().conversations.get(id);
+            if (conversation && (!conversation.memberDetails || conversation.memberDetails.size === 0)) {
+              console.log('📥 Loading member public keys for conversation:', id);
+              const { getUserPublicKey } = await import('@/services/chat/key-exchange.service');
+              
+              const memberKeyPromises = conversation.members.map(async (memberId: string) => {
+                try {
+                  const publicKey = await getUserPublicKey(memberId);
+                  return { memberId, publicKey };
+                } catch (error) {
+                  console.warn(`Failed to fetch public key for ${memberId}:`, error);
+                  return { memberId, publicKey: null };
+                }
+              });
+              
+              const memberKeys = await Promise.all(memberKeyPromises);
+              
+              set((state) => {
+                const conv = state.conversations.get(id);
+                if (conv) {
+                  const memberDetails = new Map();
+                  memberKeys.forEach(({ memberId, publicKey }) => {
+                    if (publicKey) {
+                      memberDetails.set(memberId, { publicKey });
+                      console.log(`✅ Loaded public key for ${memberId}`);
+                    }
+                  });
+                  conv.memberDetails = memberDetails;
+                  console.log(`🔑 Conversation ${id} now has ${memberDetails.size} member keys`);
+                }
+              });
+            }
           }
           
-          state.activeConversationId = id;
-          
           if (id) {
-            state.markConversationAsRead(id);
+            get().markConversationAsRead(id);
             
             // Join new conversation room to receive typing events
+            const socketService = (window as any).socketService;
             if (socketService) {
               console.log(`🚪 Joining conversation room: ${id}`);
               socketService.joinConversation(id);
@@ -214,7 +253,7 @@ export const useChatStore = create<ChatState>()(
               console.warn('⚠️ SocketService not available to join conversation');
             }
           }
-        }),
+        },
 
         loadConversations: async () => {
           set((state) => {
@@ -248,9 +287,48 @@ export const useChatStore = create<ChatState>()(
               }
             });
             
+            // Fetch public keys for all conversation members
+            const { getUserPublicKey } = await import('@/services/chat/key-exchange.service');
+            const allMembers = new Set<string>();
+            conversations.forEach(c => c.members.forEach(m => allMembers.add(m)));
+            
+            // Fetch all member public keys
+            const memberKeysPromises = Array.from(allMembers).map(async (userId) => {
+              try {
+                const publicKey = await getUserPublicKey(userId);
+                return { userId, publicKey };
+              } catch (error) {
+                console.warn(`Failed to fetch public key for ${userId}:`, error);
+                return { userId, publicKey: null };
+              }
+            });
+            
+            const memberKeys = await Promise.all(memberKeysPromises);
+            const memberKeyMap = new Map(memberKeys.filter(m => m.publicKey).map(m => [m.userId, m.publicKey!]));
+            
+            // Update conversations with member details including public keys
             set((state) => {
-              state.conversations = new Map(conversations.map(c => [c.id, c as any]));
+              const updatedConversations = new Map();
+              conversations.forEach(c => {
+                const memberDetails = new Map();
+                c.members.forEach(memberId => {
+                  const publicKey = memberKeyMap.get(memberId);
+                  if (publicKey) {
+                    memberDetails.set(memberId, { publicKey });
+                    console.log(`📝 Added public key for ${memberId} in conversation ${c.id}`);
+                  }
+                });
+                console.log(`🔑 Conversation ${c.id} has ${memberDetails.size} member keys`);
+                updatedConversations.set(c.id, { ...c, memberDetails });
+              });
+              state.conversations = updatedConversations;
               state.isLoading = false;
+              
+              // Debug: Log the first conversation's memberDetails
+              const firstConv = Array.from(updatedConversations.values())[0];
+              if (firstConv) {
+                console.log('🔍 First conversation memberDetails:', firstConv.memberDetails);
+              }
             });
             
             // BUG FIX: 2025-01-30 - Auto-join all group conversations
@@ -397,39 +475,48 @@ export const useChatStore = create<ChatState>()(
             throw new Error('No active conversation selected');
           }
 
-          // Encrypt message if encryption is available
-          let encryptedContent = content;
-          let nonce = '';
-          let senderEncryptedContent = content;
-          let senderNonce = '';
+          // Simple encryption approach:
+          // 1. Encrypt for recipient (if we have their key)
+          // 2. Store plaintext for sender (base64 encoded with marker)
           
-          console.log('🔐 Encryption state:', {
-            hasEncryption: !!state.encryption,
-            hasKeyPair: !!(state.encryption && state.encryption.keyPair)
-          });
+          let encryptedContent: string | undefined;
+          let nonce: string | undefined;
+          let senderEncryptedContent: string | undefined;
+          let senderNonce: string | undefined;
           
-          if (state.encryption && state.encryption.keyPair) {
-            const conversation = state.conversations.get(conversationId);
-            
-            // Find recipient's public key (other user in direct conversation)
-            const recipientId = conversation?.members.find(id => id !== state.userId);
-            const recipientKeys = Array.from(conversation?.memberDetails?.values() || [])
-              .map(m => m.publicKey)
-              .filter(Boolean);
-            
-            // Encrypt for recipient if we have their public key
-            if (recipientKeys.length > 0) {
-              const encrypted = await state.encryption.encryptMessage(content, recipientKeys[0]);
-              encryptedContent = encrypted.content;
-              nonce = encrypted.nonce;
+          const conversation = state.conversations.get(conversationId);
+          const recipientId = conversation?.members.find(id => id !== state.userId);
+          
+          // Try to encrypt for recipient
+          if (state.encryption && recipientId) {
+            try {
+              // Get recipient's public key
+              const { getUserPublicKey } = await import('@/services/chat/key-exchange.service');
+              const recipientPublicKey = await getUserPublicKey(recipientId);
+              
+              if (recipientPublicKey) {
+                // Encrypt for recipient
+                const encrypted = await state.encryption.encryptMessage(content, recipientPublicKey);
+                encryptedContent = encrypted.content;
+                nonce = encrypted.nonce;
+                console.log('✅ Message encrypted for recipient');
+              } else {
+                console.log('⚠️ No recipient public key - sending plaintext');
+                encryptedContent = content;
+              }
+            } catch (error) {
+              console.error('❌ Encryption failed:', error);
+              encryptedContent = content; // Fallback to plaintext
             }
-            
-            // Also encrypt for sender (so they can decrypt their own messages)
-            // Use sender's own public key for this
-            const senderEncrypted = await state.encryption.encryptMessage(content, state.encryption.keyPair.publicKey);
-            senderEncryptedContent = senderEncrypted.content;
-            senderNonce = senderEncrypted.nonce;
+          } else {
+            encryptedContent = content; // No encryption available
           }
+          
+          // For sender: Always store as base64-encoded plaintext with marker
+          // This avoids the NaCl self-encryption issue
+          senderEncryptedContent = Buffer.from(content).toString('base64');
+          senderNonce = 'plaintext'; // Special marker for plaintext
+          console.log('📝 Storing base64 plaintext for sender');
 
           // Get reply ID before clearing
           const replyToId = state.replyingTo?.id;
@@ -477,13 +564,23 @@ export const useChatStore = create<ChatState>()(
             const messageData: any = {
               conversationId,
               type: type || 'text',
-              text: encryptedContent || content,  // Recipient's encrypted version (fallback to plain text)
-              nonce: nonce || '',
-              senderText: senderEncryptedContent || content,  // Sender's encrypted version (fallback to plain text)
-              senderNonce: senderNonce || '',
               metadata: metadata || {},
               tempId: tempMessage.id // Include temp ID for correlation
             };
+            
+            // Add encrypted fields for recipient
+            if (encryptedContent) {
+              messageData.text = encryptedContent;
+              if (nonce) {
+                messageData.nonce = nonce;
+              }
+            }
+            
+            // Add sender's plaintext copy
+            if (senderEncryptedContent && senderNonce) {
+              messageData.senderText = senderEncryptedContent;
+              messageData.senderNonce = senderNonce;
+            }
             
             // Only add replyTo if it exists
             if (replyToId) {

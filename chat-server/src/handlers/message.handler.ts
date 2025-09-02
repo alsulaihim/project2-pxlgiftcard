@@ -70,12 +70,14 @@ export class MessageHandler {
       const messageData: any = {
         senderId: socket.data.userId,
         type: type || 'text',
-        text: text || '',
-        nonce: nonce || '',
-        senderText: senderText || '',
-        senderNonce: senderNonce || '',
         metadata: metadata || {}
       };
+
+      // Only add encrypted fields if they have values
+      if (text) messageData.text = text;
+      if (nonce) messageData.nonce = nonce;
+      if (senderText) messageData.senderText = senderText;
+      if (senderNonce) messageData.senderNonce = senderNonce;
       
       // Only add replyTo if it exists
       if (replyTo) {
@@ -123,10 +125,6 @@ export class MessageHandler {
         conversationId,
         senderId: socket.data.userId,
         type: type || 'text',
-        text: text || '',
-        nonce: nonce || '',
-        senderText: senderText || '',
-        senderNonce: senderNonce || '',
         timestamp: new Date(),
         delivered: [socket.data.userId],
         read: [],
@@ -137,6 +135,12 @@ export class MessageHandler {
           tier: socket.data.tier
         }
       };
+
+      // Only add encrypted fields if they have values
+      if (text) broadcastMessage.text = text;
+      if (nonce) broadcastMessage.nonce = nonce;
+      if (senderText) broadcastMessage.senderText = senderText;
+      if (senderNonce) broadcastMessage.senderNonce = senderNonce;
       
       // Only add replyTo if it exists
       if (replyTo) {

@@ -46,8 +46,7 @@ export class PresenceHandler {
       userId: socket.data.userId,
       displayName: socket.data.displayName,
       photoURL: socket.data.photoURL,
-      tier: socket.data.tier,
-      isTestUser: socket.data.isTestUser
+      tier: socket.data.tier
     });
     
     // Broadcast online status

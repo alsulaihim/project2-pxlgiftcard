@@ -1,6 +1,5 @@
 "use client";
 
-import { db } from "@/lib/firebase-config";
 import {
   addDoc,
   collection,
@@ -16,6 +15,7 @@ import {
   where,
   Timestamp,
 } from "firebase/firestore";
+import { db } from "@/lib/firebase-config";
 
 export interface SupportTicket {
   id: string;

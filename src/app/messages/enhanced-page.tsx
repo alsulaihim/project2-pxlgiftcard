@@ -1,24 +1,21 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { Plus, Search, Users, Mic, Settings, Bell } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { useChatStore } from "@/stores/chatStore";
 import { ConversationList } from "@/components/chat/ConversationList";
-import { ChatWindow } from "@/components/chat/ChatWindow";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { MessageSearch } from "@/components/chat/MessageSearch";
 import { VoiceRecorder } from "@/components/chat/VoiceRecorder";
-import { MessageStatus } from "@/components/chat/MessageStatus";
-import { MessageReactions } from "@/components/chat/MessageReactions";
 import { VirtualMessageList } from "@/components/chat/VirtualMessageList";
 import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
 import { socketService } from "@/services/chat/socket.service";
 import { offlineQueue } from "@/services/chat/offline-queue.service";
-import { Plus, Search, Users, Mic, Settings, Bell } from "lucide-react";
 
 export default function EnhancedMessagesPage() {
-  const { user, platformUser } = useAuth();
+  const { user } = useAuth();
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback'>('connecting');
   
@@ -26,7 +23,6 @@ export default function EnhancedMessagesPage() {
     conversations,
     messages,
     activeConversationId,
-    isConnected,
     typing,
     presence,
     loadConversations,
@@ -37,7 +33,6 @@ export default function EnhancedMessagesPage() {
     initializeEncryption,
     updateTyping,
     markAsRead,
-    addReaction,
     reset
   } = useChatStore();
 
@@ -95,6 +90,7 @@ export default function EnhancedMessagesPage() {
       socketService.disconnect();
       reset();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   // Load messages for active conversation
@@ -112,10 +108,19 @@ export default function EnhancedMessagesPage() {
         markAsRead(unreadIds, user?.uid || '');
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeConversationId]);
 
   const activeConversation = activeConversationId ? conversations.get(activeConversationId) : null;
-  const activeMessages = activeConversationId ? messages.get(activeConversationId) || [] : [];
+  const rawMessages = activeConversationId ? messages.get(activeConversationId) || [] : [];
+  // Map Message type to ChatMessage type for VirtualMessageList
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const activeMessages = rawMessages.map((msg: any) => ({
+    ...msg,
+    text: msg.decryptedContent || msg.content || msg.text || '',
+    readBy: msg.read || msg.readBy || [],
+    deliveredTo: msg.delivered || msg.deliveredTo || []
+  }));
   const typingUsers = activeConversationId ? typing.get(activeConversationId) || [] : [];
 
   const handleSendMessage = async (text: string) => {
@@ -164,10 +169,10 @@ export default function EnhancedMessagesPage() {
             <h2 className="text-xl font-bold text-white">Messages</h2>
             <div className="flex items-center gap-2">
               <MessageSearch />
-              <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+              <button type="button" aria-label="Notifications" className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
                 <Bell className="w-5 h-5 text-gray-400" />
               </button>
-              <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+              <button type="button" aria-label="Add new" className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
                 <Plus className="w-5 h-5 text-gray-400" />
               </button>
             </div>
@@ -212,6 +217,7 @@ export default function EnhancedMessagesPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src="/default-avatar.png"
                       alt="User"
@@ -234,10 +240,10 @@ export default function EnhancedMessagesPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+                  <button type="button" aria-label="Search messages" className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
                     <Search className="w-5 h-5 text-gray-400" />
                   </button>
-                  <button className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
+                  <button type="button" aria-label="Settings" className="p-2 hover:bg-gray-700 rounded-lg transition-colors">
                     <Settings className="w-5 h-5 text-gray-400" />
                   </button>
                 </div>
@@ -273,15 +279,18 @@ export default function EnhancedMessagesPage() {
               ) : (
                 <div className="flex items-center gap-2">
                   <button
+                    type="button"
+                    aria-label="Voice recording"
                     onClick={() => setShowVoiceRecorder(true)}
                     className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     <Mic className="w-5 h-5 text-gray-400" />
                   </button>
                   <MessageInput
-                    onSendMessage={handleSendMessage}
+                    onSend={handleSendMessage}
                     onTyping={handleTyping}
                     placeholder="Type a message..."
+                    conversationId={activeConversationId || undefined}
                   />
                 </div>
               )}

@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { db } from '@/lib/firebase-config';
-import { collection, addDoc, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import { Upload, CheckCircle, AlertCircle, Loader2, FileSpreadsheet } from 'lucide-react';
-import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
+import { collection, addDoc, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { Upload, CheckCircle, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/auth-context';
+import { db } from '@/lib/firebase-config';
 
 interface ParsedProduct {
   brand: string;
@@ -97,7 +97,6 @@ export default function CSVImportPage() {
       return;
     }
 
-    const headers = lines[0].split(',').map(h => h.trim());
     setImportStatus(prev => [...prev, `Found ${lines.length - 1} products to import`]);
 
     const products: ParsedProduct[] = [];

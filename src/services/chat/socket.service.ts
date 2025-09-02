@@ -14,7 +14,8 @@ export interface SocketMessage {
   conversationId: string;
   senderId: string;
   type: 'text' | 'image' | 'file' | 'voice';
-  content: string;
+  content: string; // Encrypted content
+  text?: string; // Decrypted text for compatibility
   nonce: string;
   timestamp: string;
   delivered: string[];
@@ -25,6 +26,13 @@ export interface SocketMessage {
     fileSize?: number;
     mimeType?: string;
     duration?: number;
+    mediaType?: string;
+    downloadUrl?: string;
+  };
+  sender?: {
+    displayName?: string;
+    photoURL?: string;
+    tier?: string;
   };
 }
 
@@ -37,6 +45,7 @@ export interface SocketEvents {
   'typing:update': (data: { conversationId: string; userId: string; typing: boolean }) => void;
   'recording:update': (data: { conversationId: string; userId: string; recording: boolean }) => void;
   'presence:update': (data: { userId: string; online: boolean; lastSeen?: string }) => void;
+  'new-conversation': (data: { conversationId: string }) => void;
   'error': (error: { message: string }) => void;
   'connect': () => void;
   'disconnect': (reason: string) => void;
@@ -53,8 +62,8 @@ export class SocketService {
   private isConnected = false;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = Infinity; // Never give up reconnecting
-  private eventListeners: Map<string, Function[]> = new Map();
-  private messageQueue: any[] = [];
+  private eventListeners: Map<string, ((...args: unknown[]) => void)[]> = new Map();
+  private messageQueue: unknown[] = [];
   private fallbackMode = false;
 
   private constructor() {}
@@ -70,7 +79,7 @@ export class SocketService {
    * Initialize Socket.io connection with Firebase authentication
    * Gracefully falls back to Firestore-only mode if server is unavailable
    */
-  async initialize(userId?: string): Promise<Socket | null> {
+  async initialize(_userId?: string): Promise<Socket | null> {
     if (this.socket?.connected) {
       return this.socket;
     }

@@ -4,6 +4,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase-config';
 import { myfatoorahService } from '@/lib/myfatoorah-service';
 
 export async function GET(request: NextRequest) {

@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { db, storage } from "@/lib/firebase-config";
+import Image from "next/image";
 import { 
   collection, 
   doc, 
@@ -14,7 +13,6 @@ import {
   Timestamp,
   query,
   orderBy,
-  writeBatch,
   getDoc,
   where
 } from "firebase/firestore";
@@ -28,23 +26,18 @@ import {
   Plus,
   FileSpreadsheet,
   Package,
-  DollarSign,
-  AlertCircle,
   X,
-  CreditCard,
-  Hash,
-  Image as ImageIcon,
-  FileImage,
   ImagePlus,
   Grid,
   List,
-  Palette
+  Palette,
+  Image as ImageIcon
 } from "lucide-react";
-import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
-import Image from "next/image";
 import { ArtworkGalleryModal } from "@/components/admin/artwork-gallery-modal";
+import { useAuth } from "@/contexts/auth-context";
 import { addSerialCodes } from "@/lib/inventory-service";
-import { matchArtworkForProduct, batchMatchArtwork } from "@/lib/artwork-matcher";
+import { db, storage } from "@/lib/firebase-config";
+import { optimizeImage, validateImageFile, generateArtworkFilename, ARTWORK_DIMENSIONS } from "@/lib/image-optimizer";
 
 interface ProductSerial {
   code: string;
@@ -84,7 +77,7 @@ interface Product {
 }
 
 export default function ProductsPage() {
-  const { user, platformUser, loading: authLoading, isAdmin } = useAuth();
+  const { loading: authLoading, isAdmin } = useAuth();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const artworkInputRef = useRef<HTMLInputElement>(null);
@@ -334,8 +327,6 @@ export default function ProductsPage() {
         return;
       }
 
-      const headers = lines[0].split(',').map(h => h.trim());
-      
       console.log(`Processing ${lines.length - 1} products from CSV...`);
       let successCount = 0;
       let skipCount = 0;
@@ -499,7 +490,7 @@ export default function ProductsPage() {
         }
 
         // Optimize image
-        const { blob, dataUrl } = await optimizeImage(file, {
+        const { blob } = await optimizeImage(file, {
           maxWidth: ARTWORK_DIMENSIONS.CARD.width,
           maxHeight: ARTWORK_DIMENSIONS.CARD.height,
           quality: 0.9,

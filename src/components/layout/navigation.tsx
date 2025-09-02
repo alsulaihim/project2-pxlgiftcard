@@ -11,7 +11,7 @@ import Image from "next/image";
 import { Menu, X, User, LogOut, Settings, Coins, Store, Home, LayoutGrid, Wallet, Headphones } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartIcon } from "@/components/ecommerce/cart-icon";
-import { useAuth } from "@/contexts/auth-context";
+import { useAuth, type PlatformUser } from "@/contexts/auth-context";
 import { formatPXL } from "@/lib/pxl-currency";
 
 /**
@@ -47,7 +47,7 @@ function TierRing({ tier, size = 48 }: { tier: string; size?: number }) {
 // Solution: Better URL validation and improved error handling with fallback state
 // Impact: No more console errors, proper fallback to initials when image fails
 
-function UserAvatar({ user, size = 48 }: { user: any; size?: number }) {
+function UserAvatar({ user, size = 48 }: { user: PlatformUser; size?: number }) {
   const [imageError, setImageError] = React.useState(false);
   
   // Debug log to see what we're getting
@@ -81,7 +81,7 @@ function UserAvatar({ user, size = 48 }: { user: any; size?: number }) {
     <div className="relative">
       <TierRing tier={user?.tier?.current || 'starter'} size={size} />
       <div className="absolute inset-0.5 rounded-full overflow-hidden flex items-center justify-center">
-        {hasValidAvatarUrl ? (
+        {hasValidAvatarUrl && user.profile.avatarUrl ? (
           <Image
             src={user.profile.avatarUrl}
             alt={`${user.profile.firstName} ${user.profile.lastName}`}
@@ -207,7 +207,7 @@ export function Navigation() {
                   <UserAvatar user={platformUser} size={48} />
                   <div className="hidden md:block text-left">
                     <div className="text-sm text-white font-medium">
-                      {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
+                      {platformUser.profile?.firstName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                     </div>
                     <div className="text-xs text-gray-400 capitalize">
                       {typeof platformUser.tier === 'object' ? platformUser.tier?.current : platformUser.tier || 'starter'} Tier
@@ -223,7 +223,7 @@ export function Navigation() {
                         <UserAvatar user={platformUser} size={40} />
                         <div>
                           <div className="text-sm text-white font-medium">
-                            {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
+                            {platformUser.profile?.firstName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                           </div>
                           <div className="text-xs text-gray-400">
                             {platformUser.username}
@@ -370,7 +370,7 @@ export function Navigation() {
                   <UserAvatar user={platformUser} size={40} />
                   <div>
                     <div className="text-sm text-white font-medium">
-                      {platformUser.profile?.firstName || platformUser.displayName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
+                      {platformUser.profile?.firstName || platformUser.email?.split('@')[0] || 'User'} {platformUser.profile?.lastName || ''}
                     </div>
                     <div className="text-xs text-gray-400 capitalize">
                       {typeof platformUser.tier === 'object' ? platformUser.tier?.current : platformUser.tier || 'starter'} Tier

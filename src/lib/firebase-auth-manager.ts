@@ -1,6 +1,6 @@
 // Firebase Auth Manager - Ensures proper auth state initialization
-import { auth } from './firebase-config';
 import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from './firebase-config';
 
 class FirebaseAuthManager {
   private static instance: FirebaseAuthManager;

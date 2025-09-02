@@ -1,7 +1,5 @@
 "use client";
 
-import { db, auth } from "@/lib/firebase-config";
-import { authManager } from "@/lib/firebase-auth-manager";
 import {
   addDoc,
   collection,
@@ -18,7 +16,10 @@ import {
   Timestamp,
   writeBatch,
 } from "firebase/firestore";
-import { encryptionService } from "./encryption.service";
+import { db, auth } from "@/lib/firebase-config";
+import { authManager } from "@/lib/firebase-auth-manager";
+import { EncryptionService } from "./encryption.service";
+const encryptionService = EncryptionService.getInstance();
 import { keyExchangeService } from "./key-exchange.service";
 
 export interface ChatUser {
@@ -52,11 +53,16 @@ export interface ChatMessage {
   id: string;
   senderId: string;
   text: string; // Decrypted text for display
+  content?: string; // For compatibility
+  decryptedContent?: string; // For compatibility
   encryptedContent?: string; // Encrypted content stored in Firestore
   nonce?: string; // Encryption nonce
+  senderText?: string; // Sender's version of encrypted text
+  senderNonce?: string; // Sender's encryption nonce
   timestamp: Timestamp;
   readBy?: string[]; // Array of user IDs who have read this message
   deliveredTo?: string[]; // Array of user IDs who have received this message
+  replyTo?: string; // ID of message being replied to
   reactions?: { [emoji: string]: string[] }; // Reactions with emoji as key and array of user IDs
   type?: string; // Message type (text, image, file, etc.)
   metadata?: any; // Additional metadata for media messages
@@ -311,6 +317,9 @@ export async function sendMessage(
     type?: string;
     metadata?: any;
     nonce?: string;
+    encryptedContent?: string;
+    senderEncryptedContent?: string;
+    senderNonce?: string;
   }
 ): Promise<void> {
   // Ensure auth is ready and token is fresh
@@ -335,17 +344,18 @@ export async function sendMessage(
       throw new Error(`Conversation not found: ${conversationId}`);
     }
 
-    // For direct messages, encrypt for both participants
-    let encryptedContent = text;
-    let nonce = '';
-    let senderEncryptedContent = '';
-    let senderNonce = '';
+    // Check if we already have encrypted content from the caller
+    let encryptedContent = options?.encryptedContent || text;
+    let nonce = options?.nonce || '';
+    let senderEncryptedContent = options?.senderEncryptedContent || '';
+    let senderNonce = options?.senderNonce || '';
     
     // Skip encryption for media messages (they contain URLs, not sensitive content)
     // Media content itself is already encrypted separately
     const isMediaMessage = options?.type && ['image', 'file', 'voice', 'media'].includes(options.type);
     
-    if (conversation.type === 'direct' && !isMediaMessage) {
+    // Only encrypt if we don't already have encrypted content
+    if (conversation.type === 'direct' && !isMediaMessage && !options?.encryptedContent) {
       const recipientId = conversation.members.find(id => id !== senderId);
       if (recipientId) {
         try {
@@ -409,8 +419,25 @@ export async function sendMessage(
       messageData.senderNonce = senderNonce;
     }
 
+    console.log('📤 SAVING MESSAGE TO FIRESTORE:', {
+      conversationId,
+      senderId,
+      hasText: !!messageData.text,
+      textLength: messageData.text?.length,
+      textPreview: messageData.text?.substring(0, 50),
+      hasNonce: !!messageData.nonce,
+      nonceValue: messageData.nonce,
+      hasSenderText: !!messageData.senderText,
+      senderTextLength: messageData.senderText?.length,
+      senderTextPreview: messageData.senderText?.substring(0, 50),
+      hasSenderNonce: !!messageData.senderNonce,
+      senderNonceValue: messageData.senderNonce,
+      type: messageData.type
+    });
+    
     const messagesRef = collection(db, "conversations", conversationId, "messages");
-    await addDoc(messagesRef, messageData);
+    const docRef = await addDoc(messagesRef, messageData);
+    console.log('📤 Message saved with ID:', docRef.id);
     
     await setDoc(
       doc(db, "conversations", conversationId),
@@ -486,8 +513,8 @@ export function subscribeMessages(
       // Check if this is a media message - they don't need decryption
       const isMediaMessage = data.type && ['image', 'file', 'voice', 'media'].includes(data.type);
       
-      // Don't show encrypted text initially - wait for decryption
-      let decryptedText = data.nonce || data.senderNonce ? '[Decrypting...]' : data.text;
+      // Start with encrypted text, will decrypt if needed
+      let decryptedText = data.text || '[No message content]';
       
       // Skip decryption for media messages - they contain URLs
       if (isMediaMessage) {
@@ -498,10 +525,63 @@ export function subscribeMessages(
       // Problem: Sender couldn't decrypt their own messages because they were encrypted for recipient
       // Solution: Use senderText/senderNonce for sender's own messages, text/nonce for others' messages
       // Impact: Both sender and recipient can decrypt and read messages properly
-      const currentUserId = encryptionService.getCurrentUserId?.();
-      const hasKeyPair = encryptionService.getPublicKey() !== null;
       
-      if (hasKeyPair && (data.nonce || data.senderNonce) && !isMediaMessage) {
+      // BUG FIX: 2025-02-01 - Get user ID from auth manager instead of encryption service
+      // Problem: encryptionService.getCurrentUserId() returns null if not initialized yet
+      // Solution: Use auth.currentUser?.uid which is always available when authenticated
+      // Impact: Decryption now works properly even before encryption service initialization
+      const currentUserId = auth.currentUser?.uid || encryptionService.getCurrentUserId?.();
+      
+      // BUG FIX: 2025-02-01 - Ensure encryption service has current user ID
+      // Problem: Encryption service might not have user ID set when decrypting
+      // Solution: Set it if we have auth user but encryption service doesn't have it
+      // Impact: Ensures encryption service is properly initialized for decryption
+      if (currentUserId && !encryptionService.getCurrentUserId?.()) {
+        console.log('🔐 Setting current user ID in encryption service:', currentUserId);
+        encryptionService.setCurrentUserId?.(currentUserId);
+      }
+      
+      let hasKeyPair = encryptionService.getPublicKey() !== null;
+      
+      // BUG FIX: 2025-02-01 - Load keys if not already loaded
+      // Problem: Keys might not be loaded when trying to decrypt
+      // Solution: Try to load keys from storage if they're not in memory
+      // Impact: Ensures keys are available for decryption
+      if (!hasKeyPair && currentUserId) {
+        console.log('🔐 No keys in memory, attempting to load from storage...');
+        try {
+          await keyExchangeService.initializeUserKeys(currentUserId);
+          hasKeyPair = encryptionService.getPublicKey() !== null;
+          console.log('🔐 Keys loaded successfully:', hasKeyPair);
+        } catch (error) {
+          console.error('🔥 Failed to load keys:', error);
+        }
+      }
+      
+      console.log('🔐 ==== DECRYPTION DEBUG START ====');
+      console.log('🔐 Message ID:', docSnap.id);
+      console.log('🔐 Current User ID:', currentUserId);
+      console.log('🔐 Sender ID:', data.senderId);
+      console.log('🔐 Is own message:', data.senderId === currentUserId);
+      console.log('🔐 Has encryption key pair:', hasKeyPair);
+      console.log('🔐 Message data fields:', {
+        hasText: !!data.text,
+        textLength: data.text?.length || 0,
+        textPreview: data.text?.substring(0, 50),
+        hasNonce: !!data.nonce,
+        nonceValue: data.nonce,
+        hasSenderText: !!data.senderText,
+        senderTextLength: data.senderText?.length || 0,
+        senderTextPreview: data.senderText?.substring(0, 50),
+        hasSenderNonce: !!data.senderNonce,
+        senderNonceValue: data.senderNonce,
+        messageType: data.type,
+        isMediaMessage
+      });
+      console.log('🔐 ==== DECRYPTION DEBUG END ====');
+      
+      // Handle decryption based on whether user is sender or recipient
+      if ((data.nonce || data.senderNonce) && !isMediaMessage) {
         try {
           console.log('🔐 Retrieved encrypted message from Firestore:');
           console.log('🔐 Sender ID:', data.senderId);

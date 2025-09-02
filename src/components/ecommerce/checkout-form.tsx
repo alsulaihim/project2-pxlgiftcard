@@ -264,7 +264,7 @@ export default function CheckoutForm() {
       // Prepare customer info
       const customerName = platformUser?.profile?.firstName && platformUser?.profile?.lastName
         ? `${platformUser.profile.firstName} ${platformUser.profile.lastName}`
-        : platformUser?.displayName || user.email?.split('@')[0] || 'Customer';
+        : user.email?.split('@')[0] || 'Customer';
       
       const customerEmail = user.email || 'customer@example.com';
       const customerMobile = platformUser?.profile?.phone || '';

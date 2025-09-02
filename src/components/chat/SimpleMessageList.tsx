@@ -83,7 +83,7 @@ export const SimpleMessageList: React.FC<SimpleMessageListProps> = ({
               user={user}
               showAvatar={!isOwn}
               currentUserId={currentUserId}
-              onReply={onReply}
+              onReply={onReply ? () => onReply(message.id) : undefined}
               onEdit={onEdit}
               onDelete={onDelete}
               onReact={onReact}

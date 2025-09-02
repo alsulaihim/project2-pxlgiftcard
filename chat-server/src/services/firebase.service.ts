@@ -31,7 +31,11 @@ export class FirebaseService {
         
         if (serviceAccountPath) {
           // Initialize with service account
-          const serviceAccount = require(path.resolve(serviceAccountPath));
+          const absolutePath = path.isAbsolute(serviceAccountPath) 
+            ? serviceAccountPath 
+            : path.join(process.cwd(), serviceAccountPath);
+          logger.info(`🔑 Loading service account from: ${absolutePath}`);
+          const serviceAccount = require(absolutePath);
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             projectId: process.env.FIREBASE_PROJECT_ID || 'pxl-perfect-1'
@@ -60,7 +64,7 @@ export class FirebaseService {
    */
   public async verifyIdToken(token: string): Promise<admin.auth.DecodedIdToken> {
     try {
-      const decodedToken = await this.auth.verifyIdToken(token);
+      const decodedToken = await this.auth!.verifyIdToken(token);
       logger.debug(`🔐 Token verified for user: ${decodedToken.uid}`);
       return decodedToken;
     } catch (error) {
@@ -250,10 +254,10 @@ export class FirebaseService {
     }
     
     try {
-      const batch = this.db.batch();
+      const batch = this.db!.batch();
       
       messageIds.forEach(messageId => {
-        const messageRef = this.db
+        const messageRef = this.db!
           .collection('conversations')
           .doc(conversationId)
           .collection('messages')

@@ -123,7 +123,7 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       }
       
       console.log('🔧 Connected to Firebase emulators');
-    } catch (error) {
+    } catch {
       console.log('⚠️ Firebase emulators already connected or not available');
     }
   }

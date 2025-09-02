@@ -2,20 +2,14 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase-config";
 import { collection, getDocs } from "firebase/firestore";
 import { 
   Download, 
   Plus, 
   Trash2, 
-  Copy,
-  FileSpreadsheet,
-  Save,
-  Upload,
-  Check,
-  X,
-  ChevronDown
+  Copy
 } from "lucide-react";
+import { db } from "@/lib/firebase-config";
 
 // Predefined options for dropdowns
 const KNOWN_BRANDS = [
@@ -41,7 +35,6 @@ const SUPPLIERS = [
 ];
 
 const STATUS_OPTIONS = ['active', 'inactive', 'draft'];
-const ARTWORK_MODES = ['auto', 'manual', ''];
 
 const BRAND_COLORS: { [key: string]: string } = {
   'Amazon': '#FF9900',

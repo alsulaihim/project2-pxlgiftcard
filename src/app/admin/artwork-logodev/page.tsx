@@ -1,19 +1,18 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { db, storage } from "@/lib/firebase-config";
 import { collection, getDocs, updateDoc, doc, addDoc, Timestamp } from "firebase/firestore";
 import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { 
+  Palette, CheckCircle, XCircle, Loader2, 
+  Zap, AlertTriangle, 
+  ExternalLink, Key, Settings, Download
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { db, storage } from "@/lib/firebase-config";
 import { 
-  Palette, Upload, CheckCircle, XCircle, Loader2, 
-  Image as ImageIcon, Zap, Shield, AlertTriangle, 
-  ExternalLink, Key, Settings, Download
-} from "lucide-react";
-import { 
-  getLogoDevUrl, 
   getLogoAsDataUrl, 
   testLogoDevAPI,
   LOGODEV_CONFIG,
@@ -49,7 +48,7 @@ export default function LogoDevArtworkPage() {
   const [apiConfigured, setApiConfigured] = useState(false);
   const [testingApi, setTestingApi] = useState(false);
   const [previewUrls, setPreviewUrls] = useState<Record<string, string>>({});
-  const [logoCache, setLogoCache] = useState<Map<string, string>>(new Map());
+  const [logoCache] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     fetchProducts();
@@ -143,13 +142,14 @@ export default function LogoDevArtworkPage() {
 
     // Try to load and draw the logo
     let logoDrawn = false;
-    let logoDataUrl = logoCache.get(product.brand);
+    let logoDataUrl: string | undefined = logoCache.get(product.brand);
     
     if (!logoDataUrl && apiConfigured) {
       // Fetch logo from Logo.dev
-      logoDataUrl = await getLogoAsDataUrl(product.brand, 180);
-      if (logoDataUrl) {
-        logoCache.set(product.brand, logoDataUrl);
+      const fetchedLogo = await getLogoAsDataUrl(product.brand, 180);
+      if (fetchedLogo) {
+        logoDataUrl = fetchedLogo;
+        logoCache.set(product.brand, fetchedLogo);
       }
     }
 

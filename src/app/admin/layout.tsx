@@ -1,11 +1,11 @@
 // Admin layout with route protection
 "use client";
 
-import { useAuth } from "@/contexts/auth-context";
-import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter, usePathname } from "next/navigation";
 import { LayoutDashboard, Users, TrendingUp, Package, Shield, Settings, MessageSquare, CreditCard } from "lucide-react";
+import { useAuth } from "@/contexts/auth-context";
 
 const navigation = [
   { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },

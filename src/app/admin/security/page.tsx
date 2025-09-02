@@ -1,21 +1,17 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase-config";
 import { 
   collection, 
   query, 
-  where,
   orderBy,
   limit,
   getDocs,
-  Timestamp,
-  onSnapshot,
-  QuerySnapshot,
-  DocumentData
+  Timestamp
 } from "firebase/firestore";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase-config";
 import { 
   Shield, 
   AlertTriangle, 

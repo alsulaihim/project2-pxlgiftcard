@@ -16,7 +16,6 @@ import {
   query,
   where,
   orderBy,
-  limit,
   getDocs
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase-config';

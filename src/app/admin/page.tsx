@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
 import { 
   Users, 
   TrendingUp, 
@@ -15,13 +17,10 @@ import {
   ArrowDownRight,
   Boxes
 } from "lucide-react";
-import Link from "next/link";
+import { FullPageLoader } from '@/components/ui/loader';
 import { useAuth } from "@/contexts/auth-context";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
-import { formatPXL } from "@/lib/pxl-currency";
 import { db } from "@/lib/firebase-config";
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore";
-import { FullPageLoader } from '@/components/ui/loader';
 
 interface DashboardMetrics {
   totalUsers: number;

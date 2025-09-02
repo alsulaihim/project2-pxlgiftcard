@@ -1,29 +1,24 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useAuth } from "@/contexts/auth-context";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase-config";
 import { 
   collection, 
-  getDocs, 
-  query, 
-  where,
-  Timestamp,
+  getDocs,
   onSnapshot
 } from "firebase/firestore";
 import { 
   Package, 
   AlertTriangle, 
   TrendingDown, 
-  CheckCircle,
   RefreshCw,
   Download,
   BarChart3,
-  ShoppingCart,
   Clock
 } from "lucide-react";
-import { getStockLevels, getLowStockProducts, releaseExpiredReservations } from "@/lib/inventory-service";
+import { useAuth } from "@/contexts/auth-context";
+import { db } from "@/lib/firebase-config";
+import { getLowStockProducts, releaseExpiredReservations } from "@/lib/inventory-service";
 
 interface Product {
   id: string;

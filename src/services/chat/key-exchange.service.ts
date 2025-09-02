@@ -1,17 +1,16 @@
 "use client";
 
-import { db } from "@/lib/firebase-config";
 import {
   doc,
   getDoc,
   setDoc,
   collection,
   query,
-  where,
   getDocs,
   serverTimestamp,
   Timestamp,
 } from "firebase/firestore";
+import { db } from "@/lib/firebase-config";
 import { encryptionService, KeyPair } from './encryption.service';
 import { storageService } from './storage.service';
 
@@ -366,3 +365,6 @@ export class KeyExchangeService {
 
 // Export singleton instance
 export const keyExchangeService = KeyExchangeService.getInstance();
+
+// Export convenience functions for common operations
+export const getUserPublicKey = (userId: string) => keyExchangeService.getUserPublicKey(userId);

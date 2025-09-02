@@ -1,50 +1,66 @@
 'use client';
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { useAuth } from "@/contexts/auth-context";
-import { useChatStore } from "@/stores/chatStore";
-import { ConversationList } from "@/components/chat/ConversationList";
-import { ChatWindow } from "@/components/chat/ChatWindow";
+import { doc, getDoc, deleteDoc, updateDoc, getDocs, collection, Timestamp } from "firebase/firestore";
+import { 
+  Plus, Search, Users, Mic, Phone, Video, 
+  Info, ChevronDown, MessageSquare,
+  Trash2, Camera
+} from "lucide-react";
 import { MessageInput } from "@/components/chat/MessageInput";
 import { SimpleMessageList } from "@/components/chat/SimpleMessageList";
-import { TypingIndicator } from "@/components/chat/TypingIndicator";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
 import { ProfileSlider } from "@/components/chat/ProfileSlider";
+import { useAuth } from "@/contexts/auth-context";
+import type { SocketMessage } from "@/services/chat/socket.service";
+import type { Message } from "@/stores/chatStore";
+import { useChatStore } from "@/stores/chatStore";
+import { encryptionService } from "@/services/chat/encryption.service";
 import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
 import { socketService } from "@/services/chat/socket.service";
 import { offlineQueue } from "@/services/chat/offline-queue.service";
-import { 
-  Plus, Search, Users, Mic, Settings, Bell, Phone, Video, 
-  Info, Star, MoreVertical, Hash, Lock, ChevronDown, 
-  Paperclip, Image as ImageIcon, Smile, Send, File, X, Home, MessageSquare,
-  CreditCard, Wallet, User as UserIcon, Trash2, Camera, Edit2
-} from "lucide-react";
-import { doc, getDoc, deleteDoc, updateDoc, getDocs, collection } from "firebase/firestore";
 import { db } from "@/lib/firebase-config";
 import { authManager } from "@/lib/firebase-auth-manager";
 
 export default function EnhancedMessagesPage() {
   const { user, platformUser } = useAuth();
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback'>('connecting');
-  const [userProfiles, setUserProfiles] = useState<Map<string, any>>(new Map());
+  const [userProfiles, setUserProfiles] = useState<Map<string, {
+    uid: string;
+    displayName?: string;
+    email?: string;
+    photoURL?: string;
+    tier?: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
+    createdAt?: Date;
+    lastSeen?: Date;
+    country?: string;
+    region?: string;
+    [key: string]: unknown;
+  }>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
-  const [showChannelImageUpload, setShowChannelImageUpload] = useState(false);
-  const [messageListHeight, setMessageListHeight] = useState(600);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingState = useRef<boolean>(false);
   const [showProfileSlider, setShowProfileSlider] = useState(false);
-  const [selectedProfile, setSelectedProfile] = useState<any>(null);
+  const [selectedProfile, setSelectedProfile] = useState<{
+    uid: string;
+    displayName?: string;
+    email?: string;
+    photoURL?: string;
+    tier?: 'starter' | 'rising' | 'pro' | 'pixlbeast' | 'pixlionaire';
+    createdAt?: Date;
+    lastSeen?: Date;
+    country?: string;
+    region?: string;
+  } | null>(null);
   const [forceUpdate, setForceUpdate] = useState(0);
   
   const {
     conversations,
     messages,
     activeConversationId,
-    isConnected,
     typing,
     recording,
     presence,
@@ -68,18 +84,6 @@ export default function EnhancedMessagesPage() {
     reset
   } = useChatStore();
   
-  // Calculate message list height dynamically
-  useEffect(() => {
-    const calculateHeight = () => {
-      // Account for header (128px with padding), message input (120px), and some padding
-      const height = window.innerHeight - 268;
-      setMessageListHeight(Math.max(400, height)); // Minimum 400px
-    };
-
-    calculateHeight();
-    window.addEventListener('resize', calculateHeight);
-    return () => window.removeEventListener('resize', calculateHeight);
-  }, []);
 
   // Set userId in store
   useEffect(() => {
@@ -118,7 +122,7 @@ export default function EnhancedMessagesPage() {
         const socket = await socketService.initialize(user.uid);
         
         // Expose socketService to window for store access
-        (window as any).socketService = socketService;
+        (window as Window & { socketService?: typeof socketService }).socketService = socketService;
         
         if (socket) {
           initializeSocket(socket);
@@ -144,8 +148,40 @@ export default function EnhancedMessagesPage() {
           });
           
           // Listen for new messages via WebSocket
-          socketService.on('message:new', async (message: any) => {
-            console.log('📨 New message received via WebSocket in Messages page:', message);
+          socketService.on('message:new', async (socketMessage: SocketMessage) => {
+            console.log('📨 New message received via WebSocket in Messages page:', socketMessage);
+            
+            // Decrypt the message if it's from another user
+            let decryptedText = socketMessage.content || '';
+            
+            if (socketMessage.senderId !== user?.uid && socketMessage.nonce) {
+              try {
+                const senderPublicKey = await keyExchangeService.getPublicKey(socketMessage.senderId);
+                if (senderPublicKey) {
+                  const decrypted = encryptionService.decryptMessage(
+                    { content: socketMessage.content || '', nonce: socketMessage.nonce },
+                    senderPublicKey
+                  );
+                  decryptedText = decrypted || '[Unable to decrypt]';
+                  console.log('🔓 Successfully decrypted message from:', socketMessage.senderId);
+                } else {
+                  console.warn('⚠️ Could not get public key for sender:', socketMessage.senderId);
+                  decryptedText = socketMessage.content || '[Unable to decrypt - key not found]';
+                }
+              } catch (error) {
+                console.error('🔥 Failed to decrypt message:', error);
+                decryptedText = socketMessage.content || '[Decryption failed]';
+              }
+            }
+            
+            // Convert SocketMessage to Message type with decrypted content
+            const message: Message = {
+              ...socketMessage,
+              timestamp: Timestamp.fromDate(new Date(socketMessage.timestamp)),
+              text: decryptedText, // For display compatibility
+              decryptedContent: decryptedText,
+              content: socketMessage.content || ''
+            };
             
             // Check if conversation exists, if not reload conversations
             const conversations = useChatStore.getState().conversations;
@@ -173,8 +209,11 @@ export default function EnhancedMessagesPage() {
               useChatStore.setState((state) => {
                 const conversation = state.conversations.get(message.conversationId);
                 if (conversation) {
-                  conversation.lastMessage = message;
-                  conversation.lastMessageTime = message.timestamp;
+                  conversation.lastMessage = {
+                    text: message.content,
+                    senderId: message.senderId,
+                    timestamp: message.timestamp
+                  };
                   // Increment unread count if not active conversation
                   if (state.activeConversationId !== message.conversationId && message.senderId !== user?.uid) {
                     conversation.unreadCount = (conversation.unreadCount || 0) + 1;
@@ -297,11 +336,11 @@ export default function EnhancedMessagesPage() {
     const msgs = messages.get(activeConversationId) || [];
     console.log(`📊 Active messages for ${activeConversationId}:`, msgs.length);
     // Convert Message type to ChatMessage type for compatibility
-    return msgs.map((msg: any) => ({
+    return msgs.map((msg: Message) => ({
       ...msg,
-      text: msg.decryptedContent || msg.content || msg.text || '',
-      readBy: msg.read || msg.readBy || [],
-      deliveredTo: msg.delivered || msg.deliveredTo || []
+      text: msg.text || msg.decryptedContent || msg.content || '',
+      readBy: msg.readBy || msg.read || [],
+      deliveredTo: msg.deliveredTo || msg.delivered || []
     }));
   }, [activeConversationId, messages]);
   const typingUsers = activeConversationId ? typing.get(activeConversationId) || [] : [];
@@ -316,20 +355,31 @@ export default function EnhancedMessagesPage() {
   // Problem: Media messages not showing for recipients due to missing metadata
   // Solution: Ensure downloadUrl is both in text field and metadata
   // Impact: Media messages now properly display for all users
-  const handleMediaSend = async (mediaMessage: any) => {
+  const handleMediaSend = async (mediaMessage: {
+    type?: 'image' | 'file' | 'voice';
+    mediaType?: 'image' | 'file' | 'voice'; 
+    url?: string;
+    downloadUrl?: string;
+    encryptedKey?: string;
+    nonce?: string;
+    metadata?: { 
+      fileName?: string; 
+      fileSize?: number; 
+      mimeType?: string; 
+      duration?: number;
+    };
+  }) => {
     if (!activeConversationId) return;
     
-    const messageType = mediaMessage.mediaType === 'image' ? 'image' : 
-                       mediaMessage.mediaType === 'voice' ? 'voice' : 
-                       mediaMessage.mediaType === 'file' ? 'file' : 'text';
+    const messageType = (mediaMessage.type || mediaMessage.mediaType) || 'file';
     
     // Ensure all media metadata is properly included
     const metadata = {
       ...mediaMessage.metadata,
-      downloadUrl: mediaMessage.downloadUrl,
+      downloadUrl: mediaMessage.downloadUrl || mediaMessage.url,
       encryptedKey: mediaMessage.encryptedKey,
       nonce: mediaMessage.nonce,
-      mediaType: mediaMessage.mediaType,
+      mediaType: mediaMessage.type || mediaMessage.mediaType,
       fileName: mediaMessage.metadata?.fileName,
       fileSize: mediaMessage.metadata?.fileSize,
       duration: mediaMessage.metadata?.duration
@@ -337,7 +387,7 @@ export default function EnhancedMessagesPage() {
     
     // Send downloadUrl as text content for backward compatibility
     // and full metadata for proper rendering
-    await sendMessage(mediaMessage.downloadUrl || '', messageType, metadata);
+    await sendMessage(mediaMessage.downloadUrl || mediaMessage.url || '', messageType, metadata);
   };
 
   const handleTyping = (isTyping: boolean) => {
@@ -482,19 +532,13 @@ export default function EnhancedMessagesPage() {
     };
   }, [userProfiles, user, platformUser]);
 
-  const handleLoadMore = useCallback(() => {
-    const oldest = activeMessages[0];
-    if (oldest && activeConversationId) {
-      loadMessages(activeConversationId, {
-        limit: 50,
-        before: oldest.id
-      });
-    }
-  }, [activeMessages, activeConversationId, loadMessages]);
 
-  const handleReply = useCallback((message: any) => {
-    setReplyingTo(message);
-  }, [setReplyingTo]);
+  const handleReply = useCallback((messageId: string) => {
+    const message = messages.get(activeConversationId || '')?.find(m => m.id === messageId);
+    if (message) {
+      setReplyingTo(message);
+    }
+  }, [setReplyingTo, messages, activeConversationId]);
 
   const handleEdit = useCallback((messageId: string, newText: string) => {
     editMessage(messageId, newText);
@@ -579,8 +623,8 @@ export default function EnhancedMessagesPage() {
             setShowProfileSlider(false);
             setSelectedProfile(null);
           }}
-          user={selectedProfile}
-          isOnline={presence.get(selectedProfile.uid) || false}
+          user={selectedProfile!}
+          isOnline={presence.get(selectedProfile?.uid || '') || false}
           conversationId={activeConversationId || undefined}
           messages={activeMessages}
         />
@@ -591,7 +635,7 @@ export default function EnhancedMessagesPage() {
         <div className="w-64 bg-[#0a0a0a] border-r border-[#262626] flex flex-col">
           {/* Workspace Header */}
           <div className="p-4 border-b border-[#262626]">
-            <button className="w-full flex items-center justify-between hover:bg-[#1a1a1a] px-2 py-1 rounded transition-colors">
+            <button type="button" aria-label="Open workspace menu" className="w-full flex items-center justify-between hover:bg-[#1a1a1a] px-2 py-1 rounded transition-colors">
               <span className="font-semibold text-white">PXL Chat</span>
               <ChevronDown className="w-4 h-4 text-gray-400" />
             </button>
@@ -615,7 +659,7 @@ export default function EnhancedMessagesPage() {
           <div className="flex-1 overflow-y-auto">
             {/* Channels Section */}
             <div className="px-3 py-2">
-              <button className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
+              <button type="button" aria-label="Toggle channels section" className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
                 <ChevronDown className="w-3 h-3" />
                 <span>Channels</span>
               </button>
@@ -665,6 +709,8 @@ export default function EnhancedMessagesPage() {
                       </div>
                       <span className="text-sm truncate flex-1">{conv.groupInfo?.name || 'group-chat'}</span>
                       <button
+                        type="button"
+                        aria-label="Delete conversation"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleDeleteConversation(conv.id);
@@ -678,6 +724,8 @@ export default function EnhancedMessagesPage() {
                 )})}
               
               <button
+                type="button"
+                aria-label="Create new channel"
                 onClick={() => setShowNewConversation(true)}
                 className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400 mt-1"
               >
@@ -688,7 +736,7 @@ export default function EnhancedMessagesPage() {
 
             {/* Direct Messages Section */}
             <div className="px-3 py-2 border-t border-[#262626]">
-              <button className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
+              <button type="button" aria-label="Toggle direct messages section" className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 mb-1">
                 <ChevronDown className="w-3 h-3" />
                 <span>Direct Messages</span>
               </button>
@@ -758,6 +806,8 @@ export default function EnhancedMessagesPage() {
                           </div>
                         </div>
                         <button
+                          type="button"
+                          aria-label="Delete conversation"
                           onClick={(e) => {
                             e.stopPropagation();
                             handleDeleteConversation(conv.id);
@@ -772,6 +822,8 @@ export default function EnhancedMessagesPage() {
                 })}
                 
               <button
+                type="button"
+                aria-label="Start new direct message"
                 onClick={() => setShowNewConversation(true)}
                 className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400 mt-1"
               >
@@ -817,6 +869,7 @@ export default function EnhancedMessagesPage() {
                         <input
                           type="file"
                           accept="image/*"
+                          aria-label="Upload channel image"
                           onChange={handleChangeChannelImage}
                           className="hidden"
                         />
@@ -954,14 +1007,16 @@ export default function EnhancedMessagesPage() {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  <button className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
+                  <button type="button" aria-label="Start voice call" className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
                     <Phone className="w-4 h-4 text-gray-400" />
                   </button>
-                  <button className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
+                  <button type="button" aria-label="Start video call" className="p-2 hover:bg-[#1a1a1a] rounded transition-colors">
                     <Video className="w-4 h-4 text-gray-400" />
                   </button>
                   {activeConversation.type === 'group' && (
                     <button 
+                      type="button"
+                      aria-label="Toggle information sidebar"
                       onClick={() => setShowRightSidebar(!showRightSidebar)}
                       className="p-2 hover:bg-[#1a1a1a] rounded transition-colors"
                     >
@@ -1003,7 +1058,7 @@ export default function EnhancedMessagesPage() {
                 onMediaSend={handleMediaSend}
                 onTyping={handleTyping}
                 placeholder={`Write a message...`}
-                conversationId={activeConversationId}
+                conversationId={activeConversationId || undefined}
                 recipientId={activeConversation.type === 'direct' ? activeConversation.members.find(id => id !== user.uid) || undefined : undefined}
                 replyingTo={replyingTo}
                 onCancelReply={() => setReplyingTo(null)}

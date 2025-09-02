@@ -227,7 +227,7 @@ export class StorageService {
       const keyPair = JSON.parse(data) as KeyPair;
       
       await this.storeKeyPair(userId, keyPair);
-    } catch (error) {
+    } catch {
       throw new Error('Failed to import keys: Invalid data or password');
     }
   }
