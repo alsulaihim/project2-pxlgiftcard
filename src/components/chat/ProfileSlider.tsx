@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Calendar, Image as ImageIcon, File, Video, Music, Link, MapPin } from 'lucide-react';
+import { X, Mail, Calendar, Image as ImageIcon, File, Video, Link, MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface SharedMedia {
@@ -26,8 +26,13 @@ interface ProfileSliderProps {
     region?: string;
   };
   isOnline?: boolean;
-  conversationId?: string;
-  messages?: any[];
+  messages?: Array<{
+    id: string;
+    type?: string;
+    text?: string;
+    metadata?: Record<string, unknown>;
+    timestamp?: Date;
+  }>;
 }
 
 export function ProfileSlider({ 
@@ -35,7 +40,6 @@ export function ProfileSlider({
   onClose, 
   user, 
   isOnline = false,
-  conversationId,
   messages = []
 }: ProfileSliderProps) {
   const [activeTab, setActiveTab] = useState<'media' | 'files' | 'links'>('media');
@@ -61,22 +65,22 @@ export function ProfileSlider({
       if (msg.type === 'image' && msg.metadata?.downloadUrl) {
         media.images.push({
           id: msg.id,
-          url: msg.metadata.downloadUrl,
-          timestamp: msg.timestamp
+          url: String(msg.metadata.downloadUrl),
+          timestamp: msg.timestamp || new Date()
         });
       } else if (msg.type === 'video' && msg.metadata?.downloadUrl) {
         media.videos.push({
           id: msg.id,
-          url: msg.metadata.downloadUrl,
-          thumbnail: msg.metadata.thumbnailUrl,
-          timestamp: msg.timestamp
+          url: String(msg.metadata.downloadUrl),
+          thumbnail: msg.metadata.thumbnailUrl ? String(msg.metadata.thumbnailUrl) : undefined,
+          timestamp: msg.timestamp || new Date()
         });
       } else if (msg.type === 'file' && msg.metadata?.downloadUrl) {
         media.files.push({
           id: msg.id,
-          name: msg.metadata.fileName || 'Unknown file',
-          size: msg.metadata.fileSize || 0,
-          timestamp: msg.timestamp
+          name: msg.metadata.fileName ? String(msg.metadata.fileName) : 'Unknown file',
+          size: typeof msg.metadata.fileSize === 'number' ? msg.metadata.fileSize : 0,
+          timestamp: msg.timestamp || new Date()
         });
       } else if (msg.type === 'text' && msg.text) {
         // Extract URLs from text messages
@@ -88,7 +92,7 @@ export function ProfileSlider({
               id: `${msg.id}_${url}`,
               url,
               title: new URL(url).hostname,
-              timestamp: msg.timestamp
+              timestamp: msg.timestamp || new Date()
             });
           });
         }
@@ -142,8 +146,11 @@ export function ProfileSlider({
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white">Profile Info</h2>
             <button
+              type="button"
               onClick={onClose}
               className="p-2 hover:bg-[#1a1a1a] rounded-lg transition-colors"
+              aria-label="Close profile"
+              title="Close"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
@@ -224,6 +231,7 @@ export function ProfileSlider({
           {/* Tabs */}
           <div className="flex border-b border-[#262626]">
             <button
+              type="button"
               onClick={() => setActiveTab('media')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'media' 
@@ -234,6 +242,7 @@ export function ProfileSlider({
               Media ({sharedMedia.images.length + sharedMedia.videos.length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('files')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'files' 
@@ -244,6 +253,7 @@ export function ProfileSlider({
               Files ({sharedMedia.files.length})
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('links')}
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
                 activeTab === 'links' 
