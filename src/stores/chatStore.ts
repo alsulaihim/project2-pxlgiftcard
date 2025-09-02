@@ -446,8 +446,12 @@ export const useChatStore = create<ChatState>()(
             set((state) => {
               state.conversations.delete(id);
               state.messages.delete(id);
-              state.typingUsers.delete(id);
-              state.recordingUsers.delete(id);
+              if (state.typingUsers) {
+                state.typingUsers.delete(id);
+              }
+              if (state.recordingUsers) {
+                state.recordingUsers.delete(id);
+              }
               if (state.activeConversationId === id) {
                 state.activeConversationId = null;
               }
@@ -458,8 +462,12 @@ export const useChatStore = create<ChatState>()(
             set((state) => {
               state.conversations.delete(id);
               state.messages.delete(id);
-              state.typingUsers.delete(id);
-              state.recordingUsers.delete(id);
+              if (state.typingUsers) {
+                state.typingUsers.delete(id);
+              }
+              if (state.recordingUsers) {
+                state.recordingUsers.delete(id);
+              }
               if (state.activeConversationId === id) {
                 state.activeConversationId = null;
               }
