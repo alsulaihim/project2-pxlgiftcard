@@ -305,9 +305,9 @@ export class EncryptionService {
    * Decrypt a message from a specific sender
    * @param encryptedData - Encrypted message data
    * @param senderPublicKey - Sender's public key (base64)
-   * @returns Decrypted plain text message
+   * @returns Decrypted plain text message or null if decryption fails
    */
-  decryptMessage(encryptedData: EncryptedData, senderPublicKey: string): string {
+  decryptMessage(encryptedData: EncryptedData, senderPublicKey: string): string | null {
     if (!this.keyPair) {
       throw new Error('No key pair available. Generate or load keys first.');
     }

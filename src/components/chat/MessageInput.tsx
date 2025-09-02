@@ -1,26 +1,26 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Send, Paperclip, Image, Mic, Smile, Plus, X, Reply } from "lucide-react";
-import { MediaUpload } from './MediaUpload';
+import { Send, Paperclip, Image, Mic, Smile, X, Reply } from "lucide-react";
 import { VoiceRecorder } from './VoiceRecorder';
 
 interface Props {
   onSend: (text: string) => Promise<void> | void;
-  conversationId?: string;
-  recipientId?: string;
-  onMediaSend?: (mediaMessage: any) => Promise<void> | void;
+  onMediaSend?: (mediaMessage: unknown) => Promise<void> | void;
   onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
   placeholder?: string;
-  replyingTo?: any;
+  replyingTo?: {
+    id: string;
+    text?: string;
+    senderId: string;
+    senderName?: string;
+  };
   onCancelReply?: () => void;
 }
 
 export function MessageInput({ 
   onSend, 
-  conversationId, 
-  recipientId, 
   onMediaSend, 
   onTyping, 
   disabled = false, 
@@ -30,11 +30,9 @@ export function MessageInput({
 }: Props) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [showMediaUpload, setShowMediaUpload] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const voiceRecorderRef = useRef<{ startRecording: () => void } | null>(null);
 
   const handleSend = async () => {
     const value = text.trim();
@@ -124,7 +122,7 @@ export function MessageInput({
           <VoiceRecorder
             autoStart={true}
             onCancel={() => setIsRecording(false)}
-            onSend={(audioBlob, duration) => {
+            onSend={() => {
               setIsRecording(false);
               // Voice message will be sent through the VoiceRecorder component itself
             }}
