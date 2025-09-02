@@ -296,6 +296,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                           autoFocus
                         />
                         <button
+                          type="button"
+                          aria-label="Save edit"
+                          title="Save edit"
                           onClick={() => {
                             if (editText.trim()) {
                               onEdit?.(message.id, editText.trim());
@@ -309,6 +312,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                           </svg>
                         </button>
                         <button
+                          type="button"
+                          aria-label="Cancel edit"
+                          title="Cancel edit"
                           onClick={() => {
                             setIsEditing(false);
                             setEditText(textContent);
@@ -396,7 +402,10 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                   const userArray = Array.isArray(users) ? users : [];
                   return (
                     <button
+                      type="button"
                       key={emoji}
+                      aria-label={`React with ${emoji}`}
+                      title={`${userArray.length} reaction${userArray.length !== 1 ? 's' : ''}`}
                       onClick={() => onReact?.(message.id, emoji)}
                       className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
                         userArray.includes(currentUserId)
@@ -426,6 +435,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               {/* Message Actions Menu */}
               <div className="relative">
                 <button
+                  type="button"
+                  aria-label="Message actions"
+                  title="More actions"
                   onClick={() => setShowActions(!showActions)}
                   className="p-0.5 hover:bg-[#262626] rounded transition-colors"
                 >
@@ -435,6 +447,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
             {showActions && (
             <div className="absolute z-10 mt-1 bg-[#1a1a1a] border border-[#262626] rounded-lg shadow-lg py-1 min-w-[150px] right-0">
               <button
+                type="button"
                 onClick={() => {
                   onReply?.(message);
                   setShowActions(false);
@@ -447,6 +460,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               
               {isOwn && (
                 <button
+                  type="button"
                   onClick={() => {
                     setIsEditing(true);
                     setShowActions(false);
@@ -459,6 +473,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               )}
               
               <button
+                type="button"
                 onClick={() => {
                   navigator.clipboard.writeText(message.text || '');
                   setShowActions(false);
@@ -471,6 +486,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               
               {isOwn && (
                 <button
+                  type="button"
                   onClick={() => {
                     onDelete?.(message.id);
                     setShowActions(false);
@@ -488,6 +504,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               {/* Quick Reactions */}
               <div className="relative">
                 <button
+                  type="button"
+                  aria-label="Add reaction"
+                  title="Add reaction"
                   onClick={() => setShowReactions(!showReactions)}
                   className="p-0.5 hover:bg-[#262626] rounded transition-colors"
                 >
@@ -498,7 +517,9 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
               <div className="absolute z-10 mt-1 bg-[#1a1a1a] border border-[#262626] rounded-lg shadow-lg p-2 flex gap-1 right-0">
                 {quickReactions.map(emoji => (
                   <button
+                    type="button"
                     key={emoji}
+                    aria-label={`React with ${emoji}`}
                     onClick={() => {
                       onReact?.(message.id, emoji);
                       setShowReactions(false);

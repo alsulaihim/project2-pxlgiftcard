@@ -106,9 +106,11 @@ export function MessageInput({
               </div>
             </div>
             <button
+              type="button"
               onClick={onCancelReply}
               className="p-1 hover:bg-[#262626] rounded transition-colors"
               title="Cancel reply"
+              aria-label="Cancel reply"
             >
               <X className="w-4 h-4 text-gray-400" />
             </button>
@@ -210,6 +212,7 @@ export function MessageInput({
           {/* Send button */}
           <div className="p-2">
             <button
+              type="button"
               onClick={handleSend}
               disabled={sending || text.trim() === "" || disabled}
               className={`p-2 rounded-lg transition-colors ${
@@ -218,6 +221,7 @@ export function MessageInput({
                   : 'bg-[#262626] text-gray-600 cursor-not-allowed'
               }`}
               aria-label="Send message"
+              title="Send message"
             >
               <Send className="h-4 w-4" />
             </button>
@@ -231,6 +235,7 @@ export function MessageInput({
           accept="image/*"
           onChange={(e) => handleFileUpload(e, 'image')}
           className="hidden"
+          aria-label="Upload image"
         />
         
         <input
@@ -239,6 +244,7 @@ export function MessageInput({
           accept=".pdf,.txt,.doc,.docx,.zip"
           onChange={(e) => handleFileUpload(e, 'file')}
           className="hidden"
+          aria-label="Upload file"
         />
       </div>
     </div>
