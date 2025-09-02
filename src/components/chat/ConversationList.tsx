@@ -61,17 +61,14 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
                   />
                   {/* Tier badge for direct messages only */}
                   {!isGroup && displayUser.tier && (
-                    <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-gray-900" 
-                      style={{
-                        backgroundColor: 
-                          displayUser.tier === 'starter' ? '#6B7280' :
-                          displayUser.tier === 'rising' ? '#3B82F6' :
-                          displayUser.tier === 'pro' ? '#10B981' :
-                          displayUser.tier === 'pixlbeast' ? '#F59E0B' :
-                          displayUser.tier === 'pixlionaire' ? '#A855F7' :
-                          '#6B7280',
-                        color: 'white'
-                      }}>
+                    <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-gray-900 text-white ${
+                      displayUser.tier === 'starter' ? 'tier-bg-starter' :
+                      displayUser.tier === 'rising' ? 'tier-bg-rising' :
+                      displayUser.tier === 'pro' ? 'tier-bg-pro' :
+                      displayUser.tier === 'pixlbeast' ? 'tier-bg-pixlbeast' :
+                      displayUser.tier === 'pixlionaire' ? 'tier-bg-pixlionaire' :
+                      'tier-bg-starter'
+                    }`}>
                       {displayUser.tier === 'starter' ? 'S' :
                        displayUser.tier === 'rising' ? 'R' :
                        displayUser.tier === 'pro' ? 'P' :

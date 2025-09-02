@@ -277,6 +277,35 @@ export class FirebaseService {
   }
 
   /**
+   * Update a message in Firestore
+   */
+  public async updateMessage(
+    conversationId: string,
+    messageId: string,
+    updateData: any
+  ): Promise<void> {
+    // TEMP: Skip if Firebase is not initialized
+    if (!this.db) {
+      logger.debug(`🔧 TEMP: Mock message update for ${messageId}`);
+      return;
+    }
+
+    try {
+      const messageRef = this.db
+        .collection('conversations')
+        .doc(conversationId)
+        .collection('messages')
+        .doc(messageId);
+      
+      await messageRef.update(updateData);
+      logger.info(`✅ Message ${messageId} updated in Firestore`);
+    } catch (error) {
+      logger.error(`❌ Failed to update message ${messageId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get Firestore instance
    */
   public getFirestore(): admin.firestore.Firestore | null {

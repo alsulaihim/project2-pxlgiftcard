@@ -144,6 +144,13 @@ export default function AdminDashboardPage() {
       color: "text-blue-400"
     },
     {
+      title: "Products Management",
+      href: "/admin/products",
+      icon: ShoppingBag,
+      description: "Manage gift cards, artwork, and serial codes",
+      color: "text-pink-400"
+    },
+    {
       title: "Analytics",
       href: "/admin/analytics",
       icon: BarChart3,

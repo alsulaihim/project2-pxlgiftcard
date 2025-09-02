@@ -117,9 +117,17 @@
 @layer utilities {
   /* Custom utilities for specific use cases */
   .text-balance {
-    text-wrap: balance;
-    /* Fallback for older browsers */
+    /* Use word-wrap for better browser compatibility */
     word-wrap: break-word;
+    /* Modern browsers can use text-wrap as progressive enhancement */
+    @supports (text-wrap: balance) {
+      text-wrap: balance;
+    }
+  }
+
+  /* Pixel font utility for logo */
+  .font-pixel {
+    font-family: 'Press Start 2P', system-ui, monospace;
   }
 
   /* Tier-specific utilities */
@@ -143,9 +151,38 @@
     @apply ring-2 ring-tier-pixlionaire shadow-[0_0_20px_rgba(185,43,228,0.5)];
   }
 
+  /* Tier background colors */
+  .tier-bg-starter {
+    background-color: #6B7280;
+  }
+
+  .tier-bg-rising {
+    background-color: #3B82F6;
+  }
+
+  .tier-bg-pro {
+    background-color: #10B981;
+  }
+
+  .tier-bg-pixlbeast {
+    background-color: #F59E0B;
+  }
+
+  .tier-bg-pixlionaire {
+    background-color: #A855F7;
+  }
+
   /* Performance optimizations */
   .will-change-transform {
     will-change: transform;
+  }
+
+  /* Custom textarea styles */
+  .textarea-no-style {
+    scrollbar-width: thin;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
   }
 
   .will-change-opacity {

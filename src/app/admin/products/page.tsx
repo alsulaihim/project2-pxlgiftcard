@@ -779,12 +779,12 @@ export default function ProductsPage() {
           </button>
           
           <button
-            onClick={() => router.push('/admin/artwork')}
+            onClick={() => router.push('/admin/artwork-logodev')}
             className="flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors whitespace-nowrap"
-            title="Manage artwork repository"
+            title="Generate artwork with Logo.dev"
           >
             <Palette className="h-4 w-4 mr-2" />
-            <span className="text-sm">Artwork</span>
+            <span className="text-sm">Logo.dev</span>
           </button>
           
           <button

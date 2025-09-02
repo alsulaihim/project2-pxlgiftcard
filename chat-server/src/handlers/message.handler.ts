@@ -320,6 +320,109 @@ export class MessageHandler {
   };
 
   /**
+   * Handle message edit
+   */
+  public handleMessageEdit = async (
+    socket: AuthenticatedSocket,
+    data: { 
+      conversationId: string; 
+      messageId: string; 
+      text: string;
+      editedAt: string;
+    },
+    callback?: Function
+  ): Promise<void> => {
+    try {
+      const { conversationId, messageId, text, editedAt } = data;
+
+      if (!conversationId || !messageId || !text) {
+        if (callback) callback('Missing required fields');
+        return;
+      }
+
+      // Verify conversation membership
+      const isMember = await checkConversationMembership(socket, conversationId);
+      if (!isMember) {
+        if (callback) callback('Not a member of this conversation');
+        return;
+      }
+
+      logger.info(`✏️ Message edit from ${socket.data.userId}: messageId=${messageId}`);
+
+      // Update in Firestore
+      try {
+        const updateData = {
+          text: text,
+          'metadata.edited': true,
+          'metadata.editedAt': editedAt,
+          'metadata.editedBy': socket.data.userId
+        };
+        await firebaseService.updateMessage(conversationId, messageId, updateData);
+        logger.info(`✅ Message edit persisted to Firestore`);
+      } catch (error: any) {
+        logger.error(`❌ Failed to persist edit to Firestore:`, error);
+        // Continue even if Firestore fails - allow real-time update
+      }
+
+      // Get conversation members for broadcast
+      let members: string[] = [];
+      try {
+        const conversation = await firebaseService.getConversation(conversationId);
+        members = conversation.members || [];
+      } catch (error) {
+        // Fallback: extract members from conversationId for direct messages
+        if (conversationId.startsWith('direct_')) {
+          const parts = conversationId.replace('direct_', '').split('_');
+          members = parts;
+        }
+      }
+
+      // Prepare broadcast message
+      const broadcastMessage = {
+        conversationId,
+        messageId,
+        text,
+        editedAt,
+        editedBy: socket.data.userId,
+        metadata: {
+          edited: true,
+          editedAt,
+          editedBy: socket.data.userId
+        }
+      };
+
+      // Broadcast to all members in the conversation
+      socket.to(conversationId).emit('message:updated', broadcastMessage);
+      
+      // Also emit to sender to confirm the edit
+      socket.emit('message:updated', broadcastMessage);
+
+      // If members are known, also emit to their individual rooms
+      members.forEach(memberId => {
+        if (memberId !== socket.data.userId) {
+          this.io.to(`user:${memberId}`).emit('message:updated', broadcastMessage);
+        }
+      });
+
+      logger.info(`📤 Message edit broadcast to conversation ${conversationId} and ${members.length} members`);
+
+      if (callback) {
+        callback(null, { 
+          success: true, 
+          messageId,
+          editedAt,
+          broadcast: true
+        });
+      }
+    } catch (error: any) {
+      logger.error(`❌ Failed to handle message edit:`, error);
+      if (callback) {
+        callback(error.message || 'Failed to edit message');
+      }
+    }
+  };
+
+  /**
    * Register all message event handlers
    */
   public registerHandlers(socket: AuthenticatedSocket): void {
@@ -346,6 +449,9 @@ export class MessageHandler {
         callback(null, { success: true });
       }
     });
+    socket.on('message:edit', (data: any, callback?: Function) => 
+      this.handleMessageEdit(socket, data, callback)
+    );
     
     logger.debug(`📝 Message handlers registered for socket: ${socket.id}`);
   }

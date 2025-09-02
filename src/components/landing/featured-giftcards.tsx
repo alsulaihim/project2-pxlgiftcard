@@ -203,7 +203,10 @@ export function FeaturedGiftcards() {
                   <div className="flex items-center gap-2">
                     <div 
                       className="flex h-6 w-6 items-center justify-center rounded text-white font-semibold text-xs"
-                      style={{ backgroundColor: product.bg_color || product.bgColor || '#333' }}
+                      style={{ 
+                        '--badge-bg': product.bg_color || product.bgColor || '#333',
+                        backgroundColor: 'var(--badge-bg)'
+                      } as React.CSSProperties}
                       aria-label={`${product.brand} badge`}
                     >
                       {product.brand.substring(0, 2).toUpperCase()}

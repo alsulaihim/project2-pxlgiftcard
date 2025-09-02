@@ -12,6 +12,8 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
+  deleteField,
   where,
   Timestamp,
   writeBatch,
@@ -47,6 +49,7 @@ export interface Conversation {
   };
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
+  deletedBy?: { [userId: string]: any }; // Track which users have deleted this conversation
 }
 
 export interface ChatMessage {
@@ -89,14 +92,36 @@ export async function createOrGetDirectConversation(currentUserId: string, other
   const convId = `direct_${a}_${b}`;
   const convRef = doc(db, "conversations", convId);
   const snap = await getDoc(convRef);
+  
   if (!snap.exists()) {
+    // Create new conversation
     await setDoc(convRef, {
       type: "direct",
       members: [a, b],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+  } else {
+    // Check if the conversation was deleted by the current user
+    const data = snap.data();
+    
+    // If the current user had deleted this conversation, reset it
+    if (data.deletedBy && data.deletedBy[currentUserId]) {
+      console.log('🔄 Resetting deleted conversation for user:', currentUserId);
+      
+      // Remove the deletedBy flag for this user and reset conversation state
+      const updatedDeletedBy = { ...data.deletedBy };
+      delete updatedDeletedBy[currentUserId];
+      
+      await updateDoc(convRef, {
+        deletedBy: Object.keys(updatedDeletedBy).length > 0 ? updatedDeletedBy : deleteField(),
+        lastMessage: null,
+        lastMessageTime: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
   }
+  
   const created = await getDoc(convRef);
   const data = created.data() as Omit<Conversation, "id">;
   return { id: convId, ...data } as Conversation;
@@ -273,7 +298,21 @@ export async function listUserConversations(userId: string): Promise<Conversatio
       console.log(`📋 Attempting to get conversations (attempt ${attempt}/${maxRetries})`);
       const snap = await getDocs(q);
       console.log(`✅ Successfully loaded ${snap.docs.length} conversations`);
-      return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Conversation, "id">) }));
+      
+      // Filter out conversations that have been deleted by this user
+      const conversations = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Omit<Conversation, "id">) }))
+        .filter((conv) => {
+          // If the conversation has a deletedBy field with this user's ID, filter it out
+          if (conv.deletedBy && conv.deletedBy[userId]) {
+            console.log(`🗑️ Filtering out deleted conversation ${conv.id} for user ${userId}`);
+            return false;
+          }
+          return true;
+        });
+      
+      console.log(`📋 Returning ${conversations.length} active conversations (filtered from ${snap.docs.length})`);
+      return conversations;
     } catch (error) {
       lastError = error as Error;
       console.error(`❌ Attempt ${attempt}/${maxRetries} to load conversations failed:`, error);
@@ -1121,7 +1160,7 @@ export async function deleteConversation(conversationId: string, userId: string)
     // Solution: Implement secure conversation deletion with permission checks
     // Impact: Allows users to clean up conversations and start fresh for testing
     
-    console.log('🗑️ Deleting conversation:', conversationId);
+    console.log('🗑️ Deleting conversation for user:', userId, 'conversationId:', conversationId);
     
     // First, verify user is a member of this conversation
     const conversationRef = doc(db, 'conversations', conversationId);
@@ -1143,19 +1182,47 @@ export async function deleteConversation(conversationId: string, userId: string)
     
     console.log('🗑️ Deleting', messagesSnapshot.docs.length, 'messages');
     
-    // Delete messages in batches
-    const batch = writeBatch(db);
-    messagesSnapshot.docs.forEach((messageDoc) => {
+    // Delete messages in batches (Firestore has a limit of 500 operations per batch)
+    const BATCH_SIZE = 499; // Leave room for the conversation document update
+    let batch = writeBatch(db);
+    let operationCount = 0;
+    
+    for (const messageDoc of messagesSnapshot.docs) {
       batch.delete(messageDoc.ref);
-    });
+      operationCount++;
+      
+      // Commit current batch and start a new one if we reach the limit
+      if (operationCount >= BATCH_SIZE) {
+        await batch.commit();
+        batch = writeBatch(db);
+        operationCount = 0;
+      }
+    }
     
-    // Delete the conversation document
-    batch.delete(conversationRef);
+    // For P2P chats, keep the conversation but mark it as deleted by this user
+    // This ensures messages don't reappear when users reconnect
+    if (conversationData.type === 'direct') {
+      // Update conversation to track who deleted it and when
+      const deletedBy = conversationData.deletedBy || {};
+      deletedBy[userId] = serverTimestamp();
+      
+      batch.update(conversationRef, {
+        deletedBy: deletedBy,
+        lastMessage: null,
+        lastMessageTime: serverTimestamp()
+      });
+      
+      console.log('✅ P2P conversation messages deleted, conversation marked as deleted by user');
+    } else {
+      // For group chats, actually delete the conversation document
+      batch.delete(conversationRef);
+      console.log('✅ Group conversation and messages deleted completely');
+    }
     
-    // Commit the batch delete
+    // Commit the final batch
     await batch.commit();
     
-    console.log('✅ Conversation deleted successfully');
+    console.log('✅ Conversation deletion completed successfully');
   } catch (error) {
     console.error('Failed to delete conversation:', error);
     throw error;

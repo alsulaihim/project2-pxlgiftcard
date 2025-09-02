@@ -124,7 +124,7 @@ export interface ChatState {
   loadMessages: (conversationId: string, pagination?: { limit: number; before?: string }) => Promise<void>;
   loadMoreMessages: (conversationId: string) => Promise<void>;
   deleteMessage: (messageId: string) => void;
-  editMessage: (messageId: string, newContent: string) => void;
+  editMessage: (messageId: string, newContent: string) => Promise<void>;
   addReaction: (messageId: string, emoji: string) => Promise<void>;
   removeReaction: (messageId: string, emoji: string) => Promise<void>;
   setReplyingTo: (message: Message | null) => void;
@@ -835,20 +835,86 @@ export const useChatStore = create<ChatState>()(
           }
         }),
 
-        editMessage: (messageId, newContent) => set((state) => {
-          for (const [, messages] of state.messages) {
-            const messageIndex = messages.findIndex((m: any) => m.id === messageId);
-            if (messageIndex !== -1) {
-              messages[messageIndex].decryptedContent = newContent;
-              messages[messageIndex].metadata = {
-                ...messages[messageIndex].metadata,
-                edited: true,
-                editedAt: Timestamp.now()
+        editMessage: async (messageId, newContent) => {
+          console.log('🔄 editMessage called with:', { messageId, newContent });
+          const state = get();
+          const { socket, userId } = state;
+          
+          let conversationId: string | null = null;
+          let messageFound = false;
+          
+          // Update local state immediately and find the conversation ID
+          set((state) => {
+            for (const [convId, messages] of state.messages) {
+              const messageIndex = messages.findIndex((m: any) => m.id === messageId);
+              if (messageIndex !== -1) {
+                conversationId = convId;
+                messageFound = true;
+                
+                // Update the message locally
+                const message = messages[messageIndex];
+                message.text = newContent;
+                message.decryptedContent = newContent;
+                message.content = newContent;
+                message.metadata = {
+                  ...message.metadata,
+                  edited: true,
+                  editedAt: Timestamp.now(),
+                  editedBy: userId
+                };
+                
+                console.log('📝 Updated message locally:', message);
+                break;
+              }
+            }
+          });
+          
+          if (!messageFound || !conversationId) {
+            console.error('❌ Message not found for editing:', messageId);
+            return;
+          }
+          
+          // For now, send unencrypted content to server
+          // The server will handle encryption if needed
+          const editData = {
+            conversationId,
+            messageId,
+            text: newContent,  // Send plain text
+            editedAt: new Date().toISOString()
+          };
+          
+          // Emit socket event
+          if (socket) {
+            socket.emit('message:edit', editData, (error: any, response: any) => {
+              if (error) {
+                console.error('❌ Server rejected edit:', error);
+              } else {
+                console.log('✅ Edit acknowledged by server:', response);
+              }
+            });
+          } else {
+            console.warn('⚠️ No socket connection available');
+          }
+          
+          // Update Firestore
+          if (conversationId) {
+            try {
+              const messageRef = doc(db, 'conversations', conversationId, 'messages', messageId);
+              const updateData: any = {
+                text: newContent,
+                decryptedContent: newContent,
+                'metadata.edited': true,
+                'metadata.editedAt': Timestamp.now(),
+                'metadata.editedBy': userId
               };
-              break;
+              
+              await updateDoc(messageRef, updateData);
+              console.log('✅ Message edited in Firestore');
+            } catch (error) {
+              console.error('❌ Failed to update message in Firestore:', error);
             }
           }
-        }),
+        },
 
         addReaction: async (messageId, emoji) => {
           const state = get();
@@ -1403,6 +1469,36 @@ export const useChatStore = create<ChatState>()(
             });
           });
           
+          socket.on('message:updated', async (data: any) => {
+            console.log('✏️ Message updated event received:', data);
+            const { conversationId, messageId, text, editedBy, metadata } = data;
+            
+            // For now, just use the plain text
+            // We'll add encryption later
+            const decryptedContent = text || '[Unable to decrypt]';
+            
+            // Update the message in state
+            set((state) => {
+              const messages = state.messages.get(conversationId);
+              if (messages) {
+                const messageIndex = messages.findIndex((m: any) => m.id === messageId);
+                if (messageIndex !== -1) {
+                  const message = messages[messageIndex];
+                  message.text = decryptedContent;
+                  message.decryptedContent = decryptedContent;
+                  message.content = decryptedContent;
+                  message.metadata = {
+                    ...message.metadata,
+                    ...metadata,
+                    editedAt: metadata?.editedAt ? Timestamp.fromDate(new Date(metadata.editedAt)) : Timestamp.now()
+                  };
+                  
+                  console.log('📝 Updated message from broadcast:', message);
+                }
+              }
+            });
+          });
+          
           // Listen for presence updates
           socket.on('user:online', (data: { userId: string; displayName?: string }) => {
             console.log('🟢 User online:', data.userId);
@@ -1506,23 +1602,39 @@ export const useChatStore = create<ChatState>()(
             return;
           }
           
-          const { EncryptionService } = await import('@/services/chat/encryption.service');
-          const encryption = EncryptionService.getInstance();
-          
-          // Generate or load key pair
-          const { storageService } = await import('@/services/chat/storage.service');
-          let keyPair = await storageService.getKeyPair(userId);
-          
-          if (!keyPair) {
-            keyPair = encryption.generateKeyPair();
-            await storageService.saveKeyPair(keyPair, userId);
-          } else {
-            encryption.setKeyPair(keyPair);
+          try {
+            console.log('🔐 Starting encryption initialization in store for user:', userId);
+            
+            // Use the key exchange service for proper initialization
+            const { keyExchangeService } = await import('@/services/chat/key-exchange.service');
+            const { EncryptionService } = await import('@/services/chat/encryption.service');
+            
+            // Initialize keys through key exchange service (handles everything properly)
+            const keyPair = await keyExchangeService.initializeUserKeys(userId);
+            console.log('🔐 Keys initialized through key exchange service');
+            
+            // Get the encryption service instance
+            const encryption = EncryptionService.getInstance();
+            
+            // Verify encryption service is properly initialized
+            const hasKeys = encryption.getPublicKey() !== null;
+            const currentUserId = encryption.getCurrentUserId();
+            console.log('🔐 Encryption service state - Has keys:', hasKeys, 'User ID:', currentUserId);
+            
+            if (!hasKeys) {
+              console.error('🔥 Encryption service not properly initialized after key exchange');
+              throw new Error('Encryption initialization failed');
+            }
+            
+            set((state) => {
+              state.encryption = encryption;
+              console.log('🔐 Encryption service set in store');
+            });
+            
+          } catch (error) {
+            console.error('🔥 Failed to initialize encryption:', error);
+            throw error;
           }
-          
-          set((state) => {
-            state.encryption = encryption;
-          });
         },
 
         // Offline queue actions

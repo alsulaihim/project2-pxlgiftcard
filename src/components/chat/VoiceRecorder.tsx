@@ -311,9 +311,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
                     key={i}
                     className="flex-1 bg-blue-500 rounded-full transition-all duration-100"
                     style={{
-                      height: `${Math.max(4, height * 32)}px`,
-                      opacity: 0.5 + height * 0.5
-                    }}
+                      '--wave-height': `${Math.max(4, height * 32)}px`,
+                      '--wave-opacity': 0.5 + height * 0.5,
+                      height: 'var(--wave-height)',
+                      opacity: 'var(--wave-opacity)'
+                    } as React.CSSProperties}
                   />
                 );
               })}
@@ -365,9 +367,11 @@ export const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ onSend, onCancel, 
                   key={i}
                   className="flex-1 bg-green-500 rounded-full"
                   style={{
-                    height: `${Math.max(4, height * 32)}px`,
-                    opacity: 0.5 + height * 0.5
-                  }}
+                    '--wave-height': `${Math.max(4, height * 32)}px`,
+                    '--wave-opacity': 0.5 + height * 0.5,
+                    height: 'var(--wave-height)',
+                    opacity: 'var(--wave-opacity)'
+                  } as React.CSSProperties}
                 />
               ))}
             </div>

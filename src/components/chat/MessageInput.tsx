@@ -184,7 +184,7 @@ export function MessageInput({
 
           {/* Text input */}
           <textarea
-            className="flex-1 bg-transparent text-gray-300 placeholder-gray-500 resize-none py-3 pr-2 outline-none focus:outline-none focus:ring-0 border-none focus:border-none min-h-[44px] max-h-32"
+            className="flex-1 bg-transparent text-gray-300 placeholder-gray-500 resize-none py-3 pr-2 outline-none focus:outline-none focus:ring-0 border-none focus:border-none min-h-[44px] max-h-32 textarea-no-style"
             placeholder={placeholder}
             value={text}
             onChange={(e) => {
@@ -199,12 +199,6 @@ export function MessageInput({
             onBlur={() => onTyping && onTyping(false)}
             rows={1}
             disabled={disabled}
-            style={{ 
-              scrollbarWidth: 'thin',
-              border: 'none',
-              outline: 'none',
-              boxShadow: 'none'
-            }}
           />
 
           {/* Send button */}

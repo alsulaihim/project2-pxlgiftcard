@@ -115,8 +115,8 @@ export default function EnhancedMessagesPage() {
         // Ensure userId is set in the store before any operations
         useChatStore.setState({ userId: user.uid });
         
+        // Initialize encryption (this now properly calls keyExchangeService.initializeUserKeys internally)
         await initializeEncryption(user.uid);
-        await keyExchangeService.initializeUserKeys(user.uid);
         await presenceService.initializePresence(user.uid);
         
         const socket = await socketService.initialize(user.uid);

@@ -49,9 +49,10 @@ export default function MarketplaceClient() {
       const fetchedProducts: Product[] = [];
       
       snapshot.forEach((doc) => {
+        const data = doc.data() as Product;
         fetchedProducts.push({
-          id: doc.id,
-          ...doc.data() as Product
+          ...data,
+          id: doc.id
         });
       });
       

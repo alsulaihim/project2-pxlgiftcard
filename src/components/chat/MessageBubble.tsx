@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { ChatMessage } from "@/services/chat/firestore-chat.service";
 import { MessageStatus } from "./MessageStatus";
 import { MoreVertical, Edit2, Reply, Trash2, Copy, Pin, Smile, Heart, ThumbsUp, ThumbsDown, Laugh } from "lucide-react";
@@ -47,6 +47,13 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   const [showReactions, setShowReactions] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.text || '');
+  
+  // Sync editText when message.text changes (after an edit is completed)
+  useEffect(() => {
+    if (!isEditing) {
+      setEditText(message.text || '');
+    }
+  }, [message.text, isEditing]);
   
   const quickReactions = useMemo(() => ['👍', '❤️', '😂', '😮', '😢', '🎉'], []);
   
@@ -288,7 +295,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                             }
                             if (e.key === 'Escape') {
                               setIsEditing(false);
-                              setEditText(textContent);
+                              setEditText(message.text || '');
                             }
                           }}
                           className="px-4 py-2 rounded-2xl text-sm bg-[#262626] text-gray-300 border border-gray-600 focus:outline-none focus:border-gray-500"
@@ -317,7 +324,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                           title="Cancel edit"
                           onClick={() => {
                             setIsEditing(false);
-                            setEditText(textContent);
+                            setEditText(message.text || '');
                           }}
                           className="p-1.5 bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
                         >
