@@ -89,12 +89,15 @@ export class PresenceService {
     
     const unsubscribe = onValue(userPresenceRef, (snapshot) => {
       const data = snapshot.val() as PresenceData;
-      if (data) {
-        callback({
-          userId,
-          ...data
-        });
-      }
+      console.log(`🔍 Presence data for ${userId}:`, data);
+      
+      // Always call callback, even if data is null (user offline/never been online)
+      callback({
+        userId,
+        online: data?.online || false,
+        lastSeen: data?.lastSeen || undefined, // undefined if never been online
+        typing: data?.typing || {}
+      });
     });
 
     // Store callback for cleanup
@@ -253,8 +256,21 @@ export class PresenceService {
     this.stopHeartbeat(); // Clear any existing heartbeat
     
     this.heartbeatInterval = setInterval(async () => {
-      const userPresenceRef = ref(database, `presence/${userId}/lastSeen`);
-      await set(userPresenceRef, serverTimestamp());
+      // Update both online status and lastSeen to ensure we're still active
+      const userPresenceRef = ref(database, `presence/${userId}`);
+      await set(userPresenceRef, {
+        online: true,
+        lastSeen: serverTimestamp(),
+        typing: {} // Preserve typing state
+      });
+      
+      // Re-establish disconnect handler in case it was lost
+      const disconnectRef = onDisconnect(userPresenceRef);
+      await disconnectRef.set({
+        online: false,
+        lastSeen: serverTimestamp(),
+        typing: {}
+      });
     }, 30000); // Update every 30 seconds
   }
 

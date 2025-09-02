@@ -26,9 +26,20 @@ export class StorageService {
    */
   private async openDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
+      // Try to open with version 1 first
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = () => {
+        const error = request.error;
+        // If version error, open without version to use existing
+        if (error && error.name === 'VersionError') {
+          const retryRequest = indexedDB.open(this.dbName);
+          retryRequest.onerror = () => reject(retryRequest.error);
+          retryRequest.onsuccess = () => resolve(retryRequest.result);
+        } else {
+          reject(error);
+        }
+      };
       request.onsuccess = () => resolve(request.result);
 
       request.onupgradeneeded = (event) => {

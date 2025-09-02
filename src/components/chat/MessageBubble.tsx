@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useCallback, useEffect } from "react";
 import { ChatMessage } from "@/services/chat/firestore-chat.service";
 import { MessageStatus } from "./MessageStatus";
-import { MoreVertical, Edit2, Reply, Trash2, Copy, Pin, Smile, Heart, ThumbsUp, ThumbsDown, Laugh } from "lucide-react";
+import { MoreVertical, Edit2, Reply, Trash2, Copy, Pin, Smile, Heart, ThumbsUp, ThumbsDown, Laugh, Forward } from "lucide-react";
 
 interface MessageBubbleProps {
   message: ChatMessage & {
@@ -26,6 +26,7 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, newText: string) => void;
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
+  onForward?: () => void;
   currentUserId?: string;
 }
 
@@ -41,6 +42,7 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   onEdit,
   onDelete,
   onReact,
+  onForward,
   currentUserId = ''
 }) => {
   const [showActions, setShowActions] = useState(false);
@@ -464,6 +466,20 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 <Reply className="w-3 h-3" />
                 Reply
               </button>
+              
+              {onForward && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onForward();
+                    setShowActions(false);
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-gray-300 hover:bg-[#262626] flex items-center gap-2"
+                >
+                  <Forward className="w-3 h-3" />
+                  Forward
+                </button>
+              )}
               
               {isOwn && (
                 <button

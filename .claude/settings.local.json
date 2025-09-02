@@ -27,7 +27,8 @@
       "Bash(gcloud config get-value:*)",
       "Bash(gcloud projects list:*)",
       "Bash(firebase projects:create-service-account-key:*)",
-      "Bash(unset:*)"
+      "Bash(unset:*)",
+      "Bash(npm install:*)"
     ],
     "deny": [],
     "ask": []

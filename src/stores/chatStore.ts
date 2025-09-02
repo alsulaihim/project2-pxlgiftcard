@@ -426,36 +426,80 @@ export const useChatStore = create<ChatState>()(
 
         deleteConversation: async (id) => {
           try {
-            // Import Firestore service to delete messages and conversation
-            const { deleteConversationMessages } = await import('@/services/chat/firestore-chat.service');
-            
-            // Delete all messages and conversation document from Firestore
-            await deleteConversationMessages(id);
-            console.log(`🗑️ Deleted conversation and all messages for: ${id}`);
-            
-            // Clear from localStorage
-            try {
-              const messagesKey = `chat_messages_${id}`;
-              localStorage.removeItem(messagesKey);
-              console.log(`🗑️ Cleared localStorage for conversation: ${id}`);
-            } catch (localStorageError) {
-              console.warn('Failed to clear localStorage:', localStorageError);
-            }
-            
-            // Update local state
+            // First, clear from local state immediately to prevent cached messages from showing
             set((state) => {
-              state.conversations.delete(id);
+              // Clear messages for this conversation
               state.messages.delete(id);
+              
+              // Clear typing/recording users
               if (state.typingUsers) {
                 state.typingUsers.delete(id);
               }
               if (state.recordingUsers) {
                 state.recordingUsers.delete(id);
               }
+              
+              // Clear conversation from list
+              state.conversations.delete(id);
+              
+              // If the deleted conversation was active, clear it
               if (state.activeConversationId === id) {
                 state.activeConversationId = null;
               }
+              
+              // Clear any pagination state
+              if (state.hasMoreMessages) {
+                state.hasMoreMessages.delete(id);
+              }
+              if (state.lastMessageIds) {
+                state.lastMessageIds.delete(id);
+              }
             });
+            
+            // Clear from localStorage BEFORE deleting from Firestore
+            try {
+              const messagesKey = `chat_messages_${id}`;
+              localStorage.removeItem(messagesKey);
+              
+              // Also clear any other related localStorage keys
+              const keysToRemove = [];
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.includes(id)) {
+                  keysToRemove.push(key);
+                }
+              }
+              keysToRemove.forEach(key => localStorage.removeItem(key));
+              
+              console.log(`🗑️ Cleared all localStorage entries for conversation: ${id}`);
+            } catch (localStorageError) {
+              console.warn('Failed to clear localStorage:', localStorageError);
+            }
+            
+            // Clear from IndexedDB search index
+            try {
+              const { messageSearchService } = await import('@/services/chat/search.service');
+              await messageSearchService.deleteConversationIndex(id);
+              console.log(`🗑️ Cleared search index for conversation: ${id}`);
+            } catch (searchError) {
+              console.warn('Failed to clear search index:', searchError);
+            }
+            
+            // Leave the conversation room on Socket.IO
+            const socketService = (window as any).socketService;
+            if (socketService && socketService.isConnected) {
+              socketService.leaveConversation(id);
+              console.log(`🚪 Left conversation room: ${id}`);
+            }
+            
+            // Import Firestore service to delete messages and conversation
+            const { deleteConversationMessages } = await import('@/services/chat/firestore-chat.service');
+            
+            // Finally, delete from Firestore
+            await deleteConversationMessages(id);
+            console.log(`🗑️ Deleted conversation and all messages from Firestore: ${id}`);
+            
+            console.log(`✅ Successfully deleted conversation completely: ${id}`);
           } catch (error) {
             console.error('Error deleting conversation:', error);
             // Still update local state even if Firestore deletion fails

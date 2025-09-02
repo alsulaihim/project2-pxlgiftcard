@@ -10,6 +10,7 @@ import {
 import { MessageInput } from "@/components/chat/MessageInput";
 import { SimpleMessageList } from "@/components/chat/SimpleMessageList";
 import { NewConversationModal } from "@/components/chat/NewConversationModal";
+import { CreateGroupModal } from "@/components/chat/CreateGroupModal";
 import { ProfileSlider } from "@/components/chat/ProfileSlider";
 import { useAuth } from "@/contexts/auth-context";
 import type { SocketMessage } from "@/services/chat/socket.service";
@@ -20,14 +21,24 @@ import { keyExchangeService } from "@/services/chat/key-exchange.service";
 import { presenceService } from "@/services/chat/presence.service";
 import { socketService } from "@/services/chat/socket.service";
 import { offlineQueue } from "@/services/chat/offline-queue.service";
+import { notificationService } from "@/services/chat/notification.service";
+import { messageSearchService } from "@/services/chat/search.service";
+import { mediaService } from "@/services/chat/media.service";
 import { db } from "@/lib/firebase-config";
 import { authManager } from "@/lib/firebase-auth-manager";
+import { ForwardMessageModal } from "@/components/chat/ForwardMessageModal";
 
 export default function EnhancedMessagesPage() {
   const { user, platformUser } = useAuth();
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'fallback'>('connecting');
+  const [showForwardModal, setShowForwardModal] = useState(false);
+  const [messageToForward, setMessageToForward] = useState<Message | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [messageSearchQuery, setMessageSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
   const [userProfiles, setUserProfiles] = useState<Map<string, {
     uid: string;
     displayName?: string;
@@ -41,6 +52,7 @@ export default function EnhancedMessagesPage() {
     [key: string]: unknown;
   }>>(new Map());
   const [searchQuery, setSearchQuery] = useState('');
+  const [userPresenceData, setUserPresenceData] = useState<Map<string, { online: boolean; lastSeen?: number }>>(new Map());
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingState = useRef<boolean>(false);
   const [showProfileSlider, setShowProfileSlider] = useState(false);
@@ -81,7 +93,8 @@ export default function EnhancedMessagesPage() {
     deleteMessage,
     editMessage,
     setReplyingTo,
-    reset
+    reset,
+    updatePresence
   } = useChatStore();
   
 
@@ -97,6 +110,8 @@ export default function EnhancedMessagesPage() {
   useEffect(() => {
     if (!user) return;
 
+    const cleanupFunctions: (() => void)[] = [];
+
     const initializeChat = async () => {
       try {
         // Wait for Firebase Auth to be ready using auth manager
@@ -104,20 +119,77 @@ export default function EnhancedMessagesPage() {
         const authUser = await authManager.waitForAuth();
         
         if (!authUser) {
-          console.error('❌ No authenticated user in messages page');
+          console.warn('⚠️ Auth not ready yet, will retry...');
+          // Retry after a short delay
+          setTimeout(() => {
+            initializeChat();
+          }, 1000);
           return;
         }
         
         // Ensure token is fresh
-        await authManager.ensureFreshToken();
+        try {
+          await authManager.ensureFreshToken();
+        } catch (tokenError) {
+          console.warn('⚠️ Token refresh failed, continuing anyway:', tokenError);
+        }
         console.log('✅ Auth ready with user:', authUser.uid);
         
         // Ensure userId is set in the store before any operations
         useChatStore.setState({ userId: user.uid });
         
-        // Initialize encryption (this now properly calls keyExchangeService.initializeUserKeys internally)
-        await initializeEncryption(user.uid);
-        await presenceService.initializePresence(user.uid);
+        // Initialize services with error handling for each
+        try {
+          await initializeEncryption(user.uid);
+        } catch (error) {
+          console.error('Encryption init failed:', error);
+        }
+        
+        try {
+          await presenceService.initializePresence(user.uid);
+          
+          // Add explicit offline handling for window close/refresh
+          const handleBeforeUnload = () => {
+            presenceService.setOffline(user.uid);
+          };
+          
+          // Handle page visibility changes
+          const handleVisibilityChange = () => {
+            if (document.hidden) {
+              // Page is hidden, set user offline
+              presenceService.setOffline(user.uid);
+            } else {
+              // Page is visible again, set user online
+              presenceService.initializePresence(user.uid);
+            }
+          };
+          
+          window.addEventListener('beforeunload', handleBeforeUnload);
+          document.addEventListener('visibilitychange', handleVisibilityChange);
+          
+          // Store cleanup function for later
+          cleanupFunctions.push(() => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            presenceService.setOffline(user.uid);
+          });
+        } catch (error) {
+          console.error('Presence init failed:', error);
+        }
+        
+        // Initialize push notifications (non-critical)
+        try {
+          await notificationService.initialize(user.uid);
+        } catch (error) {
+          console.warn('Notifications init failed (non-critical):', error);
+        }
+        
+        // Initialize message search (non-critical)
+        try {
+          await messageSearchService.initialize();
+        } catch (error) {
+          console.warn('Search init failed (non-critical):', error);
+        }
         
         const socket = await socketService.initialize(user.uid);
         
@@ -250,12 +322,91 @@ export default function EnhancedMessagesPage() {
     initializeChat();
 
     return () => {
+      // Run all cleanup functions
+      cleanupFunctions.forEach(fn => fn());
       presenceService.cleanup();
       socketService.disconnect();
       reset();
     };
   }, [user]);
 
+  // Subscribe to presence updates when conversations change
+  useEffect(() => {
+    if (!user || conversations.size === 0) return;
+    
+    const allMemberIds = new Set<string>();
+    conversations.forEach(conv => {
+      conv.members.forEach(memberId => {
+        if (memberId !== user.uid) {
+          allMemberIds.add(memberId);
+        }
+      });
+    });
+    
+    if (allMemberIds.size === 0) return;
+    
+    console.log('📡 Subscribing to presence for users:', Array.from(allMemberIds));
+    
+    // Store raw presence data for periodic re-evaluation
+    let rawPresenceMap = new Map();
+    
+    const evaluatePresence = () => {
+      const presenceData = new Map<string, { online: boolean; lastSeen?: number }>();
+      const STALE_THRESHOLD = 60000; // 1 minute - if lastSeen is older than this, consider user offline
+      
+      rawPresenceMap.forEach((presence, userId) => {
+        // Handle Firebase server timestamp
+        let lastSeenValue: number | undefined;
+        if (presence.lastSeen) {
+          // Check if it's a server timestamp object
+          if (typeof presence.lastSeen === 'object' && 'seconds' in (presence.lastSeen as any)) {
+            lastSeenValue = (presence.lastSeen as any).seconds * 1000;
+          } else if (typeof presence.lastSeen === 'number') {
+            lastSeenValue = presence.lastSeen;
+          }
+        }
+        
+        const now = Date.now();
+        const timeDiff = lastSeenValue ? now - lastSeenValue : Infinity;
+        
+        // Override online status if lastSeen is stale
+        let isActuallyOnline = presence.online;
+        if (isActuallyOnline && timeDiff > STALE_THRESHOLD) {
+          // User marked as online but lastSeen is stale - consider them offline
+          isActuallyOnline = false;
+        }
+        
+        presenceData.set(userId, {
+          online: isActuallyOnline,
+          lastSeen: lastSeenValue
+        });
+      });
+      
+      setUserPresenceData(presenceData);
+    };
+    
+    // Subscribe to presence for all members
+    const unsubscribe = presenceService.subscribeToMultiplePresence(
+      Array.from(allMemberIds),
+      (presenceMap) => {
+        console.log('👥 Presence update received:', presenceMap.size, 'users');
+        rawPresenceMap = presenceMap;
+        evaluatePresence();
+      }
+    );
+    
+    // Re-evaluate presence every 30 seconds to catch stale entries
+    const intervalId = setInterval(() => {
+      console.log('🔄 Re-evaluating presence staleness');
+      evaluatePresence();
+    }, 30000);
+    
+    return () => {
+      console.log('🔌 Unsubscribing from presence');
+      unsubscribe();
+      clearInterval(intervalId);
+    };
+  }, [user, conversations]);
 
   // Load messages for active conversation
   useEffect(() => {
@@ -426,23 +577,25 @@ export default function EnhancedMessagesPage() {
   const handleDeleteConversation = async (conversationId: string) => {
     if (confirm('Delete this conversation? This will remove all messages and start fresh. This action cannot be undone.')) {
       try {
-        // Delete all messages in the conversation from Firestore
-        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-        const messagesSnapshot = await getDocs(messagesRef);
+        // Clear from search index first
+        await messageSearchService.deleteConversationIndex(conversationId);
         
-        // Delete each message document
-        const deletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
-        await Promise.all(deletePromises);
-        
-        // Delete the conversation document from Firestore
-        await deleteDoc(doc(db, 'conversations', conversationId));
-        
-        // Use store's deleteConversation to clear from local state AND Firestore
-        // This will handle clearing messages and conversation from both the store and Firestore
+        // Clear from Zustand store (this will clear messages and conversation)
         await deleteConversation(conversationId);
         
-        // Reload conversations to ensure sync with Firestore
+        // If this was the active conversation, clear it
+        if (activeConversationId === conversationId) {
+          await setActiveConversation(null);
+        }
+        
+        // Clear from localStorage
+        const messagesKey = `chat_messages_${conversationId}`;
+        localStorage.removeItem(messagesKey);
+        
+        // Force reload conversations to ensure clean state
         await loadConversations();
+        
+        console.log('✅ Conversation deleted successfully');
       } catch (error) {
         console.error('Failed to delete conversation:', error);
       }
@@ -560,6 +713,43 @@ export default function EnhancedMessagesPage() {
     }
   }, [activeMessages, user, addReaction, removeReaction]);
 
+  // Handle message forwarding
+  const handleForward = useCallback((messageId: string) => {
+    const message = messages.get(activeConversationId || '')?.find(m => m.id === messageId);
+    if (message) {
+      setMessageToForward(message);
+      setShowForwardModal(true);
+    }
+  }, [messages, activeConversationId]);
+
+  // Handle message search
+  const handleMessageSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    setIsSearching(true);
+    try {
+      const results = await messageSearchService.searchGlobal(query, {
+        limit: 50
+      });
+      setSearchResults(results);
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Index messages when they're loaded
+  useEffect(() => {
+    if (activeMessages.length > 0 && activeConversationId) {
+      // Index messages for search in the background
+      messageSearchService.indexMessages(activeMessages, activeConversationId).catch(console.error);
+    }
+  }, [activeMessages, activeConversationId]);
+
   if (!user) {
     return (
       <div className="flex items-center justify-center h-screen bg-black">
@@ -567,6 +757,26 @@ export default function EnhancedMessagesPage() {
       </div>
     );
   }
+
+  // Format last seen time
+  const formatLastSeen = (lastSeen?: number, isOnline: boolean = false): string => {
+    // If user is online, always show "Active now"
+    if (isOnline) return 'Active now';
+    
+    // If no last seen timestamp, user has never been online
+    if (!lastSeen) return 'Offline';
+    
+    const now = Date.now();
+    const diff = now - lastSeen;
+    
+    // Only show relative time for offline users
+    if (diff < 60000) return 'Just now'; // Less than 1 minute
+    if (diff < 3600000) return `Active ${Math.floor(diff / 60000)}m ago`; // Less than 1 hour
+    if (diff < 86400000) return `Active ${Math.floor(diff / 3600000)}h ago`; // Less than 1 day
+    if (diff < 604800000) return `Active ${Math.floor(diff / 86400000)}d ago`; // Less than 1 week
+    
+    return new Date(lastSeen).toLocaleDateString();
+  };
 
   // Get conversation display info
   const getConversationInfo = () => {
@@ -585,7 +795,10 @@ export default function EnhancedMessagesPage() {
       return {
         name: otherUser?.displayName || 'Direct Message',
         avatar: otherUser?.photoURL || '/default-avatar.png',
-        subtitle: presence.get(otherUserId || '') ? 'Active now' : 'Offline',
+        subtitle: (() => {
+          const presenceData = userPresenceData.get(otherUserId || '');
+          return formatLastSeen(presenceData?.lastSeen, presenceData?.online || false);
+        })(),
         isGroup: false,
         tier: otherUser?.tier
       };
@@ -594,7 +807,6 @@ export default function EnhancedMessagesPage() {
 
   const conversationInfo = getConversationInfo();
 
-  // Get tier ring color - always show a ring for all tiers
   const getTierRingColor = (tier?: string) => {
     switch (tier) {
       case 'pixlionaire': return 'ring-2 ring-purple-500';
@@ -615,6 +827,56 @@ export default function EnhancedMessagesPage() {
         currentUserId={user.uid}
       />
 
+      {/* Create Group Modal */}
+      <CreateGroupModal
+        isOpen={showCreateGroup}
+        onClose={() => setShowCreateGroup(false)}
+        onCreateGroup={async (groupData) => {
+          const { createGroupConversation } = await import('@/services/chat/firestore-chat.service');
+          const conversation = await createGroupConversation(
+            user.uid,
+            groupData.members,
+            {
+              name: groupData.name,
+              description: groupData.description,
+              photoURL: groupData.photoURL
+            }
+          );
+          await loadConversations();
+          setActiveConversation(conversation.id);
+        }}
+      />
+
+      {/* Forward Message Modal */}
+      <ForwardMessageModal
+        isOpen={showForwardModal}
+        onClose={() => {
+          setShowForwardModal(false);
+          setMessageToForward(null);
+        }}
+        message={messageToForward as any}
+        onForward={async (conversationIds) => {
+          if (!messageToForward) return;
+          
+          // Forward to each selected conversation
+          for (const convId of conversationIds) {
+            const conv = conversations.get(convId);
+            if (!conv) continue;
+            
+            // Get recipient for encryption if direct message
+            const recipientId = conv.type === 'direct' 
+              ? conv.members.find(id => id !== user.uid)
+              : undefined;
+            
+            // Re-encrypt and send the message
+            await sendMessage(
+              messageToForward.text || messageToForward.decryptedContent || '',
+              messageToForward.type as any
+            );
+          }
+        }}
+      />
+
       {/* Profile Slider */}
       {selectedProfile && (
         <ProfileSlider
@@ -624,7 +886,7 @@ export default function EnhancedMessagesPage() {
             setSelectedProfile(null);
           }}
           user={selectedProfile!}
-          isOnline={presence.get(selectedProfile?.uid || '') || false}
+          isOnline={userPresenceData.get(selectedProfile?.uid || '')?.online || false}
           conversationId={activeConversationId || undefined}
           messages={activeMessages}
         />
@@ -723,15 +985,26 @@ export default function EnhancedMessagesPage() {
                   </div>
                 )})}
               
-              <button
-                type="button"
-                aria-label="Create new channel"
-                onClick={() => setShowNewConversation(true)}
-                className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400 mt-1"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="text-sm">Add channel</span>
-              </button>
+              <div className="flex gap-2 mt-1">
+                <button
+                  type="button"
+                  aria-label="Create new channel"
+                  onClick={() => setShowNewConversation(true)}
+                  className="flex-1 flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="text-sm">Add channel</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="Create group"
+                  onClick={() => setShowCreateGroup(true)}
+                  className="flex items-center gap-2 px-2 py-1 rounded hover:bg-[#1a1a1a] transition-colors text-gray-400"
+                >
+                  <Users className="w-4 h-4" />
+                  <span className="text-sm">Group</span>
+                </button>
+              </div>
             </div>
 
             {/* Direct Messages Section */}
@@ -746,7 +1019,8 @@ export default function EnhancedMessagesPage() {
                 .map(conv => {
                   const otherUserId = conv.members.find(id => id !== user.uid);
                   const otherUser = otherUserId ? userProfiles.get(otherUserId) : null;
-                  const isOnline = presence.get(otherUserId || '');
+                  const presenceData = userPresenceData.get(otherUserId || '');
+                  const isOnline = presenceData?.online || false;
                   
                   return (
                     <div key={conv.id} className="group relative">
@@ -929,7 +1203,7 @@ export default function EnhancedMessagesPage() {
                         // Always show status for direct messages
                         if (activeConversation.type === 'direct') {
                           const otherUserId = activeConversation.members.find(id => id !== user.uid);
-                          const isOnline = otherUserId ? presence.get(otherUserId) : false;
+                          const isOnline = userPresenceData.get(otherUserId || '')?.online || false;
                           
                           // Show recording if someone is recording, then typing, otherwise show online status
                           if (recordingUsers.length > 0) {
@@ -960,15 +1234,24 @@ export default function EnhancedMessagesPage() {
                             );
                           }
                           
-                          // Always show online/offline status for direct messages
-                          return isOnline ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                              <span className="text-green-500 font-medium text-sm">Online</span>
-                            </div>
-                          ) : (
-                            <div className="text-gray-400 font-medium text-sm">Offline</div>
-                          );
+                          // Always show online/offline status with last seen for direct messages
+                          const presenceData = userPresenceData.get(otherUserId || '');
+                          const statusText = formatLastSeen(presenceData?.lastSeen, presenceData?.online || false);
+                          
+                          if (presenceData?.online) {
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                <span className="text-green-500 font-medium text-sm">{statusText}</span>
+                              </div>
+                            );
+                          } else {
+                            return (
+                              <div className="text-gray-400 font-medium text-sm">
+                                {statusText}
+                              </div>
+                            );
+                          }
                         }
                         
                         // For group conversations, show recording, then typing, or subtitle
@@ -1039,6 +1322,7 @@ export default function EnhancedMessagesPage() {
                         onEdit={handleEdit}
                         onDelete={handleDelete}
                         onReact={handleReact}
+                        onForward={handleForward}
                       />
                     </div>
                   </>
@@ -1112,7 +1396,7 @@ export default function EnhancedMessagesPage() {
                         </div>
                         <div className="text-xs text-gray-500">{memberProfile.tier}</div>
                       </div>
-                      {presence.get(memberId) && (
+                      {userPresenceData.get(memberId)?.online && (
                         <div className="w-2 h-2 bg-green-500 rounded-full" />
                       )}
                     </div>

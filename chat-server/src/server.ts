@@ -6,6 +6,8 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
@@ -36,8 +38,15 @@ class ChatServer {
     this.app = express();
     this.server = createServer(this.app);
     
+    this.initialize();
+  }
+
+  /**
+   * Initialize the server
+   */
+  private async initialize(): Promise<void> {
     this.setupMiddleware();
-    this.setupSocketIO();
+    await this.setupSocketIO();
     this.setupHandlers();
     this.setupRoutes();
     this.setupErrorHandling();
@@ -73,9 +82,9 @@ class ChatServer {
   }
 
   /**
-   * Setup Socket.io server with authentication
+   * Setup Socket.io server with authentication and Redis adapter
    */
-  private setupSocketIO(): void {
+  private async setupSocketIO(): Promise<void> {
     this.io = new Server(this.server, {
       cors: {
         origin: this.corsOrigin,
@@ -88,6 +97,24 @@ class ChatServer {
       upgradeTimeout: 30000,
       allowEIO3: true
     });
+
+    // Setup Redis adapter for horizontal scaling (if Redis URL is provided)
+    const redisUrl = process.env.REDIS_URL;
+    if (redisUrl) {
+      try {
+        const pubClient = createClient({ url: redisUrl });
+        const subClient = pubClient.duplicate();
+        
+        await Promise.all([pubClient.connect(), subClient.connect()]);
+        
+        this.io.adapter(createAdapter(pubClient, subClient));
+        logger.info('🔴 Redis adapter configured for horizontal scaling');
+      } catch (error) {
+        logger.warn('⚠️ Redis connection failed, using default in-memory adapter:', error);
+      }
+    } else {
+      logger.info('💾 Using in-memory adapter (single instance mode)');
+    }
 
     // Authentication middleware
     this.io.use(authenticateSocket);

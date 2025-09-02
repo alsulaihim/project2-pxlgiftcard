@@ -14,6 +14,7 @@ import {
   setDoc,
   updateDoc,
   deleteField,
+  deleteDoc,
   where,
   Timestamp,
   writeBatch,
@@ -72,6 +73,46 @@ export interface ChatMessage {
 }
 
 /**
+ * Create a new group conversation
+ */
+export async function createGroupConversation(
+  creatorId: string,
+  members: string[],
+  groupInfo: {
+    name: string;
+    description?: string;
+    photoURL?: string;
+  }
+): Promise<Conversation> {
+  await authManager.waitForAuth();
+  
+  const convId = `group_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  const convRef = doc(db, "conversations", convId);
+  
+  const conversationData = {
+    type: "group",
+    members,
+    groupInfo: {
+      ...groupInfo,
+      createdBy: creatorId,
+      admins: [creatorId]
+    },
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+  
+  await setDoc(convRef, conversationData);
+  
+  return {
+    id: convId,
+    ...conversationData
+  } as Conversation;
+}
+
+
+
+
+/**
  * Create or fetch a direct conversation between two users to avoid duplicates.
  * Ensures deterministic doc id ordering by concatenating sorted UIDs.
  */
@@ -127,120 +168,6 @@ export async function createOrGetDirectConversation(currentUserId: string, other
   return { id: convId, ...data } as Conversation;
 }
 
-/**
- * Create a group conversation with specified members and group info.
- */
-// BUG FIX: 2025-01-30 - Add photoURL support to group conversations
-// Problem: Group chat images not showing because photoURL was hardcoded to empty
-// Solution: Accept photoURL in groupInfo parameter and use it when creating conversation
-// Impact: Group chat images now properly display in sidebar
-export async function createGroupConversation(
-  memberIds: string[], 
-  groupInfo: {
-    name: string;
-    description?: string;
-    createdBy: string;
-    photoURL?: string;
-  }
-): Promise<Conversation> {
-  // Ensure auth is ready
-  await authManager.waitForAuth();
-  
-  console.log('📝 Creating group conversation with:', {
-    memberIds,
-    groupInfoKeys: Object.keys(groupInfo),
-    name: groupInfo.name,
-    photoURLLength: groupInfo.photoURL?.length || 0
-  });
-
-  // Validate minimum members for group chat
-  if (memberIds.length < 2) {
-    throw new Error('Group conversation requires at least 2 members');
-  }
-
-  // Ensure creator is included in members
-  if (!memberIds.includes(groupInfo.createdBy)) {
-    memberIds.push(groupInfo.createdBy);
-  }
-
-  // BUG FIX: 2025-01-30 - Ensure all fields are properly defined to prevent Firestore errors
-  // Problem: Undefined or null values can cause "invalid nested entity" errors
-  // Solution: Ensure all fields have valid values
-  // Impact: Prevents Firestore errors when creating group conversations
-  
-  // BUG FIX: 2025-01-30 - Validate photoURL to prevent Firebase nested entity errors
-  // Problem: Base64 data URLs cause "invalid nested entity" errors
-  // Solution: Reject base64 URLs and only accept regular URLs or default image
-  // Impact: Prevents Firebase errors when creating group conversations
-  
-  let photoURL = '/default-group.svg';
-  if (groupInfo.photoURL && typeof groupInfo.photoURL === 'string' && groupInfo.photoURL.length > 0) {
-    // Check if it's a base64 data URL (these cause Firebase errors)
-    if (groupInfo.photoURL.startsWith('data:')) {
-      console.warn('⚠️ Base64 data URLs not supported for group photos. Use Firebase Storage instead.');
-      photoURL = '/default-group.svg';
-    } else if (groupInfo.photoURL.length > 2048) {
-      // Firebase has limits on string field sizes
-      console.warn('⚠️ Photo URL too long. Using default image.');
-      photoURL = '/default-group.svg';
-    } else {
-      photoURL = groupInfo.photoURL;
-    }
-  }
-
-  // BUG FIX: 2025-01-30 - Create clean object structure for Firestore
-  // Problem: Firestore rejects nested objects with certain structures
-  // Solution: Create a simple JSON-serializable object
-  // Impact: Fixes "invalid nested entity" error
-  
-  // Create a simple object for groupInfo
-  const groupInfoData = {
-    name: String(groupInfo.name || 'Unnamed Group'),
-    description: String(groupInfo.description || ''),
-    createdBy: String(groupInfo.createdBy),
-    admins: [String(groupInfo.createdBy)],
-    photoURL: String(photoURL)
-  };
-  
-  const conversationData = {
-    type: "group" as const,
-    members: memberIds,
-    groupInfo: groupInfoData,
-    createdAt: Timestamp.now(),
-    updatedAt: Timestamp.now(),
-  };
-
-  // Log the data being sent
-  console.log('📤 Sending to Firestore:', {
-    type: conversationData.type,
-    members: conversationData.members,
-    groupInfo: {
-      name: groupInfoData.name,
-      description: groupInfoData.description,
-      createdBy: groupInfoData.createdBy,
-      admins: groupInfoData.admins,
-      photoURL: (groupInfoData.photoURL || '').substring(0, 50) + '...'
-    },
-    timestamps: 'Timestamp.now()'
-  });
-
-  try {
-    const ref = await addDoc(collection(db, "conversations"), conversationData);
-    const snap = await getDoc(ref);
-    console.log('✅ Group conversation created successfully:', ref.id);
-    return { id: ref.id, ...(snap.data() as Omit<Conversation, "id">) };
-  } catch (error: any) {
-    console.error('❌ Failed to create group conversation:', error.message);
-    console.error('❌ Error code:', error.code);
-    console.error('❌ Data that caused error:', {
-      type: conversationData.type,
-      membersCount: conversationData.members ? conversationData.members.length : 0,
-      groupInfo: conversationData.groupInfo,
-      allKeys: Object.keys(conversationData)
-    });
-    throw error;
-  }
-}
 
 /**
  * List conversations for a user ordered by recent activity.
@@ -932,6 +859,15 @@ export async function deleteConversationMessages(conversationId: string): Promis
   }
 
   try {
+    // First check if conversation exists
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      console.log(`⚠️ Conversation ${conversationId} doesn't exist or already deleted`);
+      return; // Exit gracefully if conversation doesn't exist
+    }
+
     // Get all messages in the conversation
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
     const q = query(messagesRef);
@@ -939,14 +875,21 @@ export async function deleteConversationMessages(conversationId: string): Promis
     
     console.log(`📊 Found ${snapshot.size} messages to delete in conversation ${conversationId}`);
     
+    if (snapshot.size === 0 && conversationSnap.exists()) {
+      // No messages but conversation exists, just delete the conversation
+      await deleteDoc(conversationRef);
+      console.log(`✅ Deleted empty conversation ${conversationId}`);
+      return;
+    }
+    
     // Delete each message in batches
     let batch = writeBatch(db);
     let batchCount = 0;
     let totalDeleted = 0;
     const MAX_BATCH_SIZE = 499; // Leave room for conversation doc deletion
 
-    for (const doc of snapshot.docs) {
-      batch.delete(doc.ref);
+    for (const docSnap of snapshot.docs) {
+      batch.delete(docSnap.ref);
       batchCount++;
       totalDeleted++;
 
@@ -960,17 +903,28 @@ export async function deleteConversationMessages(conversationId: string): Promis
     }
 
     // Delete the conversation document itself in the final batch
-    const conversationRef = doc(db, 'conversations', conversationId);
-    batch.delete(conversationRef);
-    console.log(`🗑️ Adding conversation document to deletion batch`);
+    if (conversationSnap.exists()) {
+      batch.delete(conversationRef);
+      console.log(`🗑️ Adding conversation document to deletion batch`);
+    }
 
-    // Commit the final batch (including conversation doc)
-    await batch.commit();
-    console.log(`📦 Committed final batch with ${batchCount} message deletions and conversation document`);
+    // Commit the final batch only if there are operations
+    if (batchCount > 0 || conversationSnap.exists()) {
+      await batch.commit();
+      console.log(`📦 Committed final batch with ${batchCount} message deletions and conversation document`);
+    }
 
     console.log(`✅ Successfully deleted ${totalDeleted} messages and conversation document for ${conversationId}`);
-  } catch (error) {
-    console.error('❌ Error deleting conversation messages:', error);
+  } catch (error: any) {
+    // Handle specific Firebase errors
+    if (error.code === 'permission-denied') {
+      console.error('❌ Permission denied to delete conversation:', conversationId);
+    } else if (error.code === 'not-found') {
+      console.log('⚠️ Conversation or messages not found, may have been already deleted');
+      return; // Don't throw, just return
+    } else {
+      console.error('❌ Error deleting conversation messages:', error);
+    }
     throw error;
   }
 }

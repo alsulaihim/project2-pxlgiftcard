@@ -16,6 +16,7 @@ interface SimpleMessageListProps {
   onEdit?: (messageId: string, newText: string) => void;
   onDelete?: (messageId: string) => void;
   onReact?: (messageId: string, emoji: string) => void;
+  onForward?: (messageId: string) => void;
 }
 
 /**
@@ -31,7 +32,8 @@ export const SimpleMessageList: React.FC<SimpleMessageListProps> = ({
   onReply,
   onEdit,
   onDelete,
-  onReact
+  onReact,
+  onForward
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMessageRef = useRef<HTMLDivElement>(null);
@@ -86,6 +88,7 @@ export const SimpleMessageList: React.FC<SimpleMessageListProps> = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onReact={onReact}
+              onForward={onForward ? () => onForward(message.id) : undefined}
             />
           </div>
         );
