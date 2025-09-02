@@ -67,6 +67,12 @@ export class MessageHandler {
       }
 
       // Prepare message data
+      console.log('📝 Message handler - Socket data:', {
+        userId: socket.data.userId,
+        email: socket.data.email,
+        displayName: socket.data.displayName
+      });
+      
       const messageData: any = {
         senderId: socket.data.userId,
         type: type || 'text',

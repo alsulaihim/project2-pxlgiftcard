@@ -426,17 +426,28 @@ export const useChatStore = create<ChatState>()(
 
         deleteConversation: async (id) => {
           try {
-            // Import Firestore service to delete messages
+            // Import Firestore service to delete messages and conversation
             const { deleteConversationMessages } = await import('@/services/chat/firestore-chat.service');
             
-            // Delete all messages from Firestore
+            // Delete all messages and conversation document from Firestore
             await deleteConversationMessages(id);
-            console.log(`🗑️ Deleted all messages for conversation: ${id}`);
+            console.log(`🗑️ Deleted conversation and all messages for: ${id}`);
+            
+            // Clear from localStorage
+            try {
+              const messagesKey = `chat_messages_${id}`;
+              localStorage.removeItem(messagesKey);
+              console.log(`🗑️ Cleared localStorage for conversation: ${id}`);
+            } catch (localStorageError) {
+              console.warn('Failed to clear localStorage:', localStorageError);
+            }
             
             // Update local state
             set((state) => {
               state.conversations.delete(id);
               state.messages.delete(id);
+              state.typingUsers.delete(id);
+              state.recordingUsers.delete(id);
               if (state.activeConversationId === id) {
                 state.activeConversationId = null;
               }
@@ -447,10 +458,20 @@ export const useChatStore = create<ChatState>()(
             set((state) => {
               state.conversations.delete(id);
               state.messages.delete(id);
+              state.typingUsers.delete(id);
+              state.recordingUsers.delete(id);
               if (state.activeConversationId === id) {
                 state.activeConversationId = null;
               }
             });
+            
+            // Try to clear localStorage even if Firestore fails
+            try {
+              const messagesKey = `chat_messages_${id}`;
+              localStorage.removeItem(messagesKey);
+            } catch (localStorageError) {
+              console.warn('Failed to clear localStorage:', localStorageError);
+            }
           }
         },
 
@@ -475,10 +496,7 @@ export const useChatStore = create<ChatState>()(
             throw new Error('No active conversation selected');
           }
 
-          // Simple encryption approach:
-          // 1. Encrypt for recipient (if we have their key)
-          // 2. Store plaintext for sender (base64 encoded with marker)
-          
+          // Proper encryption with key refresh
           let encryptedContent: string | undefined;
           let nonce: string | undefined;
           let senderEncryptedContent: string | undefined;
@@ -487,19 +505,35 @@ export const useChatStore = create<ChatState>()(
           const conversation = state.conversations.get(conversationId);
           const recipientId = conversation?.members.find(id => id !== state.userId);
           
-          // Try to encrypt for recipient
+          // Always fetch fresh public key from Firestore to ensure synchronization
           if (state.encryption && recipientId) {
             try {
-              // Get recipient's public key
+              // Always fetch the latest public key from Firestore
               const { getUserPublicKey } = await import('@/services/chat/key-exchange.service');
               const recipientPublicKey = await getUserPublicKey(recipientId);
               
               if (recipientPublicKey) {
-                // Encrypt for recipient
+                // Update local cache with fresh key
+                set((state) => {
+                  const conv = state.conversations.get(conversationId);
+                  if (conv) {
+                    if (!conv.memberDetails) {
+                      conv.memberDetails = new Map();
+                    }
+                    const existingDetails = conv.memberDetails.get(recipientId) || {};
+                    conv.memberDetails.set(recipientId, {
+                      ...existingDetails,
+                      uid: recipientId,
+                      publicKey: recipientPublicKey
+                    });
+                  }
+                });
+                
+                // Encrypt for recipient with fresh key
                 const encrypted = await state.encryption.encryptMessage(content, recipientPublicKey);
                 encryptedContent = encrypted.content;
                 nonce = encrypted.nonce;
-                console.log('✅ Message encrypted for recipient');
+                console.log('✅ Message encrypted with fresh recipient key');
               } else {
                 console.log('⚠️ No recipient public key - sending plaintext');
                 encryptedContent = content;
@@ -512,11 +546,9 @@ export const useChatStore = create<ChatState>()(
             encryptedContent = content; // No encryption available
           }
           
-          // For sender: Always store as base64-encoded plaintext with marker
-          // This avoids the NaCl self-encryption issue
+          // For sender: Store as base64-encoded plaintext with marker
           senderEncryptedContent = Buffer.from(content).toString('base64');
           senderNonce = 'plaintext'; // Special marker for plaintext
-          console.log('📝 Storing base64 plaintext for sender');
 
           // Get reply ID before clearing
           const replyToId = state.replyingTo?.id;
@@ -568,7 +600,7 @@ export const useChatStore = create<ChatState>()(
               tempId: tempMessage.id // Include temp ID for correlation
             };
             
-            // Add encrypted fields for recipient
+            // Add encrypted content for recipient
             if (encryptedContent) {
               messageData.text = encryptedContent;
               if (nonce) {
@@ -576,7 +608,7 @@ export const useChatStore = create<ChatState>()(
               }
             }
             
-            // Add sender's plaintext copy
+            // Add sender's copy (base64 plaintext)
             if (senderEncryptedContent && senderNonce) {
               messageData.senderText = senderEncryptedContent;
               messageData.senderNonce = senderNonce;

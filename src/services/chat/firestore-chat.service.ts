@@ -498,7 +498,7 @@ export function subscribeMessages(
 ): () => void {
   const q = query(
     collection(db, "conversations", conversationId, "messages"),
-    orderBy("timestamp", "desc"),
+    orderBy("timestamp", "asc"),
     limit(50)
   );
   
@@ -541,20 +541,23 @@ export function subscribeMessages(
         encryptionService.setCurrentUserId?.(currentUserId);
       }
       
+      // ALWAYS ensure keys are loaded for the current user
       let hasKeyPair = encryptionService.getPublicKey() !== null;
       
       // BUG FIX: 2025-02-01 - Load keys if not already loaded
       // Problem: Keys might not be loaded when trying to decrypt
-      // Solution: Try to load keys from storage if they're not in memory
+      // Solution: Always try to load keys from storage if they're not in memory
       // Impact: Ensures keys are available for decryption
-      if (!hasKeyPair && currentUserId) {
-        console.log('🔐 No keys in memory, attempting to load from storage...');
+      if (currentUserId) {
+        if (!hasKeyPair) {
+          console.log('🔐 No keys in memory, loading from storage...');
+        }
         try {
           await keyExchangeService.initializeUserKeys(currentUserId);
           hasKeyPair = encryptionService.getPublicKey() !== null;
-          console.log('🔐 Keys loaded successfully:', hasKeyPair);
+          console.log('🔐 Keys status after initialization:', hasKeyPair ? 'Loaded' : 'Not available');
         } catch (error) {
-          console.error('🔥 Failed to load keys:', error);
+          console.error('🔥 Failed to initialize keys:', error);
         }
       }
       
@@ -584,9 +587,16 @@ export function subscribeMessages(
       if ((data.nonce || data.senderNonce) && !isMediaMessage) {
         try {
           console.log('🔐 Retrieved encrypted message from Firestore:');
-          console.log('🔐 Sender ID:', data.senderId);
-          console.log('🔐 Current user ID:', currentUserId);
+          console.log('🔐 Sender ID:', data.senderId, '(length:', data.senderId?.length, ')');
+          console.log('🔐 Current user ID:', currentUserId, '(length:', currentUserId?.length, ')');
           console.log('🔐 Is own message:', data.senderId === currentUserId);
+          console.log('🔐 UID comparison debug:', {
+            senderIdType: typeof data.senderId,
+            currentUserIdType: typeof currentUserId,
+            exactMatch: data.senderId === currentUserId,
+            senderIdChars: data.senderId?.split('').map(c => c.charCodeAt(0)),
+            currentUserIdChars: currentUserId?.split('').map(c => c.charCodeAt(0))
+          });
           
           let encryptedContent: string;
           let nonce: string;
@@ -649,14 +659,35 @@ export function subscribeMessages(
               readBy: data.readBy,
               deliveredTo: data.deliveredTo
             };
-          } else if (data.senderId !== currentUserId && data.text && data.nonce) {
-            // For others' messages, use recipient encrypted version
-            encryptedContent = data.text;
-            nonce = data.nonce;
-            publicKeyForDecryption = await keyExchangeService.getPublicKey(data.senderId);
-            console.log('🔐 Using recipient encrypted version (other user message)');
-            console.log('🔐 Recipient encrypted content length:', encryptedContent.length);
-            console.log('🔐 Recipient nonce length:', nonce.length);
+          } else if (data.senderId !== currentUserId && data.text) {
+            // For others' messages
+            if (data.nonce) {
+              // Message is encrypted, need to decrypt
+              encryptedContent = data.text;
+              nonce = data.nonce;
+              // Always fetch fresh public key from Firestore
+              publicKeyForDecryption = await keyExchangeService.getUserPublicKey(data.senderId);
+              console.log('🔐 Fetched fresh sender public key from Firestore');
+              console.log('🔐 Using recipient encrypted version (other user message)');
+              console.log('🔐 Recipient encrypted content length:', encryptedContent.length);
+              console.log('🔐 Recipient nonce length:', nonce.length);
+            } else {
+              // Message is plaintext (no encryption was available)
+              console.log('📝 Message is plaintext (no encryption)');
+              decryptedText = data.text;
+              return {
+                id: docSnap.id,
+                senderId: data.senderId,
+                text: decryptedText,
+                encryptedContent: data.text,
+                nonce: data.nonce,
+                timestamp: data.timestamp,
+                readBy: data.readBy,
+                deliveredTo: data.deliveredTo,
+                type: data.type || 'text',
+                metadata: data.metadata || {}
+              };
+            }
           } else {
             console.warn('⚠️ No appropriate encrypted version found for user:', currentUserId);
             console.log('🔐 Message data available:', {
@@ -685,30 +716,36 @@ export function subscribeMessages(
           
           if (publicKeyForDecryption) {
             console.log('🔐 Attempting to decrypt message from:', data.senderId);
+            console.log('🔐 Has own key pair:', hasKeyPair);
+            console.log('🔐 Sender public key available:', !!publicKeyForDecryption);
+            console.log('🔐 Sender public key (first 20):', publicKeyForDecryption.substring(0, 20));
+            console.log('🔐 My public key:', encryptionService.getPublicKey()?.substring(0, 20));
             
-            try {
-              const decrypted = encryptionService.decryptMessage(
-                { content: encryptedContent, nonce: nonce },
-                publicKeyForDecryption
-              );
-              
-              if (decrypted === null) {
-                // Decryption returned null (can't decrypt with current keys)
-                decryptedText = '[Unable to decrypt - different encryption keys]';
-              } else {
-                decryptedText = decrypted;
-                console.log('🔓 Message decrypted successfully from:', data.senderId);
-              }
-            } catch (innerError) {
-              // If decryption fails, it might be an old message with broken encryption
-              // Try to handle gracefully
-              console.warn('⚠️ Failed to decrypt, might be legacy message:', innerError);
-              
-              // For old messages that were incorrectly encrypted, show a placeholder
-              if (data.timestamp && data.timestamp.toDate() < new Date('2025-01-29')) {
-                decryptedText = '[Old message - encryption fixed, please send new messages]';
-              } else {
-                decryptedText = '[Decryption failed - keys may have changed]';
+            // Ensure we have our key pair loaded
+            if (!hasKeyPair) {
+              console.log('❌ No key pair loaded - cannot decrypt');
+              decryptedText = '[Keys not loaded - please refresh]';
+            } else {
+              try {
+                const decrypted = encryptionService.decryptMessage(
+                  { content: encryptedContent, nonce: nonce },
+                  publicKeyForDecryption
+                );
+                
+                if (decrypted === null) {
+                  // Decryption returned null (can't decrypt with current keys)
+                  console.log('❌ Decryption returned null');
+                  console.log('❌ Encrypted content (first 50):', encryptedContent.substring(0, 50));
+                  console.log('❌ Nonce (first 20):', nonce.substring(0, 20));
+                  console.log('❌ This means the message was encrypted with different keys than currently loaded');
+                  decryptedText = '[Unable to decrypt - keys mismatch, both users need to clear browser data and refresh]';
+                } else {
+                  decryptedText = decrypted;
+                  console.log('🔓 Message decrypted successfully from:', data.senderId);
+                }
+              } catch (innerError) {
+                console.error('❌ Decryption threw error:', innerError);
+                decryptedText = '[Decryption error]';
               }
             }
           } else {
@@ -843,10 +880,10 @@ export async function markMessageAsRead(conversationId: string, messageId: strin
 }
 
 /**
- * Delete all messages in a conversation
+ * Delete all messages in a conversation and the conversation document itself
  */
 export async function deleteConversationMessages(conversationId: string): Promise<void> {
-  console.log(`🗑️ Starting deletion of messages for conversation: ${conversationId}`);
+  console.log(`🗑️ Starting deletion of conversation and messages: ${conversationId}`);
   
   // Ensure auth is ready
   const authUser = await authManager.waitForAuth();
@@ -863,16 +900,11 @@ export async function deleteConversationMessages(conversationId: string): Promis
     
     console.log(`📊 Found ${snapshot.size} messages to delete in conversation ${conversationId}`);
     
-    if (snapshot.size === 0) {
-      console.log(`✅ No messages to delete for conversation ${conversationId}`);
-      return;
-    }
-
     // Delete each message in batches
     let batch = writeBatch(db);
     let batchCount = 0;
     let totalDeleted = 0;
-    const MAX_BATCH_SIZE = 500; // Firestore batch limit
+    const MAX_BATCH_SIZE = 499; // Leave room for conversation doc deletion
 
     for (const doc of snapshot.docs) {
       batch.delete(doc.ref);
@@ -888,13 +920,16 @@ export async function deleteConversationMessages(conversationId: string): Promis
       }
     }
 
-    // Commit any remaining deletes
-    if (batchCount > 0) {
-      await batch.commit();
-      console.log(`📦 Committed final batch of ${batchCount} deletions`);
-    }
+    // Delete the conversation document itself in the final batch
+    const conversationRef = doc(db, 'conversations', conversationId);
+    batch.delete(conversationRef);
+    console.log(`🗑️ Adding conversation document to deletion batch`);
 
-    console.log(`✅ Successfully deleted ${totalDeleted} messages from conversation ${conversationId}`);
+    // Commit the final batch (including conversation doc)
+    await batch.commit();
+    console.log(`📦 Committed final batch with ${batchCount} message deletions and conversation document`);
+
+    console.log(`✅ Successfully deleted ${totalDeleted} messages and conversation document for ${conversationId}`);
   } catch (error) {
     console.error('❌ Error deleting conversation messages:', error);
     throw error;
