@@ -3,10 +3,11 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { ValidatedInput } from "@/components/ui/validated-input";
-import { CreditCard, DollarSign, ArrowRight, Info, AlertCircle, TrendingUp } from "lucide-react";
+import { CreditCard, DollarSign, ArrowRight, Info, AlertCircle, TrendingUp, Globe } from "lucide-react";
 import { parseFormattedBalance } from "@/lib/validation";
 import StripePayment from "@/components/payments/stripe-payment";
 import PayPalPayment from "@/components/payments/paypal-payment";
+import MyFatoorahPayment from "@/components/payments/myfatoorah-payment";
 import { usePXLCurrency } from "@/hooks/use-pxl-currency";
 import { formatPXL, formatUSD } from "@/lib/pxl-currency";
 import { useAuth } from "@/contexts/auth-context";
@@ -16,7 +17,7 @@ import { useAuth } from "@/contexts/auth-context";
  */
 export function PXLPurchaseSection() {
   const [usdAmount, setUsdAmount] = React.useState<string>("50");
-  const [paymentMethod, setPaymentMethod] = React.useState<"stripe" | "paypal">("stripe");
+  const [paymentMethod, setPaymentMethod] = React.useState<"stripe" | "paypal" | "myfatoorah">("stripe");
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [success, setSuccess] = React.useState(false);
   const [paymentResult, setPaymentResult] = React.useState<any>(null);
@@ -213,27 +214,39 @@ export function PXLPurchaseSection() {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             Payment Method
           </label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setPaymentMethod("stripe")}
-              className={`flex items-center justify-center space-x-2 rounded-lg border py-3 px-4 transition-all ${
+              className={`flex items-center justify-center space-x-2 rounded-lg border py-3 px-3 transition-all ${
                 paymentMethod === "stripe"
                   ? "bg-white text-black border-white"
                   : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
               }`}
             >
               <CreditCard className="h-5 w-5" />
-              <span className="font-medium">Card</span>
+              <span className="font-medium text-sm">Card</span>
             </button>
             <button
               onClick={() => setPaymentMethod("paypal")}
-              className={`flex items-center justify-center space-x-2 rounded-lg border py-3 px-4 transition-all ${
+              className={`flex items-center justify-center space-x-2 rounded-lg border py-3 px-3 transition-all ${
                 paymentMethod === "paypal"
                   ? "bg-white text-black border-white"
                   : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
               }`}
             >
-              <span className="font-medium">PayPal</span>
+              <span className="font-medium text-sm">PayPal</span>
+            </button>
+            <button
+              onClick={() => setPaymentMethod("myfatoorah")}
+              className={`flex flex-col items-center justify-center rounded-lg border py-2 px-3 transition-all ${
+                paymentMethod === "myfatoorah"
+                  ? "bg-white text-black border-white"
+                  : "bg-gray-900 text-gray-300 border-gray-700 hover:bg-gray-800 hover:border-gray-600"
+              }`}
+            >
+              <Globe className="h-5 w-5 mb-1" />
+              <span className="font-medium text-xs">MyFatoorah</span>
+              <span className="text-xs opacity-75">MENA</span>
             </button>
           </div>
         </div>
@@ -301,9 +314,19 @@ export function PXLPurchaseSection() {
             onError={handlePaymentError}
             disabled={!usdAmount || parseFloat(usdAmount) < 10}
           />
-        ) : (
+        ) : paymentMethod === "paypal" ? (
           <PayPalPayment
             amount={parseFormattedBalance(usdAmount || "0")}
+            onSuccess={handlePaymentSuccess}
+            onError={handlePaymentError}
+            onCancel={handlePaymentCancellation}
+            loading={isProcessing}
+          />
+        ) : (
+          <MyFatoorahPayment
+            amount={parseFormattedBalance(usdAmount || "0")}
+            currency="USD"
+            description={`Purchase ${formatPXL(pxlCalculation.totalPxl)}`}
             onSuccess={handlePaymentSuccess}
             onError={handlePaymentError}
             onCancel={handlePaymentCancellation}

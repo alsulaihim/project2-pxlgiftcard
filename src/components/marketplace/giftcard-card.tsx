@@ -1,11 +1,12 @@
 "use client";
 
 import * as React from "react";
-import { ShoppingCart, Star, TrendingUp, Zap } from "lucide-react";
+import { ShoppingCart, Star, TrendingUp, Zap, CreditCard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCart, cartActions } from "@/contexts/cart-context";
 import { formatBalance } from "@/lib/validation";
+import { useRouter } from "next/navigation";
 
 interface GiftcardData {
   id: string;
@@ -36,6 +37,7 @@ interface GiftcardCardProps {
 export function GiftcardCard({ giftcard }: GiftcardCardProps) {
   const [selectedDenomination, setSelectedDenomination] = React.useState(giftcard.selectedDenomination);
   const { dispatch } = useCart();
+  const router = useRouter();
   
   // Debug: Log what we're receiving
   React.useEffect(() => {
@@ -79,6 +81,31 @@ export function GiftcardCard({ giftcard }: GiftcardCardProps) {
     if (window.innerWidth < 768) {
       dispatch(cartActions.openCart());
     }
+  };
+
+  // Quick checkout function
+  const handleQuickCheckout = () => {
+    const cartItem = {
+      id: `${giftcard.id}-${selectedDenomination}`,
+      giftcardId: giftcard.id,
+      brand: giftcard.brand,
+      productName: `${giftcard.brand} Gift Card`,
+      denomination: selectedDenomination,
+      pricing: {
+        usd: finalUSDPrice,
+        pxl: finalPXLPrice,
+      },
+      tierDiscount: discountAmount,
+      cashback: giftcard.cashback,
+      imageUrl: giftcard.logo,
+    };
+    
+    // Clear cart and add only this item
+    dispatch(cartActions.clearCart());
+    dispatch(cartActions.addItem(cartItem));
+    
+    // Navigate directly to checkout
+    router.push('/checkout');
   };
 
   return (
@@ -249,16 +276,28 @@ export function GiftcardCard({ giftcard }: GiftcardCardProps) {
           )}
         </div>
 
-        {/* Purchase Button */}
-        <Button
-          className="w-full"
-          disabled={!giftcard.inStock}
-          size="sm"
-          onClick={handleAddToCart}
-        >
-          <ShoppingCart className="mr-2 h-4 w-4" />
-          {giftcard.inStock ? "Add to Cart" : "Out of Stock"}
-        </Button>
+        {/* Purchase Buttons */}
+        <div className="flex gap-2">
+          <Button
+            className="flex-1"
+            variant="outline"
+            disabled={!giftcard.inStock}
+            size="sm"
+            onClick={handleAddToCart}
+          >
+            <ShoppingCart className="mr-2 h-4 w-4" />
+            Add to Cart
+          </Button>
+          <Button
+            className="flex-1"
+            disabled={!giftcard.inStock}
+            size="sm"
+            onClick={handleQuickCheckout}
+          >
+            <CreditCard className="mr-2 h-4 w-4" />
+            Quick Buy
+          </Button>
+        </div>
 
         {/* Quick Info */}
         <div className="mt-3 flex items-center justify-between text-xs text-gray-400">

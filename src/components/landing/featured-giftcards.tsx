@@ -8,6 +8,8 @@ import { useCart, cartActions } from "@/contexts/cart-context";
 import { formatBalance } from "@/lib/validation";
 import { db } from "@/lib/firebase-config";
 import { collection, query, where, getDocs, orderBy, limit, Timestamp } from "firebase/firestore";
+import { useRouter } from "next/navigation";
+import { CreditCard, ShoppingCart } from "lucide-react";
 
 interface ProductDenomination {
   value: number;
@@ -39,6 +41,7 @@ interface Product {
  */
 export function FeaturedGiftcards() {
   const { dispatch } = useCart();
+  const router = useRouter();
   const [featuredProducts, setFeaturedProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   
@@ -96,6 +99,31 @@ export function FeaturedGiftcards() {
     if (window.innerWidth < 768) {
       dispatch(cartActions.openCart());
     }
+  };
+
+  // Quick checkout function for featured cards
+  const handleQuickCheckout = (product: Product, denomination: number) => {
+    const cartItem = {
+      id: `featured-${product.id}-${denomination}`,
+      giftcardId: product.id,
+      brand: product.brand,
+      productName: product.name,
+      denomination: denomination,
+      pricing: {
+        usd: denomination,
+        pxl: denomination * 100.85, // Using approximate exchange rate
+      },
+      tierDiscount: 0,
+      cashback: 0,
+      imageUrl: product.artwork_url || product.defaultArtworkUrl || product.logo_url || product.logo,
+    };
+    
+    // Clear cart and add only this item
+    dispatch(cartActions.clearCart());
+    dispatch(cartActions.addItem(cartItem));
+    
+    // Navigate directly to checkout
+    router.push('/checkout');
   };
 
   // Get the artwork URL for the product
@@ -268,15 +296,27 @@ export function FeaturedGiftcards() {
 
                 {/* Bottom Action Bar */}
                 <div className="p-3 border-t border-[#262626]">
-                  <div className="flex justify-end">
+                  <div className="flex gap-2">
                     <Button
                       size="sm"
-                      className="bg-[#0070f3] text-white hover:bg-[#0059c9]"
+                      variant="outline"
+                      className="flex-1 border-[#333333] hover:bg-[#1a1a1a]"
                       disabled={!hasStock}
                       onClick={() => firstDenom && handleAddToCart(product, firstDenom.value)}
                       aria-label={hasStock ? `Add ${product.name} to cart` : `Notify me ${product.name}`}
                     >
-                      {hasStock ? "Add to Cart" : "Notify Me"}
+                      <ShoppingCart className="mr-1 h-3 w-3" />
+                      Cart
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="flex-1 bg-[#0070f3] text-white hover:bg-[#0059c9]"
+                      disabled={!hasStock}
+                      onClick={() => firstDenom && handleQuickCheckout(product, firstDenom.value)}
+                      aria-label={`Quick buy ${product.name}`}
+                    >
+                      <CreditCard className="mr-1 h-3 w-3" />
+                      Quick Buy
                     </Button>
                   </div>
                 </div>

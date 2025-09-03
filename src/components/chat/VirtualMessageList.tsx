@@ -71,6 +71,8 @@ const MessageItem = React.memo<MessageItemProps>(({ index, style, data }) => {
   );
 });
 
+MessageItem.displayName = 'MessageItem';
+
 export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
   messages,
   currentUserId,
@@ -205,3 +207,5 @@ export const VirtualMessageList = React.memo<VirtualMessageListProps>(({
     </div>
   );
 });
+
+VirtualMessageList.displayName = 'VirtualMessageList';
