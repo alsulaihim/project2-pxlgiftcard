@@ -104,3 +104,8 @@ temp/
 # Mobile preparation files (temporary)
 mobile-prep/temp/
 mobile-prep/generated/
+
+# Chat server keys (local only)
+apps/chat-server/keys/
+apps/chat-server/keys/*.json
+

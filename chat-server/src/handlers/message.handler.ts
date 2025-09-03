@@ -73,6 +73,17 @@ export class MessageHandler {
         displayName: socket.data.displayName
       });
       
+      // Log the received message data for debugging
+      console.log('📥 Received message data:', {
+        hasText: !!text,
+        textLength: text?.length,
+        hasNonce: !!nonce,
+        hasSenderText: !!senderText,
+        senderTextLength: senderText?.length,
+        hasSenderNonce: !!senderNonce,
+        senderNonceValue: senderNonce
+      });
+      
       const messageData: any = {
         senderId: socket.data.userId,
         type: type || 'text',

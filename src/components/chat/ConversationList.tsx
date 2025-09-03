@@ -2,6 +2,7 @@
 
 import React from "react";
 import { Conversation } from "@/services/chat/firestore-chat.service";
+import { NotificationBadge } from "@/components/ui/NotificationBadge";
 
 interface Props {
   conversations: Conversation[];
@@ -83,9 +84,14 @@ export function ConversationList({ conversations, activeId, onSelect, onDelete, 
                     </div>
                   )}
                 </div>
-                {/* Name */}
-                <div className="text-sm font-medium truncate">
-                  {isGroup ? (c.groupInfo?.name || 'Group Chat') : displayUser.displayName}
+                {/* Name and unread count */}
+                <div className="flex-1 flex items-center justify-between">
+                  <div className="text-sm font-medium truncate">
+                    {isGroup ? (c.groupInfo?.name || 'Group Chat') : displayUser.displayName}
+                  </div>
+                  {(c as any).unreadCount > 0 && activeId !== c.id && (
+                    <NotificationBadge count={(c as any).unreadCount} size="sm" pulse={true} className="relative top-0 right-0" />
+                  )}
                 </div>
               </div>
               {c.lastMessage?.text && (

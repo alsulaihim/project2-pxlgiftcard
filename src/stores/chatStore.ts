@@ -12,6 +12,7 @@ import { EncryptionService } from '@/services/chat/encryption.service';
 import { Timestamp, doc, updateDoc, arrayUnion, arrayRemove, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase-config';
 import { authManager } from '@/lib/firebase-auth-manager';
+import { notificationService } from '@/services/notification.service';
 
 // Enable MapSet support for Immer to work with Maps and Sets
 enableMapSet();
@@ -586,21 +587,33 @@ export const useChatStore = create<ChatState>()(
                 encryptedContent = encrypted.content;
                 nonce = encrypted.nonce;
                 console.log('✅ Message encrypted with fresh recipient key');
+                
+                // For sender: Store as base64-encoded plaintext with marker
+                senderEncryptedContent = btoa(content);
+                senderNonce = 'plaintext'; // Special marker for plaintext
               } else {
-                console.log('⚠️ No recipient public key - sending plaintext');
+                console.log('⚠️ No recipient public key - sending unencrypted');
+                // When recipient has no key, send plaintext for both
                 encryptedContent = content;
+                nonce = undefined;
+                senderEncryptedContent = content;
+                senderNonce = undefined;
               }
             } catch (error) {
               console.error('❌ Encryption failed:', error);
-              encryptedContent = content; // Fallback to plaintext
+              // Fallback to plaintext for both
+              encryptedContent = content;
+              nonce = undefined;
+              senderEncryptedContent = content;
+              senderNonce = undefined;
             }
           } else {
-            encryptedContent = content; // No encryption available
+            // No encryption available - send plaintext
+            encryptedContent = content;
+            nonce = undefined;
+            senderEncryptedContent = content;
+            senderNonce = undefined;
           }
-          
-          // For sender: Store as base64-encoded plaintext with marker
-          senderEncryptedContent = Buffer.from(content).toString('base64');
-          senderNonce = 'plaintext'; // Special marker for plaintext
 
           // Get reply ID before clearing
           const replyToId = state.replyingTo?.id;
@@ -660,11 +673,7 @@ export const useChatStore = create<ChatState>()(
               }
             }
             
-            // Add sender's copy (base64 plaintext)
-            if (senderEncryptedContent && senderNonce) {
-              messageData.senderText = senderEncryptedContent;
-              messageData.senderNonce = senderNonce;
-            }
+            // Do NOT send sender plaintext/self-copy over socket (strict E2EE)
             
             // Only add replyTo if it exists
             if (replyToId) {
@@ -1343,44 +1352,13 @@ export const useChatStore = create<ChatState>()(
           socket.on('message:new', async (message: any) => {
             console.log('📨 New message received in store:', message);
             
-            // Decrypt the message content
-            const userId = get().userId;
-            let decryptedContent = '';
+            // Decrypt the message content using the decryption service
+            const { decryptMessage } = await import('@/services/chat/message-decryption.service');
+            const decryptionResult = await decryptMessage(message);
+            const decryptedContent = decryptionResult.text;
             
-            try {
-              // Determine which encrypted text to use based on who we are
-              const encryptedText = message.senderId === userId 
-                ? message.senderText  // Use sender's version if we sent it
-                : message.text;       // Use recipient's version if we received it
-              
-              const nonce = message.senderId === userId 
-                ? message.senderNonce || message.nonce
-                : message.nonce;
-              
-              if (encryptedText && nonce) {
-                const { encryptionService } = await import('@/services/chat/encryption.service');
-                // Get sender's public key from the message
-                const senderPublicKey = message.sender?.publicKey || '';
-                if (senderPublicKey && encryptedText && nonce) {
-                  decryptedContent = encryptionService.decryptMessage(
-                    { encryptedContent: encryptedText, nonce },
-                    senderPublicKey
-                  );
-                  console.log('🔓 Decrypted message content:', decryptedContent);
-                } else {
-                  // If no public key, just use the text as-is (test mode)
-                  decryptedContent = message.text || message.senderText || '';
-                  console.log('📝 Using plain text (no public key):', decryptedContent);
-                }
-              } else {
-                // Fallback to plain text if no encryption
-                decryptedContent = message.text || message.senderText || '';
-                console.log('📝 Using plain text (no encryption):', decryptedContent);
-              }
-            } catch (error) {
-              console.error('Failed to decrypt message:', error);
-              // Fallback to plain text
-              decryptedContent = message.text || message.senderText || '[Unable to decrypt]';
+            if (!decryptionResult.success) {
+              console.warn('⚠️ Message decryption failed:', decryptionResult.error);
             }
             
             // Check if this is not our own message before updating state
@@ -1450,6 +1428,25 @@ export const useChatStore = create<ChatState>()(
                   // Increment unread count if message is from another user
                   if (message.senderId !== state.userId) {
                     conversation.unreadCount = (conversation.unreadCount || 0) + 1;
+                    
+                    // Show browser notification if conversation is not active
+                    if (state.activeConversationId !== conversationId) {
+                      // Get sender info from conversation member details
+                      const senderInfo = conversation.memberDetails?.get(message.senderId);
+                      const senderName = message.sender?.displayName || senderInfo?.displayName || 'Someone';
+                      const senderAvatar = message.sender?.photoURL || senderInfo?.photoURL;
+                      
+                      // Show notification
+                      notificationService.showNewMessageNotification(
+                        senderName,
+                        decryptedContent,
+                        senderAvatar,
+                        conversationId
+                      );
+                      
+                      // Play notification sound
+                      notificationService.playNotificationSound();
+                    }
                   }
                 }
               }

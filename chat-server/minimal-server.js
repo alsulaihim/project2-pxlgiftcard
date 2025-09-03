@@ -1,6 +1,8 @@
 const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const admin = require('firebase-admin');
+const path = require('path');
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,6 +39,28 @@ const io = new Server(httpServer, {
   compression: true,
   httpCompression: true
 });
+
+// Initialize Firebase Admin (dev)
+function initAdmin() {
+  try {
+    if (admin.apps.length === 0) {
+      const saPath = process.env.GOOGLE_APPLICATION_CREDENTIALS
+        ? (path.isAbsolute(process.env.GOOGLE_APPLICATION_CREDENTIALS)
+            ? process.env.GOOGLE_APPLICATION_CREDENTIALS
+            : path.join(process.cwd(), process.env.GOOGLE_APPLICATION_CREDENTIALS))
+        : path.join(__dirname, 'serviceAccountKey.json');
+      const serviceAccount = require(saPath);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id || 'pxl-perfect-1'
+      });
+      console.log('✅ Firebase Admin initialized (minimal-server)');
+    }
+  } catch (e) {
+    console.log('⚠️ Firebase Admin init failed, continuing with mock auth:', e.message);
+  }
+}
+initAdmin();
 
 // Normalize a direct conversation room id so both participants compute the same room
 function normalizeConversationId(conversationId) {
@@ -80,47 +104,32 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Socket.io authentication middleware (simplified and stable)
+// Socket.io authentication middleware (STRICT)
 io.use(async (socket, next) => {
   try {
     const token = socket.handshake.auth.token;
-    
     if (!token) {
       console.log(`🚫 No token provided for socket: ${socket.id}`);
       return next(new Error('Authentication token required'));
     }
-    
-    // TEMP: Deterministic mock auth mapping based on token hash
-    const mockUsers = [
-      { uid: '6NmJ13Xl01eLrOZ3HhAbEMYULI72', displayName: 'Alice Johnson', email: 'alice@example.com', tier: 'pro' },
-      { uid: 'NkTmPMpaTiTNw6RmhdITwCbmf6r2', displayName: 'Bob Smith', email: 'bob@example.com', tier: 'rising' },
-      { uid: 'w5jpUcOVgvZtRnBncJSxyJ1n8Ev1', displayName: 'Charlie Brown', email: 'charlie@example.com', tier: 'pixlbeast' }
-    ];
-
-    const hashToken = (str) => {
-      let h = 5381;
-      for (let i = 0; i < (str || '').length; i++) {
-        h = ((h << 5) + h) ^ str.charCodeAt(i);
-      }
-      return Math.abs(h);
-    };
-
-    const userIndex = hashToken(token) % mockUsers.length;
-    const mockUser = mockUsers[userIndex];
-    
-    console.log(`✅ Socket authenticated: ${socket.id} as ${mockUser.displayName} (${mockUser.uid})`);
+    initAdmin();
+    if (!admin.apps.length) {
+      return next(new Error('Server auth not initialized'));
+    }
+    const decoded = await admin.auth().verifyIdToken(token);
+    const uid = decoded.uid;
+    console.log(`✅ Socket authenticated via Firebase: ${socket.id} uid=${uid}`);
     socket.data = {
-      userId: mockUser.uid,
-      email: mockUser.email,
-      tier: mockUser.tier,
-      displayName: mockUser.displayName,
+      userId: uid,
+      email: decoded.email || '',
+      tier: 'starter',
+      displayName: decoded.name || decoded.email || uid,
       socketId: socket.id,
       connectedAt: new Date().toISOString()
     };
-    
-    next();
+    return next();
   } catch (error) {
-    console.error(`❌ Authentication error for socket ${socket.id}:`, error);
+    console.error(`❌ Authentication error for socket ${socket.id}:`, error && error.message ? error.message : error);
     next(new Error('Authentication failed'));
   }
 });
@@ -154,15 +163,18 @@ io.on('connection', (socket) => {
       
       const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      // Create message object with sender info
+      // Create message object with sender info (no plaintext fields)
       const message = {
         id: messageId,
         conversationId: normalizedConversationId,
         senderId: socket.data.userId,
         senderName: socket.data.displayName,
         type: data.type || 'text',
-        content: data.text || data.senderText || '',
-        nonce: data.nonce || data.senderNonce || '',
+        // Recipient-encrypted version only
+        text: data.text || '',
+        nonce: data.nonce || '',
+        // Back-compat field mirrors encrypted text
+        content: data.text || '',
         timestamp: new Date().toISOString(),
         delivered: [socket.data.userId],
         read: []
@@ -209,9 +221,9 @@ io.on('connection', (socket) => {
         }
       }
       
-      // Send acknowledgement to sender
+      // Send acknowledgement to sender (Node-style: err, response)
       if (callback) {
-        callback({ ...ackResponse, conversationId: normalizedConversationId });
+        callback(null, { ...ackResponse, conversationId: normalizedConversationId });
       } else {
         socket.emit('message:sent', { ...ackResponse, conversationId: normalizedConversationId });
       }
@@ -263,43 +275,69 @@ io.on('connection', (socket) => {
   });
   
   // Handle message delivery acknowledgement from recipients
-  socket.on('message:delivered', (messageId, callback) => {
+  socket.on('message:delivered', (payload, callback) => {
+    const normalized = typeof payload === 'string' ? { messageId: payload } : (payload || {});
+    const messageId = normalized.messageId || payload || '';
+    const conversationId = normalized.conversationId;
     console.log(`📬 Message ${messageId} delivered to ${socket.data.userId}`);
     
-    // Notify sender about delivery
-    socket.broadcast.emit('message:delivery:update', {
+    // Notify sender about delivery (both event names for compatibility)
+    const deliveryPayload = {
       messageId,
       deliveredTo: socket.data.userId,
+      userId: socket.data.userId,
+      conversationId,
       timestamp: new Date().toISOString()
-    });
+    };
+    socket.broadcast.emit('message:delivery:update', deliveryPayload);
+    socket.broadcast.emit('message:delivered', deliveryPayload);
     
     if (callback) callback({ success: true });
   });
   
   // Handle message read acknowledgement
-  socket.on('message:read', (messageIds, callback) => {
+  socket.on('message:read', (payload, callback) => {
+    const messageIds = Array.isArray(payload) ? payload : (payload?.messageIds || []);
+    const conversationId = Array.isArray(payload) ? undefined : payload?.conversationId;
     console.log(`👀 Messages read by ${socket.data.userId}:`, messageIds);
     
-    // Notify sender about read status
-    socket.broadcast.emit('message:read:update', {
+    // Notify sender about read status (both event names for compatibility)
+    const readPayload = {
       messageIds,
       readBy: socket.data.userId,
+      conversationId,
       timestamp: new Date().toISOString()
+    };
+    socket.broadcast.emit('message:read:update', readPayload);
+    // Also emit per-message events expected by some clients
+    (messageIds || []).forEach((mid) => {
+      socket.broadcast.emit('message:read', {
+        messageId: mid,
+        userId: socket.data.userId,
+        conversationId,
+        timestamp: new Date().toISOString()
+      });
     });
     
     if (callback) callback({ success: true });
   });
   
   // Handle typing indicators
-  socket.on('typing:start', (conversationId) => {
+  socket.on('typing:start', (payload) => {
+    const conversationId = typeof payload === 'string' ? payload : (payload?.conversationId || '');
+    if (!conversationId) return;
     socket.to(conversationId).emit('typing:update', {
+      conversationId,
       userId: socket.data.userId,
       typing: true
     });
   });
   
-  socket.on('typing:stop', (conversationId) => {
+  socket.on('typing:stop', (payload) => {
+    const conversationId = typeof payload === 'string' ? payload : (payload?.conversationId || '');
+    if (!conversationId) return;
     socket.to(conversationId).emit('typing:update', {
+      conversationId,
       userId: socket.data.userId,
       typing: false
     });
@@ -309,6 +347,7 @@ io.on('connection', (socket) => {
   socket.on('recording:start', (conversationId) => {
     console.log(`🎤 User ${socket.data.userId} started recording in ${conversationId}`);
     socket.to(conversationId).emit('recording:update', {
+      conversationId,
       userId: socket.data.userId,
       recording: true
     });
@@ -317,6 +356,7 @@ io.on('connection', (socket) => {
   socket.on('recording:stop', (conversationId) => {
     console.log(`🎤 User ${socket.data.userId} stopped recording in ${conversationId}`);
     socket.to(conversationId).emit('recording:update', {
+      conversationId,
       userId: socket.data.userId,
       recording: false
     });

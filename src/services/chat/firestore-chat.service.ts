@@ -24,6 +24,7 @@ import { authManager } from "@/lib/firebase-auth-manager";
 import { EncryptionService } from "./encryption.service";
 const encryptionService = EncryptionService.getInstance();
 import { keyExchangeService } from "./key-exchange.service";
+import { decryptMessage } from './message-decryption.service';
 
 export interface ChatUser {
   uid: string;
@@ -338,14 +339,16 @@ export async function sendMessage(
             console.log('🔐 Nonce length (base64):', nonce.length);
             console.log('🔐 Original text length:', text.length);
             
-            // BUG FIX: 2025-01-28 - Store plaintext for sender
-            // Problem: NaCl box cannot encrypt to yourself - it requires two different key pairs
-            // Solution: For now, store plaintext for sender (will implement symmetric encryption later)
-            // Impact: Sender can read their own messages
-            // TODO: Implement symmetric encryption for sender's copy
-            senderEncryptedContent = Buffer.from(text).toString('base64'); // Base64 encode plaintext
-            senderNonce = 'plaintext'; // Mark as plaintext
-            console.log('🔐 Storing base64-encoded plaintext for sender');
+            // Store a self-encrypted copy for the sender (strict E2EE, no plaintext at rest)
+            const myPublicKey = encryptionService.getPublicKey();
+            if (myPublicKey) {
+              const selfEncrypted = encryptionService.encryptMessage(text, myPublicKey);
+              senderEncryptedContent = selfEncrypted.content;
+              senderNonce = selfEncrypted.nonce;
+              console.log('🔐 Stored self-encrypted sender copy');
+            } else {
+              console.warn('⚠️ Missing own public key; skipping self-encrypted sender copy');
+            }
           } else {
             console.warn('⚠️ Recipient public key not found, sending unencrypted');
           }
@@ -375,8 +378,8 @@ export async function sendMessage(
     }
     
     // Only include nonce if it has a value
-    if (nonce || options?.nonce) {
-      messageData.nonce = nonce || options.nonce;
+    if (nonce || (options && options.nonce)) {
+      messageData.nonce = nonce || (options ? options.nonce : '');
     }
     
     // Store sender's encrypted version if available
@@ -469,298 +472,44 @@ export function subscribeMessages(
   );
   
   return onSnapshot(q, async (snapshot) => {
-    // Add a small delay to ensure keys are loaded
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Get current user ID from auth or store
+    const currentUserId = auth.currentUser?.uid || (window as any).chatStore?.getState?.()?.userId;
     
     // Process all messages and wait for decryption to complete
     const messagePromises = snapshot.docs.map(async (docSnap) => {
       const data = docSnap.data();
       
-      // Check if this is a media message - they don't need decryption
-      const isMediaMessage = data.type && ['image', 'file', 'voice', 'media'].includes(data.type);
+      // Use the new decryption service with current user ID
+      const decryptionResult = await decryptMessage({
+        id: docSnap.id,
+        ...data
+      }, currentUserId);
       
-      // Start with encrypted text, will decrypt if needed
-      let decryptedText = data.text || '[No message content]';
+      const decryptedText = decryptionResult.text;
       
-      // Skip decryption for media messages - they contain URLs
-      if (isMediaMessage) {
-        decryptedText = data.text; // URL doesn't need decryption
+      
+      // Log decryption status
+      if (!decryptionResult.success) {
+        console.warn(`⚠️ Message ${docSnap.id} decryption failed:`, decryptionResult.error);
       }
       
-      // BUG FIX: 2025-01-28 - Use appropriate encrypted version for sender vs recipient
-      // Problem: Sender couldn't decrypt their own messages because they were encrypted for recipient
-      // Solution: Use senderText/senderNonce for sender's own messages, text/nonce for others' messages
-      // Impact: Both sender and recipient can decrypt and read messages properly
-      
-      // BUG FIX: 2025-02-01 - Get user ID from auth manager instead of encryption service
-      // Problem: encryptionService.getCurrentUserId() returns null if not initialized yet
-      // Solution: Use auth.currentUser?.uid which is always available when authenticated
-      // Impact: Decryption now works properly even before encryption service initialization
-      const currentUserId = auth.currentUser?.uid || encryptionService.getCurrentUserId?.();
-      
-      // BUG FIX: 2025-02-01 - Ensure encryption service has current user ID
-      // Problem: Encryption service might not have user ID set when decrypting
-      // Solution: Set it if we have auth user but encryption service doesn't have it
-      // Impact: Ensures encryption service is properly initialized for decryption
-      if (currentUserId && !encryptionService.getCurrentUserId?.()) {
-        console.log('🔐 Setting current user ID in encryption service:', currentUserId);
-        encryptionService.setCurrentUserId?.(currentUserId);
-      }
-      
-      // ALWAYS ensure keys are loaded for the current user
-      let hasKeyPair = encryptionService.getPublicKey() !== null;
-      
-      // BUG FIX: 2025-02-01 - Load keys if not already loaded
-      // Problem: Keys might not be loaded when trying to decrypt
-      // Solution: Always try to load keys from storage if they're not in memory
-      // Impact: Ensures keys are available for decryption
-      if (currentUserId) {
-        if (!hasKeyPair) {
-          console.log('🔐 No keys in memory, loading from storage...');
-        }
-        try {
-          await keyExchangeService.initializeUserKeys(currentUserId);
-          hasKeyPair = encryptionService.getPublicKey() !== null;
-          console.log('🔐 Keys status after initialization:', hasKeyPair ? 'Loaded' : 'Not available');
-        } catch (error) {
-          console.error('🔥 Failed to initialize keys:', error);
-        }
-      }
-      
-      console.log('🔐 ==== DECRYPTION DEBUG START ====');
-      console.log('🔐 Message ID:', docSnap.id);
-      console.log('🔐 Current User ID:', currentUserId);
-      console.log('🔐 Sender ID:', data.senderId);
-      console.log('🔐 Is own message:', data.senderId === currentUserId);
-      console.log('🔐 Has encryption key pair:', hasKeyPair);
-      console.log('🔐 Message data fields:', {
-        hasText: !!data.text,
-        textLength: data.text?.length || 0,
-        textPreview: data.text?.substring(0, 50),
-        hasNonce: !!data.nonce,
-        nonceValue: data.nonce,
-        hasSenderText: !!data.senderText,
-        senderTextLength: data.senderText?.length || 0,
-        senderTextPreview: data.senderText?.substring(0, 50),
-        hasSenderNonce: !!data.senderNonce,
-        senderNonceValue: data.senderNonce,
-        messageType: data.type,
-        isMediaMessage
-      });
-      console.log('🔐 ==== DECRYPTION DEBUG END ====');
-      
-      // Handle decryption based on whether user is sender or recipient
-      if ((data.nonce || data.senderNonce) && !isMediaMessage) {
-        try {
-          console.log('🔐 Retrieved encrypted message from Firestore:');
-          console.log('🔐 Sender ID:', data.senderId, '(length:', data.senderId?.length, ')');
-          console.log('🔐 Current user ID:', currentUserId, '(length:', currentUserId?.length, ')');
-          console.log('🔐 Is own message:', data.senderId === currentUserId);
-          console.log('🔐 UID comparison debug:', {
-            senderIdType: typeof data.senderId,
-            currentUserIdType: typeof currentUserId,
-            exactMatch: data.senderId === currentUserId,
-            senderIdChars: data.senderId?.split('').map(c => c.charCodeAt(0)),
-            currentUserIdChars: currentUserId?.split('').map(c => c.charCodeAt(0))
-          });
-          
-          let encryptedContent: string;
-          let nonce: string;
-          let publicKeyForDecryption: string | null = null;
-          
-          if (data.senderId === currentUserId && data.senderText && data.senderNonce) {
-            // For own messages, check if it's plaintext or encrypted
-            if (data.senderNonce === 'plaintext') {
-              // Plaintext stored as base64
-              try {
-                decryptedText = Buffer.from(data.senderText, 'base64').toString('utf-8');
-                console.log('🔐 Decoded plaintext for sender\'s own message');
-              } catch (e) {
-                console.error('🔥 Failed to decode base64 plaintext:', e);
-                decryptedText = '[Cannot decode message]';
-              }
-              // Return early since we have the plaintext
-              return {
-                id: docSnap.id,
-                senderId: data.senderId,
-                text: decryptedText,
-                encryptedContent: data.text,
-                nonce: data.nonce,
-                timestamp: data.timestamp,
-                readBy: data.readBy,
-                deliveredTo: data.deliveredTo,
-                type: data.type || 'text',
-                metadata: data.metadata || {}
-              };
-            } else {
-              // Legacy dual encryption attempt (will fail)
-              console.log('🔐 Legacy dual encryption detected - cannot decrypt');
-              decryptedText = '[Legacy encrypted message]';
-              return {
-                id: docSnap.id,
-                senderId: data.senderId,
-                text: decryptedText,
-                encryptedContent: data.text,
-                nonce: data.nonce,
-                timestamp: data.timestamp,
-                readBy: data.readBy,
-                deliveredTo: data.deliveredTo
-              };
-            }
-          } else if (data.senderId === currentUserId && data.text && data.nonce && !data.senderText) {
-            // BUG FIX: 2025-01-28 - Backward compatibility for legacy messages
-            // Problem: Old messages from sender only have text/nonce (encrypted for recipient)
-            // Solution: Return the message without attempting decryption
-            // Impact: Legacy sender messages may appear encrypted, but new messages work correctly
-            console.log('🔐 Legacy sender message detected (pre-dual encryption)');
-            console.log('🔐 Cannot decrypt legacy sender message - was encrypted for recipient only');
-            // Don't attempt to decrypt, just mark as legacy
-            return {
-              id: docSnap.id,
-              senderId: data.senderId,
-              text: '[Legacy message]',
-              encryptedContent: data.text,
-              nonce: data.nonce,
-              timestamp: data.timestamp,
-              readBy: data.readBy,
-              deliveredTo: data.deliveredTo
-            };
-          } else if (data.senderId !== currentUserId && data.text) {
-            // For others' messages
-            if (data.nonce) {
-              // Message is encrypted, need to decrypt
-              encryptedContent = data.text;
-              nonce = data.nonce;
-              // Always fetch fresh public key from Firestore
-              publicKeyForDecryption = await keyExchangeService.getUserPublicKey(data.senderId);
-              console.log('🔐 Fetched fresh sender public key from Firestore');
-              console.log('🔐 Using recipient encrypted version (other user message)');
-              console.log('🔐 Recipient encrypted content length:', encryptedContent.length);
-              console.log('🔐 Recipient nonce length:', nonce.length);
-            } else {
-              // Message is plaintext (no encryption was available)
-              console.log('📝 Message is plaintext (no encryption)');
-              decryptedText = data.text;
-              return {
-                id: docSnap.id,
-                senderId: data.senderId,
-                text: decryptedText,
-                encryptedContent: data.text,
-                nonce: data.nonce,
-                timestamp: data.timestamp,
-                readBy: data.readBy,
-                deliveredTo: data.deliveredTo,
-                type: data.type || 'text',
-                metadata: data.metadata || {}
-              };
-            }
-          } else {
-            console.warn('⚠️ No appropriate encrypted version found for user:', currentUserId);
-            console.log('🔐 Message data available:', {
-              senderId: data.senderId,
-              hasText: !!data.text,
-              hasNonce: !!data.nonce,
-              hasSenderText: !!data.senderText,
-              hasSenderNonce: !!data.senderNonce,
-              isOwnMessage: data.senderId === currentUserId
-            });
-            // Return early for messages without encryption
-            return {
-              id: docSnap.id,
-              senderId: data.senderId,
-              text: '[No encrypted version available]',
-              encryptedContent: data.text,
-              nonce: data.nonce,
-              timestamp: data.timestamp,
-              readBy: data.readBy,
-              deliveredTo: data.deliveredTo
-            };
-          }
-          
-          console.log('🔐 Public key length:', publicKeyForDecryption?.length || 0);
-          console.log('🔐 Public key (first 10):', publicKeyForDecryption?.substring(0, 10) || 'null');
-          
-          if (publicKeyForDecryption) {
-            console.log('🔐 Attempting to decrypt message from:', data.senderId);
-            console.log('🔐 Has own key pair:', hasKeyPair);
-            console.log('🔐 Sender public key available:', !!publicKeyForDecryption);
-            console.log('🔐 Sender public key (first 20):', publicKeyForDecryption.substring(0, 20));
-            console.log('🔐 My public key:', encryptionService.getPublicKey()?.substring(0, 20));
-            
-            // Ensure we have our key pair loaded
-            if (!hasKeyPair) {
-              console.log('❌ No key pair loaded - cannot decrypt');
-              decryptedText = '[Keys not loaded - please refresh]';
-            } else {
-              try {
-                const decrypted = encryptionService.decryptMessage(
-                  { content: encryptedContent, nonce: nonce },
-                  publicKeyForDecryption
-                );
-                
-                if (decrypted === null) {
-                  // Decryption returned null (can't decrypt with current keys)
-                  console.log('❌ Decryption returned null');
-                  console.log('❌ Encrypted content (first 50):', encryptedContent.substring(0, 50));
-                  console.log('❌ Nonce (first 20):', nonce.substring(0, 20));
-                  console.log('❌ This means the message was encrypted with different keys than currently loaded');
-                  decryptedText = '[Unable to decrypt - keys mismatch, both users need to clear browser data and refresh]';
-                } else {
-                  decryptedText = decrypted;
-                  console.log('🔓 Message decrypted successfully from:', data.senderId);
-                }
-              } catch (innerError) {
-                console.error('❌ Decryption threw error:', innerError);
-                decryptedText = '[Decryption error]';
-              }
-            }
-          } else {
-            console.warn('⚠️ Public key not found for user:', data.senderId);
-            decryptedText = '[Public key not available]';
-          }
-        } catch (decryptionError) {
-          console.error('🔥 Decryption failed for message from:', data.senderId, decryptionError);
-          decryptedText = '[Encrypted Message - Decryption Failed]';
-        }
-      } else if ((data.nonce || data.senderNonce) && !hasKeyPair) {
-        // Keys not yet initialized
-        decryptedText = '[Loading encrypted message...]';
-      }
-      
-      // Handle reactions - check if field exists
-      const messageReactions = data.reactions || {};
-      
-      // Debug what we're getting from Firebase for ALL messages
-      if (docSnap.id === 'Gfn2zM5Ua4aI63uH9vqX' || docSnap.id === 'HesOjcGFryyQPoF7ZVdN') {
-        console.log(`🔍 Debug for problematic message ${docSnap.id}:`, {
-          hasReactionsField: 'reactions' in data,
-          reactionsValue: data.reactions,
-          reactionsType: typeof data.reactions,
-          dataKeys: Object.keys(data),
-          fullData: JSON.stringify(data)
-        });
-      }
-      
-      const messageData = {
+      // Return the decrypted message
+      return {
         id: docSnap.id,
         senderId: data.senderId,
         text: decryptedText,
         encryptedContent: data.text,
         nonce: data.nonce,
+        senderText: data.senderText,  // Include for debugging
+        senderNonce: data.senderNonce, // Include for debugging
         timestamp: data.timestamp,
         readBy: data.readBy,
         deliveredTo: data.deliveredTo,
         type: data.type || 'text',
         metadata: data.metadata || {},
-        reactions: messageReactions
+        reactions: data.reactions || {},
+        decryptionSuccess: decryptionResult.success
       };
-      
-      // Debug reactions
-      if (data.reactions && Object.keys(data.reactions).length > 0) {
-        console.log('📊 Message has reactions:', docSnap.id, data.reactions);
-      }
-      
-      return messageData;
     });
     
     // Wait for all messages to be decrypted before updating UI
@@ -776,9 +525,8 @@ export function subscribeMessages(
             // Skip messages with null text (failed decryption)
             continue;
           }
-          // Include all messages but mark their status
-          if (!msg.text.includes('[Decryption failed]') && 
-              !msg.text.includes('[Cannot decrypt]') &&
+          // Include all messages, even if decryption failed (will show error message)
+          if (msg.text && !msg.text.includes('[Authentication required]') &&
               !msg.text.includes('[Unable to decrypt]') &&
               !msg.text.includes('[Decrypting...]')) {
             // Successfully decrypted message
@@ -793,15 +541,69 @@ export function subscribeMessages(
         }
       }
       
-      // Only update UI if we have successfully decrypted messages
-      if (decryptedMessages.length > 0 || snapshot.docs.length === 0) {
-        onData(decryptedMessages);
-      } else {
-        console.log('⏳ Waiting for successful decryption...');
+      // Always update UI, even with encrypted messages (they'll show error text)
+      onData(decryptedMessages);
+      
+      // Set up re-decryption when keys become available
+      const hasKeys = encryptionService.getPublicKey() !== null;
+      if (!hasKeys && decryptedMessages.some(m => m.text.includes('[') && m.text.includes(']'))) {
+        console.log('⏳ Some messages need re-decryption when keys are loaded');
+        
+        // Set up a one-time re-decryption when keys are available
+        const checkInterval = setInterval(async () => {
+          const nowHasKeys = encryptionService.getPublicKey() !== null;
+          if (nowHasKeys) {
+            clearInterval(checkInterval);
+            console.log('🔄 Keys now available, re-processing messages');
+            
+            // Re-process all messages with keys now available
+            const reprocessedPromises = snapshot.docs.map(async (docSnap) => {
+              const data = docSnap.data();
+              const decryptionResult = await decryptMessage({
+                id: docSnap.id,
+                ...data
+              }, currentUserId);
+              
+              return {
+                id: docSnap.id,
+                senderId: data.senderId,
+                text: decryptionResult.text,
+                encryptedContent: data.text,
+                nonce: data.nonce,
+                senderText: data.senderText,
+                senderNonce: data.senderNonce,
+                timestamp: data.timestamp,
+                readBy: data.readBy,
+                deliveredTo: data.deliveredTo,
+                type: data.type || 'text',
+                metadata: data.metadata || {},
+                reactions: data.reactions || {},
+                decryptionSuccess: decryptionResult.success
+              };
+            });
+            
+            const reprocessedResults = await Promise.allSettled(reprocessedPromises);
+            const reprocessedMessages: ChatMessage[] = [];
+            
+            for (const result of reprocessedResults) {
+              if (result.status === 'fulfilled' && result.value.text) {
+                reprocessedMessages.push(result.value);
+              }
+            }
+            
+            if (reprocessedMessages.length > 0) {
+              onData(reprocessedMessages);
+            }
+          }
+        }, 1000); // Check every second
+        
+        // Clean up after 30 seconds if keys never load
+        setTimeout(() => clearInterval(checkInterval), 30000);
       }
     } catch (error) {
       console.error('Error processing messages:', error);
-      // Don't update UI on error
+      // Still try to show what we can
+      onData([]);
     }
   });
 }

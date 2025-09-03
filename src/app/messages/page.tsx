@@ -98,10 +98,19 @@ export default function EnhancedMessagesPage() {
   } = useChatStore();
   
 
-  // Set userId in store
+  // Set userId in store and request notification permission
   useEffect(() => {
     if (user?.uid) {
       useChatStore.setState({ userId: user.uid });
+      
+      // Request notification permission when user visits messages page
+      notificationService.requestPermission().then((granted) => {
+        if (granted) {
+          console.log('🔔 Notification permission granted');
+        } else {
+          console.log('🔕 Notification permission denied');
+        }
+      });
     }
   }, [user]);
 
@@ -140,7 +149,12 @@ export default function EnhancedMessagesPage() {
         
         // Initialize services with error handling for each
         try {
-          await initializeEncryption(user.uid);
+          // Use direct encryption initialization
+          const { initializeEncryption: directInit } = await import('@/services/chat/init-encryption');
+          const encryptionReady = await directInit(user.uid);
+          if (!encryptionReady) {
+            console.error('❌ Encryption initialization returned false');
+          }
         } catch (error) {
           console.error('Encryption init failed:', error);
         }
@@ -661,6 +675,18 @@ export default function EnhancedMessagesPage() {
       };
     }
     
+    // Fallback for direct conversations: if senderId profile is missing or mismatched
+    const active = activeConversationId ? conversations.get(activeConversationId) : null;
+    if (active && active.type === 'direct') {
+      const otherId = active.members.find((m: string) => m && m !== user?.uid);
+      if (otherId) {
+        const otherProfile = userProfiles.get(otherId);
+        if (otherProfile) {
+          return otherProfile;
+        }
+      }
+    }
+    
     // Handle test users
     if (userId === 'test-user-1') {
       return {
@@ -684,6 +710,39 @@ export default function EnhancedMessagesPage() {
       tier: 'starter' as const
     };
   }, [userProfiles, user, platformUser]);
+
+
+  // Load missing member profiles for the active conversation to show correct avatars/names
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const conv = conversations.get(activeConversationId);
+    if (!conv) return;
+
+    const memberIds = (conv.members || []).filter((id: string) => id && id !== user?.uid && !userProfiles.has(id));
+    if (memberIds.length === 0) return;
+
+    (async () => {
+      for (const memberId of memberIds) {
+        try {
+          const ref = doc(db, 'users', memberId);
+          const snap = await getDoc(ref);
+          if (snap.exists()) {
+            const data: any = snap.data();
+            const displayName = data?.displayName || data?.username || [data?.profile?.firstName, data?.profile?.lastName].filter(Boolean).join(' ') || 'User';
+            const photoURL = data?.profile?.avatarUrl || data?.photoURL || '/default-avatar.png';
+            const tier = data?.tier?.current || data?.tier || 'starter';
+            setUserProfiles((prev) => {
+              const next = new Map(prev);
+              next.set(memberId, { uid: memberId, displayName, photoURL, tier });
+              return next;
+            });
+          }
+        } catch {
+          // Ignore fetch failures; fallback avatar/name will be used
+        }
+      }
+    })();
+  }, [activeConversationId, conversations, user?.uid, userProfiles, db]);
 
 
   const handleReply = useCallback((messageId: string) => {

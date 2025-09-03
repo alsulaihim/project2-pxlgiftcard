@@ -1,0 +1,14 @@
+# Notification Sound File
+This is a placeholder for the notification sound file.
+You should replace this with an actual MP3 audio file for the notification sound.
+You can use a short, pleasant notification sound (usually 1-2 seconds).
+Common options include:
+- A simple bell sound
+- A soft chime
+- A gentle pop sound
+- A subtle ding
+
+To add a real sound file:
+1. Find or create a short MP3 notification sound
+2. Replace this file with the actual MP3 file
+3. Keep the filename as "notification.mp3"

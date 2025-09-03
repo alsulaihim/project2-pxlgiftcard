@@ -65,6 +65,7 @@ export class SocketService {
   private eventListeners: Map<string, ((...args: unknown[]) => void)[]> = new Map();
   private messageQueue: unknown[] = [];
   private fallbackMode = false;
+  private currentUserId: string | null = null;
 
   private constructor() {}
 
@@ -79,7 +80,10 @@ export class SocketService {
    * Initialize Socket.io connection with Firebase authentication
    * Gracefully falls back to Firestore-only mode if server is unavailable
    */
-  async initialize(_userId?: string): Promise<Socket | null> {
+  async initialize(userId?: string): Promise<Socket | null> {
+    if (userId) {
+      this.currentUserId = userId;
+    }
     if (this.socket?.connected) {
       return this.socket;
     }
@@ -608,9 +612,17 @@ export class SocketService {
       this.socket = null;
     }
     this.isConnected = false;
+    this.currentUserId = null;
     this.eventListeners.clear();
     this.messageQueue = [];
     console.log('🔌 Socket.io service disconnected and cleaned up');
+  }
+  
+  /**
+   * Get the current user ID
+   */
+  getUserId(): string | null {
+    return this.currentUserId || auth.currentUser?.uid || null;
   }
 }
 

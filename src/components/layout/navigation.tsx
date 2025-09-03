@@ -8,11 +8,13 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Menu, X, User, LogOut, Settings, Coins, Store, Home, LayoutGrid, Wallet, Headphones } from "lucide-react";
+import { Menu, X, User, LogOut, Settings, Coins, Store, Home, LayoutGrid, Wallet, Headphones, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CartIcon } from "@/components/ecommerce/cart-icon";
 import { useAuth, type PlatformUser } from "@/contexts/auth-context";
 import { formatPXL } from "@/lib/pxl-currency";
+import { NotificationBadge, InlineBadge } from "@/components/ui/NotificationBadge";
+import { useChatStore } from "@/stores/chatStore";
 
 /**
  * Tier Ring Component - Shows tier status around user avatar
@@ -112,6 +114,16 @@ export function Navigation() {
   const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = React.useState(false);
   const { user, platformUser, logout, isAdmin } = useAuth();
+  
+  // Get unread message count from chat store
+  const conversations = useChatStore((state) => state.conversations);
+  const totalUnreadCount = React.useMemo(() => {
+    let count = 0;
+    conversations.forEach((conversation) => {
+      count += conversation.unreadCount || 0;
+    });
+    return count;
+  }, [conversations]);
 
   const publicNavigationItems = [
     { href: "/", label: "Home", icon: Home },
@@ -176,9 +188,12 @@ export function Navigation() {
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-sm text-gray-400 hover:text-white transition-colors"
+                className="text-sm text-gray-400 hover:text-white transition-colors relative"
               >
                 {item.label}
+                {item.href === '/messages' && totalUnreadCount > 0 && (
+                  <InlineBadge count={totalUnreadCount} className="ml-1.5" />
+                )}
               </Link>
             ))}
           </nav>
@@ -251,6 +266,20 @@ export function Navigation() {
                     >
                       <Coins className="h-4 w-4 mr-3" />
                       PXL Wallet
+                    </Link>
+                    
+                    <Link
+                      href="/messages"
+                      className="flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-800 hover:text-white"
+                      onClick={() => setIsUserMenuOpen(false)}
+                    >
+                      <div className="flex items-center">
+                        <MessageSquare className="h-4 w-4 mr-3" />
+                        Messages
+                      </div>
+                      {totalUnreadCount > 0 && (
+                        <InlineBadge count={totalUnreadCount} />
+                      )}
                     </Link>
                     
                     <Link
@@ -356,10 +385,13 @@ export function Navigation() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="block text-base text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center justify-between text-base text-gray-400 hover:text-white transition-colors"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.href === '/messages' && totalUnreadCount > 0 && (
+                    <NotificationBadge count={totalUnreadCount} size="sm" pulse={false} className="relative top-0 right-0" />
+                  )}
                 </Link>
               ))}
             </nav>
