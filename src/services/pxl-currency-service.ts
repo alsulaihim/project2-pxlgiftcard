@@ -16,7 +16,8 @@ import {
   query,
   where,
   orderBy,
-  getDocs
+  getDocs,
+  limit
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase-config';
 import { 
@@ -361,12 +362,12 @@ export class PXLCurrencyService {
   /**
    * Get transaction history for a user
    */
-  async getUserTransactions(userId: string, limit: number = 20): Promise<any[]> {
+  async getUserTransactions(userId: string, limitCount: number = 20): Promise<any[]> {
     const q = query(
       collection(db, 'transactions'),
       where('userId', '==', userId),
       orderBy('timestamps.created', 'desc'),
-      limit(limit)
+      limit(limitCount)
     );
     
     const snapshot = await getDocs(q);
