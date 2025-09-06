@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  chat-server:
+    build:
+      context: ./apps/chat-server
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - GOOGLE_APPLICATION_CREDENTIALS=/run/secrets/firebase_sa
+    ports:
+      - "8080:8080"
+    secrets:
+      - firebase_sa
+    restart: unless-stopped
+secrets:
+  firebase_sa:
+    file: ./apps/chat-server/keys/pxl-perfect-1-service-account.json
+
